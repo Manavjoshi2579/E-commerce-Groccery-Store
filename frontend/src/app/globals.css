@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  --black: #050505;
+  --charcoal: #141414;
+  --gold: #d4af37;
+  --soft-gold: #e7c766;
+  --cream: #faf7ef;
+  --ink: #181818;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.display-font {
+  font-family: var(--font-montserrat), Montserrat, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.container-premium {
+  width: min(1280px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.premium-card {
+  border: 1px solid rgba(20, 20, 20, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #f2d26d 0%, #d4af37 52%, #b88d1e 100%);
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+}

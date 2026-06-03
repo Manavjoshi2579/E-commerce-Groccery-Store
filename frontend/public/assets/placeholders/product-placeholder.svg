@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-label="Eagleclub product placeholder">
+  <rect width="640" height="640" fill="#f4f1e9"/>
+  <rect x="118" y="132" width="404" height="376" rx="22" fill="#111"/>
+  <path d="M198 438c35-116 93-176 174-180 37-2 70 9 101 31-43 19-72 51-86 96-15 46-47 68-97 66-34-1-65-5-92-13Z" fill="#d4af37"/>
+  <circle cx="254" cy="272" r="54" fill="#2f8f4e"/>
+  <circle cx="358" cy="248" r="46" fill="#d94a28"/>
+  <circle cx="430" cy="316" r="42" fill="#f3c43c"/>
+  <text x="320" y="548" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#111">EAGLECLUB</text>
+</svg>
