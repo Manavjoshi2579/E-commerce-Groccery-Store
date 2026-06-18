@@ -147,37 +147,69 @@ async function upsertCatalog() {
       select: { id: true },
     });
 
-    await prisma.productImage.upsert({
-      where: { productId_sortOrder: { productId: product.id, sortOrder: 1 } },
-      update: { url: item.image, alt: item.name, isPrimary: true },
-      create: { productId: product.id, url: item.image, alt: item.name, isPrimary: true, sortOrder: 1 },
+    const existingImage = await prisma.productImage.findFirst({
+      where: { productId: product.id, sortOrder: 1 },
+      select: { id: true },
     });
+    if (existingImage) {
+      await prisma.productImage.update({
+        where: { id: existingImage.id },
+        data: { url: item.image, alt: item.name, isPrimary: true },
+      });
+    } else {
+      await prisma.productImage.create({
+        data: { productId: product.id, url: item.image, alt: item.name, isPrimary: true, sortOrder: 1 },
+      });
+    }
 
-    await prisma.productVariant.upsert({
-      where: { productId_unit: { productId: product.id, unit: item.unit } },
-      update: {
-        mrp: money(item.mrp),
-        price: money(item.price),
-        stock: item.stock,
-        lowStockThreshold: Math.max(8, Math.round(item.stock * 0.16)),
-        status: ProductStatus.ACTIVE,
-      },
-      create: {
-        productId: product.id,
-        unit: item.unit,
-        mrp: money(item.mrp),
-        price: money(item.price),
-        stock: item.stock,
-        lowStockThreshold: Math.max(8, Math.round(item.stock * 0.16)),
-        status: ProductStatus.ACTIVE,
-      },
+    const variantData = {
+      mrp: money(item.mrp),
+      price: money(item.price),
+      stock: item.stock,
+      lowStockThreshold: Math.max(8, Math.round(item.stock * 0.16)),
+      status: ProductStatus.ACTIVE,
+    };
+    const existingVariant = await prisma.productVariant.findFirst({
+      where: { productId: product.id, unit: item.unit },
+      select: { id: true },
     });
+    if (existingVariant) {
+      await prisma.productVariant.update({
+        where: { id: existingVariant.id },
+        data: variantData,
+      });
+    } else {
+      await prisma.productVariant.create({
+        data: {
+          productId: product.id,
+          unit: item.unit,
+          ...variantData,
+        },
+      });
+    }
 
-    await prisma.inventory.upsert({
+    const inventoryData = {
+      quantity: item.stock,
+      reserved: 0,
+      reorderLevel: Math.max(8, Math.round(item.stock * 0.16)),
+    };
+    const existingInventory = await prisma.inventory.findFirst({
       where: { productId: product.id },
-      update: { quantity: item.stock, reserved: 0, reorderLevel: Math.max(8, Math.round(item.stock * 0.16)) },
-      create: { productId: product.id, quantity: item.stock, reserved: 0, reorderLevel: Math.max(8, Math.round(item.stock * 0.16)) },
+      select: { id: true },
     });
+    if (existingInventory) {
+      await prisma.inventory.update({
+        where: { id: existingInventory.id },
+        data: inventoryData,
+      });
+    } else {
+      await prisma.inventory.create({
+        data: {
+          productId: product.id,
+          ...inventoryData,
+        },
+      });
+    }
   }
 }
 
