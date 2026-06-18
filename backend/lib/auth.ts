@@ -16,7 +16,11 @@ export const ADMIN_COOKIE = "ec_admin_session";
 const maxAgeMs = 1000 * 60 * 60 * 24 * 7;
 
 function secret() {
-  return process.env.JWT_SECRET || "dev-eagleclub-session-secret-change-in-production";
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production.");
+  }
+  return "dev-eagleclub-session-secret-change-in-production";
 }
 
 export function signSession(payload: SessionPayload) {

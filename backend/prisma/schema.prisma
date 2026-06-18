@@ -9,6 +9,7 @@ datasource db {
 
 enum UserStatus {
   ACTIVE
+  INACTIVE
   BLOCKED
 }
 
@@ -104,6 +105,20 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum SettingType {
   STRING
   NUMBER
@@ -118,6 +133,7 @@ model User {
   phone        String?     @unique
   passwordHash String
   status       UserStatus  @default(ACTIVE)
+  deletedAt    DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -128,6 +144,7 @@ model User {
   reviews      Review[]
   couponUsages CouponUsage[]
   returns      ReturnRequest[]
+  supportTickets SupportTicket[]
 
   @@index([status])
   @@index([createdAt])
@@ -181,6 +198,8 @@ model AdminUser {
   stockMovements StockMovement[]
   coupons        Coupon[]
   settings       Setting[]
+  assignedSupportTickets SupportTicket[] @relation("AssignedSupportTickets")
+  resolvedSupportTickets SupportTicket[] @relation("ResolvedSupportTickets")
 
   @@index([roleId])
   @@index([status])
@@ -359,6 +378,9 @@ model CartItem {
   cartId            String
   productId         String
   variantId         String?
+  customUnit        String?
+  customMrp         Decimal?        @db.Decimal(10, 2)
+  customPrice       Decimal?        @db.Decimal(10, 2)
   quantity          Int
   unitPriceSnapshot Decimal         @db.Decimal(10, 2)
   createdAt         DateTime        @default(now())
@@ -368,7 +390,7 @@ model CartItem {
   product           Product         @relation(fields: [productId], references: [id])
   variant           ProductVariant? @relation(fields: [variantId], references: [id])
 
-  @@unique([cartId, productId, variantId])
+  @@unique([cartId, productId, variantId, customUnit])
   @@index([cartId])
   @@index([productId])
 }
@@ -484,6 +506,7 @@ model Order {
   stockMovements      StockMovement[]
   couponUsages        CouponUsage[]
   returns             ReturnRequest[]
+  supportTickets      SupportTicket[]
 
   @@index([userId])
   @@index([orderNumber])
@@ -496,6 +519,7 @@ model OrderItem {
   orderId       String
   productId     String
   variantId     String?
+  unitSnapshot  String?
   nameSnapshot  String
   skuSnapshot   String
   quantity      Int
@@ -640,22 +664,75 @@ model Review {
 }
 
 model ReturnRequest {
-  id          String       @id @default(cuid())
-  orderId     String
-  orderItemId String?
-  userId      String
-  reason      String       @db.Text
-  status      ReturnStatus @default(REQUESTED)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  orderId           String
+  orderItemId       String?
+  userId            String
+  reason            String       @db.Text
+  bankAccountHolder String?
+  bankName          String?
+  bankAccountNumber String?
+  bankIfsc          String?
+  status            ReturnStatus @default(REQUESTED)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  order       Order        @relation(fields: [orderId], references: [id])
-  orderItem   OrderItem?   @relation(fields: [orderItemId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
-  refunds     Refund[]
+  order             Order        @relation(fields: [orderId], references: [id])
+  orderItem         OrderItem?   @relation(fields: [orderItemId], references: [id])
+  user              User         @relation(fields: [userId], references: [id])
+  refunds           Refund[]
 
   @@index([orderId])
   @@index([status])
+}
+
+model SupportTicket {
+  id              String                @id @default(cuid())
+  ticketNumber    String                @unique
+  userId          String?
+  orderId         String?
+  assignedAdminId String?
+  resolvedAdminId String?
+  name            String
+  email           String?
+  phone           String?
+  category        String
+  subject         String
+  message         String                @db.Text
+  adminNote       String?               @db.Text
+  resolution      String?               @db.Text
+  status          SupportTicketStatus   @default(OPEN)
+  priority        SupportTicketPriority @default(MEDIUM)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
+  user            User?                 @relation(fields: [userId], references: [id])
+  order           Order?                @relation(fields: [orderId], references: [id])
+  assignedAdmin   AdminUser?            @relation("AssignedSupportTickets", fields: [assignedAdminId], references: [id])
+  resolvedAdmin   AdminUser?            @relation("ResolvedSupportTickets", fields: [resolvedAdminId], references: [id])
+
+  @@index([userId])
+  @@index([orderId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model FAQ {
+  id           String   @id @default(cuid())
+  question     String
+  answer       String   @db.Text
+  category     String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@index([displayOrder])
 }
 
 model Refund {

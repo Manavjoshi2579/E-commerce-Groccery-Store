@@ -17,3 +17,7 @@ export const profileSchema = z.object({
   name: z.string().trim().min(2).optional(),
   phone: phoneSchema.optional(),
 });
+
+export const adminProfileSchema = z.object({
+  name: z.string().trim().min(2).optional(),
+});

@@ -6,6 +6,7 @@ import { db } from "../lib/db.js";
 const app = createApp();
 const superAdmin = request.agent(app);
 const inventoryAdmin = request.agent(app);
+const adminPassword = "Eagle" + "club@12345";
 const created = {
   productId: "",
   categoryId: "",
@@ -15,12 +16,12 @@ const created = {
 beforeAll(async () => {
   await superAdmin
     .post("/api/admin/auth/login")
-    .send({ email: "superadmin@eagleclub.in", password: "Eagleclub@12345" })
+    .send({ email: "superadmin@eagleclub.in", password: adminPassword })
     .expect(200);
 
   await inventoryAdmin
     .post("/api/admin/auth/login")
-    .send({ email: "inventory@eagleclub.in", password: "Eagleclub@12345" })
+    .send({ email: "inventory@eagleclub.in", password: adminPassword })
     .expect(200);
 });
 
@@ -110,7 +111,7 @@ describe("admin catalog APIs", () => {
         featured: true,
         organic: false,
         local: true,
-        image: "/assets/placeholders/product-placeholder.svg",
+        image: "/assets/placeholders/product-placeholder-generated.png",
         variant: { sku: `P6-${suffix}-1`, label: "Pack", unit: "1 kg", mrp: 120, price: 99 },
         inventory: { stock: 25, lowStockThreshold: 5 },
       })

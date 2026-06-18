@@ -5,6 +5,9 @@ export const addCartItemSchema = z.object({
   productId: z.string().min(8),
   variantId: z.string().min(8).optional(),
   quantity: z.coerce.number().int().positive().default(1),
+  customUnit: z.string().trim().min(1).max(40).optional(),
+  customPrice: z.coerce.number().positive().optional(),
+  customMrp: z.coerce.number().positive().optional(),
 });
 
 export const updateCartItemSchema = z.object({
@@ -15,7 +18,7 @@ export const couponValidateSchema = z.object({
   code: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()),
 });
 
-export const adminCouponSchema = z.object({
+const adminCouponBaseSchema = z.object({
   code: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()),
   title: z.string().trim().min(2).max(160),
   type: z.nativeEnum(CouponType),
@@ -28,3 +31,16 @@ export const adminCouponSchema = z.object({
   perUserLimit: z.coerce.number().int().positive().optional().nullable(),
   active: z.coerce.boolean().default(true),
 });
+
+function refineCoupon(value: Partial<z.infer<typeof adminCouponBaseSchema>>, context: z.RefinementCtx) {
+  if (value.endAt && value.startAt && value.endAt <= value.startAt) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["endAt"], message: "Coupon end date must be after start date." });
+  }
+  if (value.type === CouponType.PERCENTAGE && value.value != null && value.value > 95) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "Percentage coupon value must be 95 or less." });
+  }
+}
+
+export const adminCouponSchema = adminCouponBaseSchema.superRefine(refineCoupon);
+
+export const adminCouponUpdateSchema = adminCouponBaseSchema.partial().superRefine(refineCoupon);

@@ -21,7 +21,7 @@ import { brandSchema, categorySchema, productListQuerySchema, productSchema, pro
 
 export const adminCatalogRouter = Router();
 
-const catalogViewRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER];
+const catalogViewRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER, RoleName.ORDER_MANAGER];
 const catalogManageRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER];
 
 function param(value: string | string[]) {

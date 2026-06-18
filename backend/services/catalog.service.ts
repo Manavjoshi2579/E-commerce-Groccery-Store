@@ -21,7 +21,7 @@ const productInclude = {
 
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
-const productImageFallback = "/assets/placeholders/product-placeholder.svg";
+const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryImageFallback = "/assets/placeholders/category-placeholder.svg";
 
 export function slugify(value: string) {
@@ -41,8 +41,67 @@ function tags(value: Prisma.JsonValue) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+const relatedSearchTerms: Record<string, string[]> = {
+  atta: ["flour", "wheat", "aashirvaad"],
+  banana: ["bananna", "bannana", "fruit", "fruits"],
+  bread: ["bakery", "toast"],
+  butter: ["dairy", "amul"],
+  dal: ["lentil", "lentils", "tur"],
+  detergent: ["laundry", "surf"],
+  milk: ["dairy", "amul"],
+  oil: ["sunflower", "fortune"],
+  paneer: ["dairy"],
+  rice: ["basmati", "grain"],
+  salt: ["tata"],
+  shampoo: ["baby", "himalaya"],
+  tomato: ["vegetable", "vegetables"],
+};
+
+function normalizeSearch(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function searchDistance(a: string, b: string) {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const next = row[j];
+      row[j] = a[i - 1] === b[j - 1] ? previous : Math.min(previous, row[j - 1], row[j]) + 1;
+      previous = next;
+    }
+  }
+  return row[b.length];
+}
+
+function searchTerms(value: string) {
+  const parts = normalizeSearch(value).split(" ").filter((part) => part.length > 1);
+  const terms = new Set(parts);
+  parts.forEach((part) => {
+    Object.entries(relatedSearchTerms).forEach(([term, aliases]) => {
+      if (term === part || aliases.includes(part) || searchDistance(term, part) <= 2) {
+        terms.add(term);
+        aliases.forEach((alias) => terms.add(alias));
+      }
+    });
+  });
+  return Array.from(terms);
+}
+
 function mainVariant(product: ProductWithCatalog) {
   return product.variants.find((variant) => variant.status === ProductStatus.ACTIVE) ?? product.variants[0];
+}
+
+function variantInventory(product: ProductWithCatalog, variantId: string) {
+  const inventory = product.inventory.find((item) => item.variantId === variantId);
+  const fallbackRows = product.inventory.filter((item) => item.variantId == null);
+  const fallbackStock = fallbackRows.length ? fallbackRows.reduce((sum, item) => sum + item.stock, 0) : product.inventory.reduce((sum, item) => sum + item.stock, 0);
+  const fallbackLowStock = fallbackRows[0]?.lowStockThreshold ?? product.inventory[0]?.lowStockThreshold ?? 10;
+  return {
+    stock: inventory?.stock ?? fallbackStock,
+    lowStockThreshold: inventory?.lowStockThreshold ?? fallbackLowStock,
+  };
 }
 
 function stockSummary(product: ProductWithCatalog) {
@@ -120,16 +179,24 @@ export function mapProduct(product: ProductWithCatalog) {
     active: product.status === ProductStatus.ACTIVE,
     status: product.status,
     description: product.description,
-    variants: product.variants.map((item) => ({
-      id: item.id,
-      sku: item.sku,
-      label: item.label,
-      unit: item.unit,
-      mrp: decimal(item.mrp),
-      price: decimal(item.price),
-      sellingPrice: decimal(item.price),
-      status: item.status,
-    })),
+    variants: product.variants.map((item, index) => {
+      const inventory = variantInventory(product, item.id);
+      return {
+        id: item.id,
+        sku: item.sku,
+        label: item.label,
+        unit: item.unit,
+        mrp: decimal(item.mrp),
+        price: decimal(item.price),
+        sellingPrice: decimal(item.price),
+        status: item.status,
+        active: item.status === ProductStatus.ACTIVE,
+        isDefault: item.id === variant?.id || index === 0,
+        stock: inventory.stock,
+        lowStock: inventory.lowStockThreshold,
+        lowStockThreshold: inventory.lowStockThreshold,
+      };
+    }),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -140,13 +207,14 @@ function buildProductWhere(query: ProductQuery, admin = false): Prisma.ProductWh
   const where: Prisma.ProductWhereInput = admin ? { deletedAt: null } : { deletedAt: null, status: ProductStatus.ACTIVE };
 
   if (search) {
+    const terms = searchTerms(search);
     where.OR = [
-      { name: { contains: search } },
-      { sku: { contains: search } },
-      { description: { contains: search } },
-      { brand: { name: { contains: search } } },
-      { category: { name: { contains: search } } },
-    ];
+      ...terms.map((term) => ({ name: { contains: term } })),
+      ...terms.map((term) => ({ sku: { contains: term } })),
+      ...terms.map((term) => ({ description: { contains: term } })),
+      ...terms.map((term) => ({ brand: { name: { contains: term } } })),
+      ...terms.map((term) => ({ category: { name: { contains: term } } })),
+    ] satisfies Prisma.ProductWhereInput[];
   }
   if (query.category) where.category = { OR: [{ slug: query.category }, { name: query.category }] };
   if (query.brand) where.brand = { OR: [{ slug: query.brand }, { name: query.brand }] };
@@ -224,6 +292,42 @@ export async function listBrands(admin = false) {
 
 export async function listProducts(query: ProductQuery, admin = false) {
   const where = buildProductWhere(query, admin);
+  const start = (query.page - 1) * query.limit;
+  const needsComputedPass = query.discount != null || query.availability === "low_stock" || ["price_asc", "price_desc", "discount"].includes(query.sort);
+  const [categories, brands] = await Promise.all([listCategories(admin), listBrands(admin)]);
+
+  if (!needsComputedPass) {
+    const [rows, total] = await Promise.all([
+      db.product.findMany({
+        where,
+        include: productInclude,
+        orderBy: productOrderBy(query.sort),
+        skip: start,
+        take: query.limit,
+      }),
+      db.product.count({ where }),
+    ]);
+
+    return {
+      products: rows.map(mapProduct),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / query.limit)),
+        hasNextPage: start + query.limit < total,
+        hasPreviousPage: query.page > 1,
+      },
+      appliedFilters: query,
+      filters: {
+        categories,
+        brands,
+        availability: ["in_stock", "low_stock", "out_of_stock"],
+        sort: ["popular", "newest", "price_asc", "price_desc", "discount"],
+      },
+    };
+  }
+
   const rows = await db.product.findMany({
     where,
     include: productInclude,
@@ -231,9 +335,7 @@ export async function listProducts(query: ProductQuery, admin = false) {
   });
   const filtered = applyComputedFilters(rows, query);
   const total = filtered.length;
-  const start = (query.page - 1) * query.limit;
   const products = filtered.slice(start, start + query.limit).map(mapProduct);
-  const [categories, brands] = await Promise.all([listCategories(admin), listBrands(admin)]);
 
   return {
     products,
@@ -309,51 +411,77 @@ async function resolveBrand(input: { brandId?: string; brandSlug?: string; brand
   return brand.id;
 }
 
+function normalizedVariants(input: any) {
+  const source = Array.isArray(input.variants) && input.variants.length ? input.variants : input.variant ? [{ ...input.variant, stock: input.inventory?.stock, lowStockThreshold: input.inventory?.lowStockThreshold }] : [];
+  return source.map((variant: any, index: number) => {
+    const active = variant.active == null ? variant.status !== ProductStatus.INACTIVE : Boolean(variant.active);
+    const lowStock = variant.lowStockThreshold ?? variant.lowStock;
+    return {
+      ...variant,
+      label: variant.label || variant.unit || `Variant ${index + 1}`,
+      status: active ? ProductStatus.ACTIVE : ProductStatus.INACTIVE,
+      isDefault: Boolean(variant.isDefault) || index === 0,
+      stock: Math.max(0, Number.isFinite(Number(variant.stock)) ? Math.trunc(Number(variant.stock)) : 0),
+      lowStockThreshold: Math.max(0, Number.isFinite(Number(lowStock)) ? Math.trunc(Number(lowStock)) : 10),
+    };
+  }).sort((a: any, b: any) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)));
+}
+
+function variantSku(productSku: string, variant: any, index: number) {
+  return (variant.sku || `${productSku}-${String(index + 1).padStart(2, "0")}`).trim();
+}
+
 export async function createProduct(input: any) {
   const categoryId = await resolveCategory(input);
   const brandId = await resolveBrand(input);
   const slug = input.slug || slugify(input.name);
+  const variants = normalizedVariants(input);
 
-  const product = await db.product.create({
-    data: {
-      name: input.name,
-      slug,
-      sku: input.sku,
-      categoryId,
-      brandId,
-      description: input.description,
-      gst: input.gst,
-      tags: input.tags,
-      featured: input.featured,
-      organic: input.organic,
-      local: input.local,
-      status: input.status,
-      images: input.image ? { create: { url: input.image, alt: input.name, isPrimary: true } } : undefined,
-      variants: {
-        create: {
-          sku: input.variant.sku || `${input.sku}-DEFAULT`,
-          label: input.variant.label,
-          unit: input.variant.unit,
-          mrp: input.variant.mrp,
-          price: input.variant.price,
-          status: input.variant.status,
-        },
+  const productId = await db.$transaction(async (tx) => {
+    const product = await tx.product.create({
+      data: {
+        name: input.name,
+        slug,
+        sku: input.sku,
+        categoryId,
+        brandId,
+        description: input.description,
+        gst: input.gst,
+        tags: input.tags,
+        featured: input.featured,
+        organic: input.organic,
+        local: input.local,
+        status: input.status,
+        images: input.image ? { create: { url: input.image, alt: input.name, isPrimary: true } } : undefined,
       },
-    },
-    include: productInclude,
+    });
+
+    for (const [index, variantInput] of variants.entries()) {
+      const variant = await tx.productVariant.create({
+        data: {
+          productId: product.id,
+          sku: variantSku(input.sku, variantInput, index),
+          label: variantInput.label,
+          unit: variantInput.unit,
+          mrp: variantInput.mrp,
+          price: variantInput.price,
+          status: variantInput.status,
+        },
+      });
+      await tx.inventory.create({
+        data: {
+          productId: product.id,
+          variantId: variant.id,
+          stock: variantInput.stock,
+          lowStockThreshold: variantInput.lowStockThreshold,
+        },
+      });
+    }
+
+    return product.id;
   });
 
-  const variant = product.variants[0];
-  await db.inventory.create({
-    data: {
-      productId: product.id,
-      variantId: variant.id,
-      stock: input.inventory.stock,
-      lowStockThreshold: input.inventory.lowStockThreshold,
-    },
-  });
-
-  const fresh = await db.product.findUniqueOrThrow({ where: { id: product.id }, include: productInclude });
+  const fresh = await db.product.findUniqueOrThrow({ where: { id: productId }, include: productInclude });
   return mapProduct(fresh);
 }
 
@@ -372,37 +500,76 @@ export async function updateProduct(id: string, input: any) {
   if (input.categoryId || input.categorySlug || input.category) data.category = { connect: { id: await resolveCategory(input) } };
   if (input.brandId || input.brandSlug || input.brand) data.brand = { connect: { id: await resolveBrand(input) } };
 
-  await db.product.update({ where: { id }, data });
+  await db.$transaction(async (tx) => {
+    await tx.product.update({ where: { id }, data });
 
-  if (input.image) {
-    await db.productImage.deleteMany({ where: { productId: id } });
-    await db.productImage.create({ data: { productId: id, url: input.image, alt: input.name, isPrimary: true } });
-  }
-  if (input.variant) {
-    const variant = await db.productVariant.findFirst({ where: { productId: id }, orderBy: { createdAt: "asc" } });
-    if (variant) {
-      await db.productVariant.update({
-        where: { id: variant.id },
-        data: {
-          sku: input.variant.sku,
-          label: input.variant.label,
-          unit: input.variant.unit,
-          mrp: input.variant.mrp,
-          price: input.variant.price,
-          status: input.variant.status,
-        },
-      });
+    if (input.image) {
+      await tx.productImage.deleteMany({ where: { productId: id } });
+      await tx.productImage.create({ data: { productId: id, url: input.image, alt: input.name, isPrimary: true } });
     }
-  }
-  if (input.inventory) {
-    const inventory = await db.inventory.findFirst({ where: { productId: id } });
-    if (inventory) {
-      await db.inventory.update({
-        where: { id: inventory.id },
-        data: { stock: input.inventory.stock, lowStockThreshold: input.inventory.lowStockThreshold },
-      });
+
+    if (input.variants?.length) {
+      const variants = normalizedVariants(input);
+      const existing = await tx.productVariant.findMany({ where: { productId: id }, orderBy: { createdAt: "asc" } });
+      const existingIds = new Set(existing.map((variant) => variant.id));
+      const seenIds = new Set<string>();
+
+      for (const [index, variantInput] of variants.entries()) {
+        const baseData = {
+          sku: variantSku(input.sku ?? "", variantInput, index),
+          label: variantInput.label,
+          unit: variantInput.unit,
+          mrp: variantInput.mrp,
+          price: variantInput.price,
+          status: variantInput.status,
+        };
+        let variantId = variantInput.id;
+        if (variantId && existingIds.has(variantId)) {
+          await tx.productVariant.update({ where: { id: variantId }, data: baseData });
+        } else {
+          const created = await tx.productVariant.create({ data: { productId: id, ...baseData } });
+          variantId = created.id;
+        }
+        seenIds.add(variantId);
+
+        await tx.inventory.upsert({
+          where: { productId_variantId: { productId: id, variantId } },
+          update: { stock: variantInput.stock, lowStockThreshold: variantInput.lowStockThreshold },
+          create: { productId: id, variantId, stock: variantInput.stock, lowStockThreshold: variantInput.lowStockThreshold },
+        });
+      }
+
+      const omitted = existing.filter((variant) => !seenIds.has(variant.id));
+      if (omitted.length) {
+        await tx.productVariant.updateMany({ where: { id: { in: omitted.map((variant) => variant.id) } }, data: { status: ProductStatus.INACTIVE } });
+      }
+    } else if (input.variant) {
+      const variant = await tx.productVariant.findFirst({ where: { productId: id }, orderBy: { createdAt: "asc" } });
+      if (variant) {
+        await tx.productVariant.update({
+          where: { id: variant.id },
+          data: {
+            sku: input.variant.sku,
+            label: input.variant.label,
+            unit: input.variant.unit,
+            mrp: input.variant.mrp,
+            price: input.variant.price,
+            status: input.variant.status,
+          },
+        });
+      }
     }
-  }
+
+    if (input.inventory && !input.variants?.length) {
+      const inventory = await tx.inventory.findFirst({ where: { productId: id } });
+      if (inventory) {
+        await tx.inventory.update({
+          where: { id: inventory.id },
+          data: { stock: input.inventory.stock, lowStockThreshold: input.inventory.lowStockThreshold },
+        });
+      }
+    }
+  });
 
   const product = await db.product.findUniqueOrThrow({ where: { id }, include: productInclude });
   return mapProduct(product);
@@ -417,13 +584,27 @@ export async function softDeleteProduct(id: string) {
   await db.product.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.INACTIVE } });
 }
 
+async function assertAvailableCategorySlug(slug: string, id?: string) {
+  const existing = await db.category.findFirst({ where: { slug, deletedAt: null, ...(id ? { id: { not: id } } : {}) } });
+  if (existing) throw new Error("A category with this name already exists.");
+}
+
+async function assertAvailableBrandSlug(slug: string, id?: string) {
+  const existing = await db.brand.findFirst({ where: { slug, deletedAt: null, ...(id ? { id: { not: id } } : {}) } });
+  if (existing) throw new Error("A brand with this name already exists.");
+}
+
 export async function createCategory(input: any) {
-  const category = await db.category.create({ data: { ...input, slug: input.slug || slugify(input.name) } });
+  const slug = input.slug || slugify(input.name);
+  await assertAvailableCategorySlug(slug);
+  const category = await db.category.create({ data: { ...input, slug } });
   return mapCategory(category);
 }
 
 export async function updateCategory(id: string, input: any) {
-  const category = await db.category.update({ where: { id }, data: { ...input, slug: input.slug ?? undefined } });
+  const slug = input.slug ?? (input.name ? slugify(input.name) : undefined);
+  if (slug) await assertAvailableCategorySlug(slug, id);
+  const category = await db.category.update({ where: { id }, data: { ...input, slug } });
   return mapCategory(category);
 }
 
@@ -432,12 +613,16 @@ export async function softDeleteCategory(id: string) {
 }
 
 export async function createBrand(input: any) {
-  const brand = await db.brand.create({ data: { ...input, slug: input.slug || slugify(input.name) } });
+  const slug = input.slug || slugify(input.name);
+  await assertAvailableBrandSlug(slug);
+  const brand = await db.brand.create({ data: { ...input, slug } });
   return mapBrand(brand);
 }
 
 export async function updateBrand(id: string, input: any) {
-  const brand = await db.brand.update({ where: { id }, data: { ...input, slug: input.slug ?? undefined } });
+  const slug = input.slug ?? (input.name ? slugify(input.name) : undefined);
+  if (slug) await assertAvailableBrandSlug(slug, id);
+  const brand = await db.brand.update({ where: { id }, data: { ...input, slug } });
   return mapBrand(brand);
 }
 

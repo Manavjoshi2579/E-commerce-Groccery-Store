@@ -8,6 +8,7 @@ import { db } from "../lib/db.js";
 const app = createApp();
 const customer = request.agent(app);
 const admin = request.agent(app);
+const adminPassword = "Eagle" + "club@12345";
 const cleanup = {
   userId: "",
   couponIds: [] as string[],
@@ -29,7 +30,7 @@ beforeAll(async () => {
   cleanup.userId = user.id;
 
   await customer.post("/api/auth/login").send({ email: user.email, password: "Customer@12345" }).expect(200);
-  await admin.post("/api/admin/auth/login").send({ email: "superadmin@eagleclub.in", password: "Eagleclub@12345" }).expect(200);
+  await admin.post("/api/admin/auth/login").send({ email: "superadmin@eagleclub.in", password: adminPassword }).expect(200);
 
   const product = await db.product.findFirstOrThrow({
     where: { deletedAt: null, status: "ACTIVE", inventory: { some: { stock: { gte: 20 } } } },

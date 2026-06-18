@@ -30,17 +30,34 @@ export async function listAdminCoupons() {
   return coupons.map(mapCoupon);
 }
 
-export async function createAdminCoupon(input: any, adminId: string) {
-  const coupon = await db.coupon.create({
-    data: {
-      ...input,
-      createdByAdminId: adminId,
+export async function listAvailableCoupons() {
+  const now = new Date();
+  const coupons = await db.coupon.findMany({
+    where: {
+      deletedAt: null,
+      active: true,
+      startAt: { lte: now },
+      endAt: { gte: now },
     },
+    orderBy: [{ minOrderAmount: "asc" }, { createdAt: "desc" }],
   });
+  return coupons.map(mapCoupon);
+}
+
+export async function createAdminCoupon(input: any, adminId: string) {
+  const existing = await db.coupon.findUnique({ where: { code: input.code } });
+  if (existing && !existing.deletedAt) throw new Error("A coupon with this code already exists.");
+  const coupon = existing
+    ? await db.coupon.update({ where: { id: existing.id }, data: { ...input, deletedAt: null, createdByAdminId: adminId } })
+    : await db.coupon.create({ data: { ...input, createdByAdminId: adminId } });
   return mapCoupon(coupon);
 }
 
 export async function updateAdminCoupon(id: string, input: any) {
+  if (input.code) {
+    const existing = await db.coupon.findUnique({ where: { code: input.code } });
+    if (existing && existing.id !== id && !existing.deletedAt) throw new Error("A coupon with this code already exists.");
+  }
   const coupon = await db.coupon.update({ where: { id }, data: input });
   return mapCoupon(coupon);
 }
@@ -49,5 +66,5 @@ export async function softDeleteAdminCoupon(id: string) {
   await db.coupon.update({ where: { id }, data: { active: false, deletedAt: new Date() } });
 }
 
-export const couponViewRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.BILLING_STAFF];
+export const couponViewRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER, RoleName.ORDER_MANAGER, RoleName.BILLING_STAFF];
 export const couponManageRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER];

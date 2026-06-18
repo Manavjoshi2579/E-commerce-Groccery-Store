@@ -110,6 +110,47 @@ export async function updateCustomerProfile(id: string, input: { name?: string; 
   return safeUser(user);
 }
 
+function defaultNameFromEmail(email: string | null, fallback: string) {
+  const source = email?.split("@")[0]?.replace(/[._-]+/g, " ").trim();
+  if (!source) return fallback;
+  return source.split(" ").filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1).toLowerCase()).join(" ");
+}
+
+export async function resetCustomerProfile(id: string) {
+  const current = await db.user.findUnique({ where: { id } });
+  if (!current) throw new Error("Customer not found.");
+  const user = await db.user.update({
+    where: { id },
+    data: {
+      name: defaultNameFromEmail(current.email, "Customer"),
+      phone: null,
+    },
+  });
+  return safeUser(user);
+}
+
+export async function updateAdminProfile(id: string, input: { name?: string }) {
+  const admin = await db.adminUser.update({
+    where: { id },
+    data: input,
+    include: { role: true },
+  });
+  return safeAdmin(admin);
+}
+
+export async function resetAdminProfile(id: string) {
+  const current = await db.adminUser.findUnique({ where: { id }, include: { role: true } });
+  if (!current) throw new Error("Admin not found.");
+  const admin = await db.adminUser.update({
+    where: { id },
+    data: {
+      name: current.role.name === RoleName.SUPER_ADMIN ? "Eagle Mart Super Admin" : defaultNameFromEmail(current.email, "Eagle Mart Admin"),
+    },
+    include: { role: true },
+  });
+  return safeAdmin(admin);
+}
+
 export async function loginAdmin(input: { email: string; password: string }) {
   const admin = await db.adminUser.findUnique({
     where: { email: input.email.toLowerCase() },

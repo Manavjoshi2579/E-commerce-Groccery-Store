@@ -17,7 +17,7 @@ export const productListQuerySchema = z.object({
   local: z.coerce.boolean().optional(),
   sort: z.enum(["popular", "newest", "price_asc", "price_desc", "discount"]).default("popular"),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(60).default(20),
+  limit: z.coerce.number().int().min(1).max(500).default(20),
 });
 
 export const categorySchema = z.object({
@@ -44,6 +44,10 @@ export const variantSchema = z.object({
   mrp: z.coerce.number().positive(),
   price: z.coerce.number().positive(),
   status: z.nativeEnum(ProductStatus).default(ProductStatus.ACTIVE),
+  active: z.coerce.boolean().optional(),
+  isDefault: z.coerce.boolean().optional(),
+  stock: z.coerce.number().int().min(0).optional(),
+  lowStockThreshold: z.coerce.number().int().min(0).optional(),
 });
 
 export const inventorySchema = z.object({
@@ -51,7 +55,7 @@ export const inventorySchema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).default(10),
 });
 
-export const productSchema = z.object({
+const productBaseSchema = z.object({
   name: z.string().trim().min(2).max(180),
   slug: slugSchema.optional(),
   sku: z.string().trim().min(2).max(80),
@@ -69,12 +73,20 @@ export const productSchema = z.object({
   local: z.coerce.boolean().default(false),
   status: z.nativeEnum(ProductStatus).default(ProductStatus.ACTIVE),
   image: z.string().trim().optional(),
-  variant: variantSchema,
+  variant: variantSchema.optional(),
+  variants: z.array(variantSchema).min(1).optional(),
   inventory: inventorySchema.default({ stock: 0, lowStockThreshold: 10 }),
 });
 
-export const productUpdateSchema = productSchema.partial().extend({
+export const productSchema = productBaseSchema.superRefine((value, context) => {
+  if (!value.variant && !value.variants?.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["variants"], message: "At least one product variant is required." });
+  }
+});
+
+export const productUpdateSchema = productBaseSchema.partial().extend({
   tags: z.array(z.string().trim().min(1)).optional(),
   variant: variantSchema.partial().optional(),
+  variants: z.array(variantSchema).min(1).optional(),
   inventory: inventorySchema.partial().optional(),
 });

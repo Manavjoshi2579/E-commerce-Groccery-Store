@@ -68,8 +68,8 @@ export async function getOrCreateCart(userId: string) {
 }
 
 export function mapCart(cart: CartWithItems) {
-  const subtotal = cart.items.reduce((sum, item) => sum + decimal(item.variant?.price ?? item.unitPriceSnapshot) * item.quantity, 0);
-  const mrp = cart.items.reduce((sum, item) => sum + decimal(item.variant?.mrp ?? item.unitPriceSnapshot) * item.quantity, 0);
+  const subtotal = cart.items.reduce((sum, item) => sum + decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot) * item.quantity, 0);
+  const mrp = cart.items.reduce((sum, item) => sum + decimal(item.customMrp ?? item.variant?.mrp ?? item.unitPriceSnapshot) * item.quantity, 0);
   const discount = Math.max(0, mrp - subtotal);
   const deliveryBeforeCoupon = subtotal && subtotal <= 799 ? 49 : 0;
   const couponDiscountAmount = couponDiscount(cart.coupon, subtotal, deliveryBeforeCoupon);
@@ -86,7 +86,13 @@ export function mapCart(cart: CartWithItems) {
       variantId: item.variantId,
       qty: item.quantity,
       quantity: item.quantity,
-      unitPrice: decimal(item.variant?.price ?? item.unitPriceSnapshot),
+      name: item.product.name,
+      sku: item.variant?.sku ?? item.product.sku,
+      unit: item.customUnit ?? item.variant?.unit ?? item.variant?.label ?? "",
+      mrp: decimal(item.customMrp ?? item.variant?.mrp ?? item.unitPriceSnapshot),
+      price: decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot),
+      lineTotal: decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot) * item.quantity,
+      unitPrice: decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot),
       product: mapProduct(item.product),
     })),
     subtotal,
@@ -131,25 +137,31 @@ async function getActiveProduct(productId: string, variantId?: string) {
   return { product, variant, stock };
 }
 
-export async function addCartItem(userId: string, input: { productId: string; variantId?: string; quantity: number }) {
+export async function addCartItem(userId: string, input: { productId: string; variantId?: string; quantity: number; customUnit?: string; customPrice?: number; customMrp?: number }) {
   const cart = await getOrCreateCart(userId);
   const { variant, stock } = await getActiveProduct(input.productId, input.variantId);
-  const existing = await db.cartItem.findUnique({
-    where: { cartId_productId_variantId: { cartId: cart.id, productId: input.productId, variantId: variant.id } },
+  const customUnit = input.customUnit?.trim() || null;
+  const customPrice = input.customPrice == null ? null : new Prisma.Decimal(input.customPrice);
+  const customMrp = input.customMrp == null ? customPrice : new Prisma.Decimal(input.customMrp);
+  const existing = await db.cartItem.findFirst({
+    where: { cartId: cart.id, productId: input.productId, variantId: variant.id, customUnit },
   });
   const nextQuantity = (existing?.quantity ?? 0) + input.quantity;
   if (nextQuantity > stock) throw new Error("Requested quantity exceeds available stock.");
 
   if (existing) {
-    await db.cartItem.update({ where: { id: existing.id }, data: { quantity: nextQuantity, unitPriceSnapshot: variant.price } });
+    await db.cartItem.update({ where: { id: existing.id }, data: { quantity: nextQuantity, unitPriceSnapshot: customPrice ?? variant.price, customUnit, customPrice, customMrp } });
   } else {
     await db.cartItem.create({
       data: {
         cartId: cart.id,
         productId: input.productId,
         variantId: variant.id,
+        customUnit,
+        customPrice,
+        customMrp,
         quantity: input.quantity,
-        unitPriceSnapshot: variant.price,
+        unitPriceSnapshot: customPrice ?? variant.price,
       },
     });
   }

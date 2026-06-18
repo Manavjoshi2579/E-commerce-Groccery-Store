@@ -2,9 +2,14 @@ import { Router } from "express";
 import { sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
 import { getCartSummary, validateCouponForCart } from "../../services/cart.service.js";
+import { listAvailableCoupons } from "../../services/coupon.service.js";
 import { couponValidateSchema } from "../../validators/cart.js";
 
 export const couponRouter = Router();
+
+couponRouter.get("/", async (_req, res) => {
+  return sendOk(res, { coupons: await listAvailableCoupons() });
+});
 
 couponRouter.post("/validate", requireCustomer, async (req, res) => {
   const parsed = couponValidateSchema.safeParse(req.body);

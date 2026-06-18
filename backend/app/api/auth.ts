@@ -2,7 +2,7 @@ import { Router } from "express";
 import { clearSessionCookie, setSessionCookie } from "../../lib/auth.js";
 import { sendError, sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
-import { getCustomerById, loginCustomer, registerCustomer, updateCustomerProfile } from "../../services/auth.service.js";
+import { getCustomerById, loginCustomer, registerCustomer, resetCustomerProfile, updateCustomerProfile } from "../../services/auth.service.js";
 import { loginSchema, profileSchema, registerSchema } from "../../validators/auth.js";
 
 export const customerAuthRouter = Router();
@@ -50,4 +50,13 @@ customerAuthRouter.patch("/profile", requireCustomer, async (req, res) => {
 
   const user = await updateCustomerProfile(req.customer!.id, parsed.data);
   return sendOk(res, { user });
+});
+
+customerAuthRouter.post("/profile/reset", requireCustomer, async (req, res) => {
+  try {
+    const user = await resetCustomerProfile(req.customer!.id);
+    return sendOk(res, { user });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not reset profile.");
+  }
 });

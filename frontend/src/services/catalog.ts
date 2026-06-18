@@ -1,45 +1,40 @@
 "use client";
 
-import { categories as seedCategories } from "@/data/categories";
 import { products as seedProducts } from "@/data/products";
 import type { Category, Product } from "@/types";
+import { requestApi } from "./api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-const productFallback = "/assets/placeholders/product-placeholder.svg";
+const productFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryFallback = "/assets/placeholders/category-placeholder.svg";
-
-type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string } };
-
-async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
-  if (typeof window !== "undefined") {
-    const downUntil = Number(sessionStorage.getItem("ec-api-down-until") || 0);
-    if (downUntil > Date.now()) throw new Error("API temporarily unavailable");
-  }
-  try {
-    const response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers || {}),
-      },
-    });
-    const body = (await response.json()) as ApiEnvelope<T>;
-    if (!response.ok || !body.ok) throw new Error(body.ok ? "API request failed" : body.error.message);
-    return body.data;
-  } catch (error) {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("ec-api-down-until", String(Date.now() + 15_000));
-    }
-    throw error;
-  }
-}
+const generatedProductImages: Record<string, string> = Object.fromEntries(seedProducts.map((product) => [product.slug, product.image]));
 
 function asset(value: string | undefined, fallback: string) {
   return value && value.trim() ? value : fallback;
 }
 
+function productAsset(input: any) {
+  const value = asset(input.image, productFallback);
+  if (value === productFallback || value.includes("/assets/placeholders/")) {
+    return generatedProductImages[input.slug] || productFallback;
+  }
+  return value;
+}
+
 export function mapApiProduct(input: any): Product {
+  const variants = Array.isArray(input.variants) ? input.variants.map((variant: any, index: number) => ({
+    id: variant.id,
+    sku: variant.sku,
+    label: variant.label || variant.unit,
+    unit: variant.unit,
+    mrp: Number(variant.mrp || 0),
+    price: Number(variant.price ?? variant.sellingPrice ?? 0),
+    stock: Number(variant.stock ?? input.stock ?? 0),
+    lowStock: Number(variant.lowStock ?? variant.lowStockThreshold ?? 10),
+    lowStockThreshold: Number(variant.lowStockThreshold ?? variant.lowStock ?? 10),
+    active: variant.active ?? variant.status === "ACTIVE",
+    status: variant.status,
+    isDefault: Boolean(variant.isDefault) || index === 0,
+  })) : [];
   return {
     id: input.id,
     slug: input.slug,
@@ -51,7 +46,7 @@ export function mapApiProduct(input: any): Product {
     category: input.category,
     categoryId: input.categoryId,
     categorySlug: input.categorySlug,
-    unit: input.unit || input.variants?.[0]?.unit || "",
+    unit: input.unit || variants[0]?.unit || "",
     mrp: Number(input.mrp || 0),
     price: Number(input.price ?? input.sellingPrice ?? 0),
     gst: Number(input.gst ?? input.taxPercentage ?? 0),
@@ -59,8 +54,9 @@ export function mapApiProduct(input: any): Product {
     reviews: Number(input.reviews ?? input.reviewCount ?? 0),
     stock: Number(input.stock ?? 0),
     lowStock: Number(input.lowStock ?? 10),
-    image: asset(input.image, productFallback),
+    image: productAsset(input),
     images: input.images,
+    variants,
     tags: Array.isArray(input.tags) ? input.tags : [],
     featured: Boolean(input.featured ?? input.isFeatured),
     organic: Boolean(input.organic ?? input.isOrganic),
@@ -80,21 +76,13 @@ export function mapApiCategory(input: any): Category {
 }
 
 export async function fetchCategories() {
-  try {
-    const data = await requestApi<{ categories: any[] }>("/api/categories");
-    return data.categories.map(mapApiCategory);
-  } catch {
-    return seedCategories;
-  }
+  const data = await requestApi<{ categories: any[] }>("/api/categories");
+  return data.categories.map(mapApiCategory);
 }
 
 export async function fetchBrands() {
-  try {
-    const data = await requestApi<{ brands: any[] }>("/api/brands");
-    return data.brands.map((brand) => ({ id: brand.id, slug: brand.slug, name: brand.name, logo: asset(brand.logo, categoryFallback) }));
-  } catch {
-    return [];
-  }
+  const data = await requestApi<{ brands: any[] }>("/api/brands");
+  return data.brands.map((brand) => ({ id: brand.id, slug: brand.slug, name: brand.name, logo: asset(brand.logo, categoryFallback) }));
 }
 
 export async function fetchProducts(params: Record<string, string | number | boolean | undefined> = {}) {
@@ -102,26 +90,24 @@ export async function fetchProducts(params: Record<string, string | number | boo
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") search.set(key, String(value));
   });
-  try {
-    const data = await requestApi<{ products: any[]; pagination: any; filters: any }>(`/api/products${search.size ? `?${search}` : ""}`);
-    return { products: data.products.map(mapApiProduct), pagination: data.pagination, filters: data.filters, source: "api" as const };
-  } catch {
-    return { products: seedProducts, pagination: { page: 1, limit: seedProducts.length, total: seedProducts.length, totalPages: 1 }, filters: {}, source: "fallback" as const };
-  }
+  const data = await requestApi<{ products: any[]; pagination: any; filters: any }>(`/api/products${search.size ? `?${search}` : ""}`);
+  return { products: data.products.map(mapApiProduct), pagination: data.pagination, filters: data.filters, source: "api" as const };
 }
 
 export async function fetchProduct(slug: string) {
-  try {
-    const data = await requestApi<{ product: any }>(`/api/products/${slug}`);
-    return mapApiProduct(data.product);
-  } catch {
-    return seedProducts.find((product) => product.slug === slug) || seedProducts[0];
-  }
+  const data = await requestApi<{ product: any }>(`/api/products/${slug}`);
+  return mapApiProduct(data.product);
 }
 
-export async function fetchAdminProducts() {
-  const data = await requestApi<{ products: any[] }>("/api/admin/products?limit=60");
-  return data.products.map(mapApiProduct);
+export async function fetchAdminProducts(params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams({ limit: "25", ...Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== "").map(([key, value]) => [key, String(value)])) });
+  const data = await requestApi<{ products: any[]; pagination?: any }>(`/api/admin/products?${search}`);
+  return { products: data.products.map(mapApiProduct), pagination: data.pagination };
+}
+
+export async function fetchAdminProduct(id: string) {
+  const data = await requestApi<{ product: any }>(`/api/admin/products/${encodeURIComponent(id)}`);
+  return mapApiProduct(data.product);
 }
 
 export async function fetchAdminCategories() {
@@ -132,6 +118,14 @@ export async function fetchAdminCategories() {
 export async function createAdminCategory(name: string) {
   const data = await requestApi<{ category: any }>("/api/admin/categories", {
     method: "POST",
+    body: JSON.stringify({ name, image: categoryFallback }),
+  });
+  return mapApiCategory(data.category);
+}
+
+export async function updateAdminCategory(id: string, name: string) {
+  const data = await requestApi<{ category: any }>(`/api/admin/categories/${id}`, {
+    method: "PATCH",
     body: JSON.stringify({ name, image: categoryFallback }),
   });
   return mapApiCategory(data.category);
@@ -149,6 +143,14 @@ export async function fetchAdminBrands() {
 export async function createAdminBrand(name: string) {
   const data = await requestApi<{ brand: any }>("/api/admin/brands", {
     method: "POST",
+    body: JSON.stringify({ name, logo: categoryFallback }),
+  });
+  return { id: data.brand.id, slug: data.brand.slug, name: data.brand.name, logo: data.brand.logo };
+}
+
+export async function updateAdminBrand(id: string, name: string) {
+  const data = await requestApi<{ brand: any }>(`/api/admin/brands/${id}`, {
+    method: "PATCH",
     body: JSON.stringify({ name, logo: categoryFallback }),
   });
   return { id: data.brand.id, slug: data.brand.slug, name: data.brand.name, logo: data.brand.logo };
@@ -179,6 +181,29 @@ export async function deleteAdminProduct(id: string) {
 }
 
 function toAdminPayload(product: Product) {
+  const variants = product.variants?.length ? product.variants.map((variant, index) => ({
+    id: variant.id,
+    sku: variant.sku,
+    label: variant.label || variant.unit,
+    unit: variant.unit,
+    mrp: variant.mrp,
+    price: variant.price,
+    stock: variant.stock ?? (index === 0 ? product.stock : 0),
+    lowStockThreshold: variant.lowStockThreshold ?? variant.lowStock ?? product.lowStock,
+    active: variant.active !== false,
+    isDefault: Boolean(variant.isDefault) || index === 0,
+    status: variant.active === false ? "INACTIVE" : "ACTIVE",
+  })) : [{
+    label: "Default",
+    unit: product.unit,
+    mrp: product.mrp,
+    price: product.price,
+    stock: product.stock,
+    lowStockThreshold: product.lowStock,
+    active: true,
+    isDefault: true,
+    status: "ACTIVE",
+  }];
   return {
     name: product.name,
     slug: product.slug,
@@ -195,12 +220,8 @@ function toAdminPayload(product: Product) {
     local: product.local,
     status: product.active === false ? "INACTIVE" : "ACTIVE",
     image: product.image,
-    variant: {
-      label: "Default",
-      unit: product.unit,
-      mrp: product.mrp,
-      price: product.price,
-    },
+    variants,
+    variant: variants[0],
     inventory: {
       stock: product.stock,
       lowStockThreshold: product.lowStock,

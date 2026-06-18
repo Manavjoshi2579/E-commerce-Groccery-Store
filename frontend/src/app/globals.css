@@ -46,8 +46,14 @@ a {
 }
 
 .container-premium {
-  width: min(1280px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 24px));
   margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .container-premium {
+    width: min(1280px, calc(100% - 48px));
+  }
 }
 
 .premium-card {
@@ -77,9 +83,107 @@ a {
   scrollbar-width: none;
 }
 
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+}
+
+.responsive-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: #b8a36a #eee8da;
+  scrollbar-width: auto;
+}
+
+.responsive-scroll::-webkit-scrollbar {
+  height: 14px;
+  width: 14px;
+}
+
+.responsive-scroll::-webkit-scrollbar-track {
+  background: #eee8da;
+  border-radius: 999px;
+}
+
+.responsive-scroll::-webkit-scrollbar-thumb {
+  background: #b8a36a;
+  border: 3px solid #eee8da;
+  border-radius: 999px;
+}
+
+.responsive-scroll::-webkit-scrollbar-thumb:hover {
+  background: #8a6500;
+}
+
+.scroll-hint {
+  color: rgba(0, 0, 0, 0.52);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .responsive-scroll {
+    padding-bottom: 10px;
+  }
+}
+
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
   .no-print {
     display: none !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-root,
+  .invoice-print-root * {
+    visibility: visible !important;
+  }
+
+  .invoice-page {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .invoice-print-root {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .invoice-table-wrap {
+    overflow: visible !important;
+  }
+
+  .invoice-print-table {
+    min-width: 0 !important;
+    font-size: 9px !important;
+  }
+
+  .invoice-print-table th,
+  .invoice-print-table td {
+    padding: 6px !important;
+  }
+
+  .premium-card {
+    box-shadow: none !important;
   }
 
   body {

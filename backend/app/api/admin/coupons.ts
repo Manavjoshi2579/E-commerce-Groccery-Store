@@ -9,7 +9,7 @@ import {
   softDeleteAdminCoupon,
   updateAdminCoupon,
 } from "../../../services/coupon.service.js";
-import { adminCouponSchema } from "../../../validators/cart.js";
+import { adminCouponSchema, adminCouponUpdateSchema } from "../../../validators/cart.js";
 
 export const adminCouponRouter = Router();
 
@@ -32,7 +32,7 @@ adminCouponRouter.post("/coupons", requireAdminRole(couponManageRoles), async (r
 });
 
 adminCouponRouter.patch("/coupons/:id", requireAdminRole(couponManageRoles), async (req, res) => {
-  const parsed = adminCouponSchema.partial().safeParse(req.body);
+  const parsed = adminCouponUpdateSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid coupon payload.");
   return sendOk(res, { coupon: await updateAdminCoupon(param(req.params.id), parsed.data) });
 });

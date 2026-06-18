@@ -1,5 +1,5 @@
 export const adminUser = {
-  email: "admin@eagleclub.in",
+  email: "admin@eaglemart.in",
   password: "admin123",
-  name: "Eagleclub Admin",
+  name: "Eagle Mart Admin",
 };

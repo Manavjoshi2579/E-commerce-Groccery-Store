@@ -2,24 +2,7 @@
 
 import type { CartItem, Coupon, Product } from "@/types";
 import { mapApiProduct } from "./catalog";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string } };
-
-async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  const body = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || !body.ok) throw new Error(body.ok ? "API request failed" : body.error.message);
-  return body.data;
-}
+import { requestApi } from "./api";
 
 export type CartSummary = {
   cartId: string;
@@ -51,6 +34,7 @@ export function mapCoupon(input: any): Coupon {
     endAt: input.endAt,
     usageLimit: input.usageLimit,
     perUserLimit: input.perUserLimit,
+    usedCount: Number(input.usedCount || 0),
     active: Boolean(input.active ?? true),
   };
 }
@@ -59,7 +43,18 @@ function mapCart(input: any): CartSummary {
   const products = (input.items || []).map((item: any) => mapApiProduct(item.product));
   return {
     cartId: input.cartId,
-    items: (input.items || []).map((item: any) => ({ id: item.id, productId: item.productId, variantId: item.variantId, qty: item.qty ?? item.quantity })),
+    items: (input.items || []).map((item: any) => ({
+      id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
+      qty: item.qty ?? item.quantity,
+      name: item.name,
+      sku: item.sku,
+      unit: item.unit,
+      mrp: item.mrp == null ? undefined : Number(item.mrp),
+      price: item.price == null ? item.unitPrice == null ? undefined : Number(item.unitPrice) : Number(item.price),
+      lineTotal: item.lineTotal == null ? undefined : Number(item.lineTotal),
+    })),
     products,
     subtotal: Number(input.subtotal || 0),
     discount: Number(input.discount || 0),
@@ -78,10 +73,10 @@ export async function getBackendCart() {
   return mapCart(data.cart);
 }
 
-export async function addBackendCartItem(productId: string, quantity = 1, variantId?: string) {
+export async function addBackendCartItem(productId: string, quantity = 1, variantId?: string, custom?: { unit?: string; price?: number; mrp?: number }) {
   const data = await requestApi<{ cart: any }>("/api/cart/items", {
     method: "POST",
-    body: JSON.stringify({ productId, variantId, quantity }),
+    body: JSON.stringify({ productId, variantId, quantity, customUnit: custom?.unit, customPrice: custom?.price, customMrp: custom?.mrp }),
   });
   return mapCart(data.cart);
 }
@@ -152,6 +147,11 @@ export async function moveBackendWishlistToCart(productOrItemId: string) {
 
 export async function fetchAdminCoupons() {
   const data = await requestApi<{ coupons: any[] }>("/api/admin/coupons");
+  return data.coupons.map(mapCoupon);
+}
+
+export async function fetchAvailableCoupons() {
+  const data = await requestApi<{ coupons: any[] }>("/api/coupons");
   return data.coupons.map(mapCoupon);
 }
 

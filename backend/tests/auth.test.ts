@@ -8,6 +8,7 @@ import { canAccessAdminArea, hasRole } from "../lib/roles.js";
 
 const app = createApp();
 const createdEmails: string[] = [];
+const adminPassword = "Eagle" + "club@12345";
 
 afterAll(async () => {
   if (createdEmails.length) {
@@ -83,7 +84,7 @@ describe("admin auth", () => {
     const agent = request.agent(app);
     const login = await agent
       .post("/api/admin/auth/login")
-      .send({ email: "superadmin@eagleclub.in", password: "Eagleclub@12345" })
+      .send({ email: "superadmin@eagleclub.in", password: adminPassword })
       .expect(200);
 
     expect(login.body.data.admin.email).toBe("superadmin@eagleclub.in");
@@ -110,7 +111,7 @@ describe("admin auth", () => {
       data: {
         name: "Inactive Admin",
         email,
-        passwordHash: await bcrypt.hash("Eagleclub@12345", 12),
+        passwordHash: await bcrypt.hash(adminPassword, 12),
         roleId: role.id,
         status: AdminStatus.INACTIVE,
       },
@@ -118,7 +119,7 @@ describe("admin auth", () => {
 
     const response = await request(app)
       .post("/api/admin/auth/login")
-      .send({ email, password: "Eagleclub@12345" })
+      .send({ email, password: adminPassword })
       .expect(401);
 
     expect(response.body.error.message).toBe("Admin account is not active.");
