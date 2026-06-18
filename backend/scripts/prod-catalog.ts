@@ -163,10 +163,10 @@ async function upsertCatalog() {
     }
 
     const variantData = {
+      sku: `${slug.toUpperCase().replace(/-/g, "-")}-${slugify(item.unit).toUpperCase()}`,
+      label: item.unit,
       mrp: money(item.mrp),
       price: money(item.price),
-      stock: item.stock,
-      lowStockThreshold: Math.max(8, Math.round(item.stock * 0.16)),
       status: ProductStatus.ACTIVE,
     };
     const existingVariant = await prisma.productVariant.findFirst({
@@ -189,9 +189,8 @@ async function upsertCatalog() {
     }
 
     const inventoryData = {
-      quantity: item.stock,
-      reserved: 0,
-      reorderLevel: Math.max(8, Math.round(item.stock * 0.16)),
+      stock: item.stock,
+      lowStockThreshold: Math.max(8, Math.round(item.stock * 0.16)),
     };
     const existingInventory = await prisma.inventory.findFirst({
       where: { productId: product.id },
@@ -221,36 +220,50 @@ async function upsertOperationalContent() {
 
   for (const [name, pincodes, fee, freeAbove] of zones) {
     await prisma.deliveryZone.upsert({
-      where: { name },
-      update: { pincodes: [...pincodes], fee: money(fee), freeAbove: money(freeAbove), active: true },
-      create: { name, pincodes: [...pincodes], fee: money(fee), freeAbove: money(freeAbove), active: true },
+      where: { city: name },
+      update: { pincodes: [...pincodes], deliveryCharge: money(fee), freeDeliveryThreshold: money(freeAbove), active: true },
+      create: { city: name, pincodes: [...pincodes], deliveryCharge: money(fee), freeDeliveryThreshold: money(freeAbove), active: true },
     });
   }
 
   const today = new Date();
-  for (let day = 0; day < 5; day++) {
-    const date = daysFromNow(day);
-    for (const [index, label] of ["8 AM - 10 AM", "10 AM - 12 PM", "4 PM - 6 PM", "6 PM - 8 PM"].entries()) {
-      await prisma.deliverySlot.upsert({
-        where: { date_label: { date, label } },
-        update: { capacity: 35, booked: 0, status: "OPEN" },
-        create: { date, label, capacity: 35, booked: day === 0 && index === 0 ? 8 : 0, status: "OPEN" },
+  const vadodaraZone = await prisma.deliveryZone.findUnique({ where: { city: "Vadodara" }, select: { id: true } });
+  const slotSeeds = [
+    ["8 AM - 10 AM", "08:00", "10:00"],
+    ["10 AM - 12 PM", "10:00", "12:00"],
+    ["4 PM - 6 PM", "16:00", "18:00"],
+    ["6 PM - 8 PM", "18:00", "20:00"],
+  ] as const;
+
+  if (vadodaraZone) {
+    for (const [label, startTime, endTime] of slotSeeds) {
+      const existingSlot = await prisma.deliverySlot.findFirst({
+        where: { zoneId: vadodaraZone.id, label },
+        select: { id: true },
       });
+      const slotData = { zoneId: vadodaraZone.id, label, startTime, endTime, capacity: 35, active: true };
+      if (existingSlot) {
+        await prisma.deliverySlot.update({ where: { id: existingSlot.id }, data: slotData });
+      } else {
+        await prisma.deliverySlot.create({ data: slotData });
+      }
     }
   }
 
   await prisma.coupon.upsert({
     where: { code: "WELCOME50" },
-    update: { type: CouponType.FIXED, value: money(50), minOrderValue: money(499), maxDiscount: money(50), active: true, validFrom: today, validTo: daysFromNow(90), usageLimit: 1000 },
-    create: { code: "WELCOME50", title: "Welcome savings", type: CouponType.FIXED, value: money(50), minOrderValue: money(499), maxDiscount: money(50), active: true, validFrom: today, validTo: daysFromNow(90), usageLimit: 1000 },
+    update: { type: CouponType.FIXED, value: money(50), minOrderAmount: money(499), maxDiscount: money(50), active: true, startAt: today, endAt: daysFromNow(90), usageLimit: 1000, perUserLimit: 1 },
+    create: { code: "WELCOME50", title: "Welcome savings", type: CouponType.FIXED, value: money(50), minOrderAmount: money(499), maxDiscount: money(50), active: true, startAt: today, endAt: daysFromNow(90), usageLimit: 1000, perUserLimit: 1 },
   });
 
   for (const [index, [category, question, answer]] of faqSeeds.entries()) {
-    await prisma.fAQ.upsert({
-      where: { question },
-      update: { category, answer, displayOrder: index + 1, isActive: true },
-      create: { category, question, answer, displayOrder: index + 1, isActive: true },
-    });
+    const existingFaq = await prisma.fAQ.findFirst({ where: { question }, select: { id: true } });
+    const faqData = { category, question, answer, displayOrder: index + 1, isActive: true };
+    if (existingFaq) {
+      await prisma.fAQ.update({ where: { id: existingFaq.id }, data: faqData });
+    } else {
+      await prisma.fAQ.create({ data: faqData });
+    }
   }
 
   await prisma.setting.upsert({
