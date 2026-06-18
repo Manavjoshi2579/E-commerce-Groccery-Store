@@ -9,6 +9,7 @@
     "db:check": "tsx scripts/db-check.ts",
     "db:demo-reset": "tsx scripts/demo-reset.ts",
     "db:ensure-gujarat-delivery": "tsx scripts/ensure-gujarat-delivery.ts",
+    "db:prod-catalog": "tsx scripts/prod-catalog.ts",
     "db:prod-bootstrap": "tsx scripts/prod-bootstrap.ts",
     "db:seed": "prisma db seed",
     "prisma:validate": "prisma validate",
