@@ -1,4 +1,4 @@
-import { CouponType, DeliverySlotStatus, PrismaClient, ProductStatus, SettingType } from "@prisma/client";
+import { CouponType, PrismaClient, ProductStatus, SettingType } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { daysFromNow } from "../lib/dates.js";
 import { gujaratPincodePrefixes } from "../lib/gujarat-pincodes.js";
@@ -201,8 +201,8 @@ async function upsertOperationalContent() {
     for (const [index, label] of ["8 AM - 10 AM", "10 AM - 12 PM", "4 PM - 6 PM", "6 PM - 8 PM"].entries()) {
       await prisma.deliverySlot.upsert({
         where: { date_label: { date, label } },
-        update: { capacity: 35, booked: 0, status: DeliverySlotStatus.OPEN },
-        create: { date, label, capacity: 35, booked: day === 0 && index === 0 ? 8 : 0, status: DeliverySlotStatus.OPEN },
+        update: { capacity: 35, booked: 0, status: "OPEN" },
+        create: { date, label, capacity: 35, booked: day === 0 && index === 0 ? 8 : 0, status: "OPEN" },
       });
     }
   }
