@@ -224,7 +224,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
     ["/account", User, customer ? "My Account" : "Login"],
   ] as const;
   return (
-    <div className="flex min-h-screen flex-col pb-24 md:pb-0">
+    <div className="flex min-h-screen flex-col bg-black">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black text-white shadow-xl no-print">
         <div className="container-premium flex min-h-16 items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -271,13 +271,10 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
       </header>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 bg-[#f7f4ec]">{children}</div>
       <Footer />
       <a href="https://wa.me/919876543210" className="fixed bottom-32 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-2xl md:bottom-6 no-print" aria-label="WhatsApp support"><MessageCircle /></a>
       {cartCount > 0 && <Link href="/cart" className="fixed bottom-20 left-4 right-4 z-40 flex items-center justify-between rounded-md bg-black px-4 py-3 text-white shadow-2xl md:hidden no-print"><span className="text-sm font-bold">{cartCount} items - {money(amount)}</span><span className="rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">Checkout</span></Link>}
-      <div className="fixed bottom-4 left-4 z-50 md:hidden no-print">
-        <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-2xl" aria-expanded={mobileNavOpen} aria-label="Open navigation"><Menu size={23} /></button>
-      </div>
     </div>
   );
 }
@@ -402,15 +399,28 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
       setMessage(error.code === error.PERMISSION_DENIED ? "Allow location access in your browser, or enter pincode manually." : error.code === error.TIMEOUT ? "Location request timed out. Try again or enter pincode manually." : "Could not read your location. Please try again.");
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   };
+  if (compact) {
+    return (
+      <div className="flex h-11 min-w-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white">
+        <MapPin size={16} className="shrink-0 text-[#d4af37]" />
+        <span className="hidden text-white/55 xl:inline">Deliver to</span>
+        <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="w-16 bg-transparent text-sm font-bold text-white outline-none" />
+        <button type="button" onClick={() => run()} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10">{status === "loading" ? "Checking" : "Check"}</button>
+        <button type="button" onClick={detectLocation} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10">{status === "locating" ? "Locating" : "Locate"}</button>
+        {place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
+        {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-white/60"}`}>{message}</span>}
+      </div>
+    );
+  }
   return (
-    <div className={compact ? "flex h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white" : "inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full bg-white/95 p-2 text-black shadow-xl ring-1 ring-black/10"}>
-      <MapPin size={compact ? 16 : 18} className={compact ? "text-[#d4af37]" : "text-[#8a6500]"} />
-      {compact && <span className="hidden text-white/55 xl:inline">Deliver to</span>}
-      <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className={compact ? "w-16 bg-transparent text-sm font-bold text-white outline-none" : "min-h-11 w-24 rounded-full bg-transparent px-3 text-sm font-bold text-black outline-none"} />
-      <button type="button" onClick={() => run()} className={compact ? "rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10" : "min-h-11 rounded-full bg-black px-5 text-sm font-bold text-white hover:bg-[#222]"}>{status === "loading" ? "Checking" : "Check"}</button>
-      <button type="button" onClick={detectLocation} className={compact ? "rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10" : "min-h-11 rounded-full border border-black/15 px-4 text-sm font-bold text-black hover:border-[#d4af37] hover:bg-[#fff8df]"}>{status === "locating" ? "Locating" : compact ? "Locate" : "Use my location"}</button>
-      {compact && place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
-      {message && <span className={`${compact ? "hidden lg:inline" : "basis-full px-4 pb-1 text-xs"} ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-black/60"}`}>{message}</span>}
+    <div className="w-full max-w-[680px] rounded-2xl bg-white/95 p-3 text-black shadow-xl ring-1 ring-black/10 sm:w-fit sm:rounded-full">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
+        <MapPin size={18} className="shrink-0 text-[#8a6500]" />
+        <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="min-h-11 min-w-0 rounded-full bg-transparent px-2 text-base font-bold text-black outline-none sm:w-24 sm:px-3 sm:text-sm" />
+        <button type="button" onClick={() => run()} className="min-h-11 rounded-full bg-black px-5 text-sm font-bold text-white hover:bg-[#222]">{status === "loading" ? "Checking" : "Check"}</button>
+        <button type="button" onClick={detectLocation} className="col-span-3 min-h-11 rounded-full border border-black/15 px-4 text-sm font-bold text-black hover:border-[#d4af37] hover:bg-[#fff8df] sm:col-auto">{status === "locating" ? "Locating" : "Use my location"}</button>
+      </div>
+      {message && <p className={`mt-2 px-2 text-sm font-semibold leading-5 sm:px-4 ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-black/60"}`}>{message}</p>}
     </div>
   );
 }
@@ -587,8 +597,8 @@ function CategoryShowcase({ category, products }: { category: Category; products
             <span className="mt-4 inline-flex rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">View All</span>
           </div>
         </Link>
-        <div className="bg-[#f7f2e8] p-4">
-          {products.length ? <div className="responsive-scroll flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{products.map((product) => <div key={product.id} className="min-w-[210px] text-black"><ProductCard product={product} /></div>)}</div> : <div className="flex min-h-36 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">Products for this category will be added soon.</div>}
+        <div className="min-w-0 bg-[#f7f2e8] p-4">
+          {products.length ? <div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible lg:grid-cols-4">{products.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div> : <div className="flex min-h-36 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">Products for this category will be added soon.</div>}
         </div>
       </div>
     </section>
@@ -596,7 +606,7 @@ function CategoryShowcase({ category, products }: { category: Category; products
 }
 
 function ProductSection({ title, products }: { title: string; products: Product[] }) {
-  return <section className="container-premium py-10"><div className="mb-6 flex items-end justify-between gap-3"><h2 className="display-font text-2xl font-black md:text-3xl">{title}</h2><Link href="/products" className="shrink-0 text-sm font-bold text-[#8a6500]">View all</Link></div><div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-4">{products.map((p) => <ProductCard key={p.id} product={p} />)}</div></section>;
+  return <section className="container-premium py-10"><div className="mb-6 flex items-end justify-between gap-3"><h2 className="display-font text-2xl font-black md:text-3xl">{title}</h2><Link href="/products" className="shrink-0 text-sm font-bold text-[#8a6500]">View all</Link></div><div className="responsive-scroll flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{products.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 lg:min-w-0 lg:max-w-none"><ProductCard product={p} /></div>)}</div></section>;
 }
 
 function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
@@ -750,7 +760,7 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
         {activeFilters.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{activeFilters.map(([label, value]) => <span key={`${label}-${value}`} className="rounded-full bg-black px-3 py-1 text-xs font-bold capitalize text-white">{label}: {value}</span>)}<button type="button" onClick={clearFilters} className="rounded-full border border-black/20 bg-white px-3 py-1 text-xs font-bold">Clear all</button></div>}
         <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
           {renderFilterPanel()}
-          <section>{list.length ? <div className={`grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 xl:grid-cols-4 ${loadingProducts ? "opacity-60" : ""}`}>{list.map((p) => <ProductCard key={p.id} product={p} />)}</div> : <section className="premium-card p-10 text-center"><h2 className="display-font text-2xl font-black">No products found</h2><p className="mt-2 text-sm text-black/55">Try removing a filter or changing your search.</p><Button variant="gold" className="mt-5" onClick={clearFilters}>Clear filters</Button></section>}</section>
+          <section>{list.length ? <div className={`responsive-scroll flex gap-4 overflow-x-auto pb-2 xl:grid xl:grid-cols-4 xl:overflow-visible ${loadingProducts ? "opacity-60" : ""}`}>{list.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 xl:min-w-0 xl:max-w-none"><ProductCard product={p} /></div>)}</div> : <section className="premium-card p-10 text-center"><h2 className="display-font text-2xl font-black">No products found</h2><p className="mt-2 text-sm text-black/55">Try removing a filter or changing your search.</p><Button variant="gold" className="mt-5" onClick={clearFilters}>Clear filters</Button></section>}</section>
         </div>
         {mobileFiltersOpen && <div className="fixed inset-0 z-[70] bg-black/60 p-3 lg:hidden"><div className="ml-auto flex h-full max-w-sm flex-col overflow-hidden rounded-md bg-[#f7f4ec]"><div className="flex items-center justify-between border-b bg-white p-4"><h2 className="display-font text-xl font-black">Filters</h2><button type="button" onClick={() => setMobileFiltersOpen(false)} className="rounded-md border px-3 py-2 text-sm font-bold">Close</button></div><div className="min-h-0 flex-1 overflow-y-auto p-3">{renderFilterPanel(true)}</div><div className="border-t bg-white p-3"><Button variant="gold" className="w-full" onClick={() => setMobileFiltersOpen(false)}>Show {list.length} products</Button></div></div></div>}
       </main>
@@ -909,7 +919,7 @@ function Summary({ t, code, coupons, setCode, applyCoupon }: { t: ReturnType<typ
 function WishlistPage() {
   const { wishlist, products, moveWishlistToCart, toggleWishlist } = useStore();
   const list = products.filter((p) => wishlist.includes(p.id));
-  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Wishlist</h1>{list.length ? <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{list.map((p) => <ProductCard key={p.id} product={p} footer={<><Button variant="gold" onClick={() => moveWishlistToCart(p.id)}>Move</Button><Button variant="outline" onClick={() => toggleWishlist(p.id)}>Remove</Button></>} />)}</div> : <Empty title="Your wishlist is empty" cta="Browse products" href="/products" />}</main></CustomerShell>;
+  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Wishlist</h1>{list.length ? <div className="responsive-scroll mt-6 flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{list.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 lg:min-w-0 lg:max-w-none"><ProductCard product={p} footer={<><Button variant="gold" onClick={() => moveWishlistToCart(p.id)}>Move</Button><Button variant="outline" onClick={() => toggleWishlist(p.id)}>Remove</Button></>} /></div>)}</div> : <Empty title="Your wishlist is empty" cta="Browse products" href="/products" />}</main></CustomerShell>;
 }
 
 type AddressInput = Omit<Address, "id">;
