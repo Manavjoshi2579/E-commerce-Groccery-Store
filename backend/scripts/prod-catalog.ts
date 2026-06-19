@@ -1,7 +1,6 @@
 import { CouponType, PrismaClient, ProductStatus, SettingType } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { daysFromNow } from "../lib/dates.js";
-import { gujaratPincodePrefixes } from "../lib/gujarat-pincodes.js";
 import { slugify } from "../lib/ids.js";
 
 const prisma = new PrismaClient();
@@ -214,9 +213,13 @@ async function upsertCatalog() {
 
 async function upsertOperationalContent() {
   const zones = [
-    ["Gujarat", gujaratPincodePrefixes, 49, 799],
     ["Vadodara", ["390001", "390007", "390020", "390024"], 49, 799],
   ] as const;
+
+  await prisma.deliveryZone.updateMany({
+    where: { city: { in: ["Gujarat", "India"] } },
+    data: { active: false },
+  });
 
   for (const [name, pincodes, fee, freeAbove] of zones) {
     await prisma.deliveryZone.upsert({

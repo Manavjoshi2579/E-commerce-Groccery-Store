@@ -19,10 +19,7 @@ function pincodes(value: Prisma.JsonValue): string[] {
 function matchesPincode(zonePincodes: string[], pincode: string) {
   return zonePincodes.some((entry) => {
     const normalized = entry.trim();
-    if (!normalized) return false;
-    if (/^\d{6}$/.test(normalized)) return normalized === pincode;
-    if (/^\d{2,5}$/.test(normalized)) return pincode.startsWith(normalized);
-    return false;
+    return /^\d{6}$/.test(normalized) && normalized === pincode;
   });
 }
 
