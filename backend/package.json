@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "tsx app/server.ts",
     "build": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:check": "tsx scripts/db-check.ts",
