@@ -16,6 +16,16 @@ function pincodes(value: Prisma.JsonValue): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function matchesPincode(zonePincodes: string[], pincode: string) {
+  return zonePincodes.some((entry) => {
+    const normalized = entry.trim();
+    if (!normalized) return false;
+    if (/^\d{6}$/.test(normalized)) return normalized === pincode;
+    if (/^\d{2,5}$/.test(normalized)) return pincode.startsWith(normalized);
+    return false;
+  });
+}
+
 function extractIndianPincode(...values: unknown[]) {
   return values.map((value) => String(value || "")).join(" ").match(/\b[1-9]\d{5}\b/)?.[0] || "";
 }
@@ -67,19 +77,7 @@ export async function listDeliveryZones() {
 
 export async function findZoneByPincode(pincode: string) {
   const zones = await db.deliveryZone.findMany({ where: { active: true } });
-  const exact = zones.find((zone) => pincodes(zone.pincodes).includes(pincode));
-  if (exact) return exact;
-  const existingIndiaZone = zones.find((zone) => zone.city.toLowerCase() === "india");
-  if (existingIndiaZone) return existingIndiaZone;
-  return db.deliveryZone.create({
-    data: {
-      city: "India",
-      pincodes: [],
-      deliveryCharge: 49,
-      freeDeliveryThreshold: 799,
-      active: true,
-    },
-  });
+  return zones.find((zone) => matchesPincode(pincodes(zone.pincodes), pincode)) || null;
 }
 
 async function ensureDefaultSlots(zoneId: string) {
@@ -92,9 +90,9 @@ async function ensureDefaultSlots(zoneId: string) {
 export async function checkPincode(pincode: string) {
   const zone = await findZoneByPincode(pincode);
   return {
-    serviceable: true,
+    serviceable: Boolean(zone),
     zone: zone ? mapZone(zone) : null,
-    message: "Pincode is serviceable.",
+    message: zone ? "Pincode is serviceable." : "Delivery is not available for this pincode yet.",
   };
 }
 
@@ -107,7 +105,7 @@ export async function reverseGeocodeLocation(latitude: number, longitude: number
       }>(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&addressdetails=1`, {
         headers: {
           Accept: "application/json",
-          "User-Agent": "EagleMartGrocery/1.0 (local development)",
+          "User-Agent": "EagleMartGrocery/1.0 (https://eaglesclub.in)",
         },
       });
       const pincode = extractIndianPincode(data.address?.postcode, data.display_name);

@@ -331,11 +331,13 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
   const [pincode, setPincode] = useState(() => readSavedDeliveryPincode());
   const [status, setStatus] = useState<"idle" | "loading" | "locating" | "ok" | "no" | "error">("ok");
   const [message, setMessage] = useState("Delivery available. Pincode is serviceable.");
+  const [place, setPlace] = useState("");
   useEffect(() => {
     const sync = (event: Event) => {
       const next = event instanceof CustomEvent && typeof event.detail === "string" ? event.detail : readSavedDeliveryPincode();
       setPincode(next);
       setStatus("ok");
+      setPlace("");
       setMessage("Delivery available. Pincode is serviceable.");
     };
     window.addEventListener(deliveryPincodeEvent, sync);
@@ -356,6 +358,7 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
         new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Pincode check timed out.")), 4000)),
       ]);
       setStatus(result.serviceable ? "ok" : "no");
+      setPlace(result.zone?.city ? result.zone.city : "");
       setMessage(result.serviceable ? `Delivery available. ${result.message}` : result.message);
       if (result.serviceable) saveDeliveryPincode(clean);
     } catch (error) {
@@ -364,6 +367,11 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
     }
   };
   const detectLocation = () => {
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setStatus("error");
+      setMessage("Location needs HTTPS. Open the secure website, or enter your pincode manually.");
+      return;
+    }
     if (!("geolocation" in navigator)) {
       setStatus("error");
       setMessage("Location detection is not supported by this browser.");
@@ -377,6 +385,7 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
         const result = await reverseGeocodeLocation(position.coords.latitude, position.coords.longitude);
         setPincode(result.pincode);
         setStatus(result.serviceable ? "ok" : "no");
+        setPlace(result.place || result.zone?.city || "");
         setMessage(result.place ? `Detected ${result.place}. ${result.serviceable ? "Delivery available. " : ""}${result.message}` : result.serviceable ? `Delivery available. ${result.message}` : result.message);
         if (result.serviceable) saveDeliveryPincode(result.pincode);
       } catch (error) {
@@ -397,9 +406,10 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
     <div className={compact ? "flex h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white" : "inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full bg-white/95 p-2 text-black shadow-xl ring-1 ring-black/10"}>
       <MapPin size={compact ? 16 : 18} className={compact ? "text-[#d4af37]" : "text-[#8a6500]"} />
       {compact && <span className="hidden text-white/55 xl:inline">Deliver to</span>}
-      <input aria-label="Delivery pincode" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); }} className={compact ? "w-16 bg-transparent text-sm font-bold text-white outline-none" : "min-h-11 w-24 rounded-full bg-transparent px-3 text-sm font-bold text-black outline-none"} />
+      <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className={compact ? "w-16 bg-transparent text-sm font-bold text-white outline-none" : "min-h-11 w-24 rounded-full bg-transparent px-3 text-sm font-bold text-black outline-none"} />
       <button type="button" onClick={() => run()} className={compact ? "rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10" : "min-h-11 rounded-full bg-black px-5 text-sm font-bold text-white hover:bg-[#222]"}>{status === "loading" ? "Checking" : "Check"}</button>
       <button type="button" onClick={detectLocation} className={compact ? "rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10" : "min-h-11 rounded-full border border-black/15 px-4 text-sm font-bold text-black hover:border-[#d4af37] hover:bg-[#fff8df]"}>{status === "locating" ? "Locating" : compact ? "Locate" : "Use my location"}</button>
+      {compact && place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
       {message && <span className={`${compact ? "hidden lg:inline" : "basis-full px-4 pb-1 text-xs"} ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-black/60"}`}>{message}</span>}
     </div>
   );
