@@ -1,3 +1,4 @@
+import "../lib/load-env.js";
 import { PrismaClient } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { gujaratPincodePrefixes } from "../lib/gujarat-pincodes.js";

@@ -1,3 +1,4 @@
+import "../lib/load-env.js";
 import { createApp } from "./app.js";
 import { validateEnv } from "../lib/env.js";
 

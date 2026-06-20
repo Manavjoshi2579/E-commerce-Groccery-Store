@@ -11,6 +11,9 @@ export function getEnv(name: (typeof required)[number]) {
 
 export function validateEnv() {
   for (const key of required) getEnv(key);
+  if (!process.env.DATABASE_URL?.startsWith("mysql://")) {
+    throw new Error('DATABASE_URL must use the MySQL format: mysql://USER:PASSWORD@127.0.0.1:3306/DB_NAME');
+  }
   if (process.env.NODE_ENV === "production") {
     for (const key of productionRequired) {
       if (!process.env[key]) throw new Error(`Missing required production environment variable: ${key}`);

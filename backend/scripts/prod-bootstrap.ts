@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import "../lib/load-env.js";
 import { AdminStatus, PrismaClient, RoleName, SettingType } from "@prisma/client";
 
 const prisma = new PrismaClient();

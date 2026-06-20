@@ -1,3 +1,4 @@
+import "../lib/load-env.js";
 import bcrypt from "bcrypt";
 import {
   AdminStatus,

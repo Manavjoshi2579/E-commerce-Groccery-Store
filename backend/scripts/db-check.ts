@@ -1,3 +1,4 @@
+import "../lib/load-env.js";
 import { PrismaClient } from "@prisma/client";
 import { databaseConnectionMessage } from "../lib/db-health.js";
 

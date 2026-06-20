@@ -1,3 +1,4 @@
+import "../lib/load-env.js";
 import { CouponType, PrismaClient, ProductStatus, SettingType } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { daysFromNow } from "../lib/dates.js";
