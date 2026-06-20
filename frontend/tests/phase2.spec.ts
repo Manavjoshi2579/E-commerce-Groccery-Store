@@ -82,9 +82,8 @@ test("phase 8.1 header auth navigation and pincode UX work", async ({ page }) =>
   await expect(header).not.toContainText("Dairy");
 
   const hero = page.locator("main, section").filter({ hasText: "India's Finest Grocery Experience" }).first();
-  await hero.getByLabel("Delivery pincode").fill("380015");
-  await hero.getByRole("button", { name: "Check" }).click();
-  await expect(hero.getByText(/Delivery available|Pincode is serviceable/)).toBeVisible();
+  await expect(hero.getByRole("link", { name: /Shop Now/ })).toBeVisible();
+  await expect(hero.getByLabel("Delivery pincode")).toHaveCount(0);
 
   await page.getByLabel("Account menu").click();
   await page.getByText("Customer Login").click();

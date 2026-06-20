@@ -231,7 +231,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
             <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white hover:bg-white/10 md:hidden" aria-expanded={mobileNavOpen} aria-label="Open navigation"><Menu size={22} /></button>
             <Link href="/" onClick={closeMobileNav}><Logo invert /></Link>
           </div>
-          <div className="hidden md:block"><PincodeChecker compact /></div>
+          <div className="hidden md:block"><PincodeChecker /></div>
           <form onSubmit={(event) => { event.preventDefault(); submitSearch(); }} className="hidden min-w-[260px] flex-1 items-center rounded-md bg-white px-3 py-2 text-black md:flex">
             <Search size={18} className="text-black/50" />
             <input value={term} onChange={(event) => setTerm(event.target.value)} className="w-full border-0 bg-transparent px-3 text-sm outline-none" placeholder="Search atta, milk, fruits, vegetables..." />
@@ -248,7 +248,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
               <Search size={18} className="text-[#d4af37]" />
               <input value={term} onChange={(event) => setTerm(event.target.value)} className="w-full bg-transparent text-sm outline-none placeholder:text-white/55" placeholder="Search Eagle Mart" />
             </form>
-            <PincodeChecker compact />
+            <PincodeChecker />
           </div>
         </div>
         {mobileNavOpen && (
@@ -324,7 +324,7 @@ function saveDeliveryPincode(pincode: string) {
   window.dispatchEvent(new CustomEvent(deliveryPincodeEvent, { detail: pincode }));
 }
 
-function PincodeChecker({ compact = false }: { compact?: boolean }) {
+function PincodeChecker() {
   const [pincode, setPincode] = useState(() => readSavedDeliveryPincode());
   const [status, setStatus] = useState<"idle" | "loading" | "locating" | "ok" | "no" | "error">("ok");
   const [message, setMessage] = useState("Delivery available. Pincode is serviceable.");
@@ -399,28 +399,15 @@ function PincodeChecker({ compact = false }: { compact?: boolean }) {
       setMessage(error.code === error.PERMISSION_DENIED ? "Allow location access in your browser, or enter pincode manually." : error.code === error.TIMEOUT ? "Location request timed out. Try again or enter pincode manually." : "Could not read your location. Please try again.");
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   };
-  if (compact) {
-    return (
-      <div className="flex h-11 min-w-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white">
-        <MapPin size={16} className="shrink-0 text-[#d4af37]" />
-        <span className="hidden text-white/55 xl:inline">Deliver to</span>
-        <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="w-16 bg-transparent text-sm font-bold text-white outline-none" />
-        <button type="button" onClick={() => run()} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10">{status === "loading" ? "Checking" : "Check"}</button>
-        <button type="button" onClick={detectLocation} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10">{status === "locating" ? "Locating" : "Locate"}</button>
-        {place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
-        {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-white/60"}`}>{message}</span>}
-      </div>
-    );
-  }
   return (
-    <div className="w-full max-w-[680px] rounded-2xl bg-white/95 p-3 text-black shadow-xl ring-1 ring-black/10 sm:w-fit sm:rounded-full">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
-        <MapPin size={18} className="shrink-0 text-[#8a6500]" />
-        <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="min-h-11 min-w-0 rounded-full bg-transparent px-2 text-base font-bold text-black outline-none sm:w-24 sm:px-3 sm:text-sm" />
-        <button type="button" onClick={() => run()} className="min-h-11 rounded-full bg-black px-5 text-sm font-bold text-white hover:bg-[#222]">{status === "loading" ? "Checking" : "Check"}</button>
-        <button type="button" onClick={detectLocation} className="col-span-3 min-h-11 rounded-full border border-black/15 px-4 text-sm font-bold text-black hover:border-[#d4af37] hover:bg-[#fff8df] sm:col-auto">{status === "locating" ? "Locating" : "Use my location"}</button>
-      </div>
-      {message && <p className={`mt-2 px-2 text-sm font-semibold leading-5 sm:px-4 ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-black/60"}`}>{message}</p>}
+    <div className="flex h-11 min-w-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white">
+      <MapPin size={16} className="shrink-0 text-[#d4af37]" />
+      <span className="hidden text-white/55 xl:inline">Deliver to</span>
+      <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="w-16 bg-transparent text-sm font-bold text-white outline-none" />
+      <button type="button" onClick={() => run()} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10">{status === "loading" ? "Checking" : "Check"}</button>
+      <button type="button" onClick={detectLocation} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10">{status === "locating" ? "Locating" : "Locate"}</button>
+      {place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
+      {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-white/60"}`}>{message}</span>}
     </div>
   );
 }
