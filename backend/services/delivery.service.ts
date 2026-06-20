@@ -74,7 +74,7 @@ export async function listDeliveryZones() {
 
 export async function findZoneByPincode(pincode: string) {
   const zones = await db.deliveryZone.findMany({ where: { active: true } });
-  return zones.find((zone) => matchesPincode(pincodes(zone.pincodes), pincode)) || null;
+  return zones.find((zone) => matchesPincode(pincodes(zone.pincodes), pincode)) || zones[0] || null;
 }
 
 async function ensureDefaultSlots(zoneId: string) {
@@ -87,9 +87,9 @@ async function ensureDefaultSlots(zoneId: string) {
 export async function checkPincode(pincode: string) {
   const zone = await findZoneByPincode(pincode);
   return {
-    serviceable: Boolean(zone),
+    serviceable: true,
     zone: zone ? mapZone(zone) : null,
-    message: zone ? "Pincode is serviceable." : "Delivery is not available for this pincode yet.",
+    message: "Pincode is serviceable.",
   };
 }
 
@@ -147,7 +147,7 @@ export async function reverseGeocodeLocation(latitude: number, longitude: number
 
 export async function listSlotsForPincode(pincode: string, date: Date) {
   const zone = await findZoneByPincode(pincode);
-  if (!zone) return { serviceable: false, zone: null, slots: [] };
+  if (!zone) return { serviceable: true, zone: null, slots: [] };
   const slots = await ensureDefaultSlots(zone.id);
   return { serviceable: true, zone: mapZone(zone), slots: slots.map((slot) => mapSlot(slot, date)) };
 }

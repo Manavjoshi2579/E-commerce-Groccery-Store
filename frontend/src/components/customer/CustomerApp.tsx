@@ -407,7 +407,7 @@ function PincodeChecker() {
       <button type="button" onClick={() => run()} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10">{status === "loading" ? "Checking" : "Check"}</button>
       <button type="button" onClick={detectLocation} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10">{status === "locating" ? "Locating" : "Locate"}</button>
       {place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
-      {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : status === "no" || status === "error" ? "text-red-600" : "text-white/60"}`}>{message}</span>}
+      {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : "text-white/60"}`}>{message}</span>}
     </div>
   );
 }
@@ -513,7 +513,7 @@ function HomePage() {
   return (
     <CustomerShell>
       <section className="relative min-h-[620px] overflow-hidden bg-black text-white">
-        <img src="/assets/banners/fresh-produce-banner.png" alt="Eagle Mart fresh grocery produce banner" className="absolute inset-0 h-full w-full object-cover opacity-90" />
+        <img src="/assets/banners/fresh-produce-banner.png" alt="Eagle Mart fresh grocery produce banner" className="absolute inset-0 h-full w-full object-cover opacity-50" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-black/5" />
         <div className="container-premium relative flex min-h-[620px] items-center">
           <div className="max-w-2xl py-20">

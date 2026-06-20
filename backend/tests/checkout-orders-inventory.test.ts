@@ -97,7 +97,7 @@ async function placeCod(quantity = 2) {
 }
 
 describe("delivery serviceability", () => {
-  it("accepts configured delivery pincodes and rejects unconfigured pincodes", async () => {
+  it("accepts configured and unconfigured delivery pincodes", async () => {
     const zone = await db.deliveryZone.findFirstOrThrow({ where: { active: true } });
     const pincode = Array.isArray(zone.pincodes) ? String(zone.pincodes.find((entry) => /^\d{6}$/.test(String(entry)))) : "";
     expect(pincode).toMatch(/^\d{6}$/);
@@ -105,8 +105,8 @@ describe("delivery serviceability", () => {
     const serviceable = await request(app).get(`/api/delivery/check-pincode?pincode=${pincode}`).expect(200);
     expect(serviceable.body.data.serviceable).toBe(true);
 
-    const unavailable = await request(app).get("/api/delivery/check-pincode?pincode=110001").expect(200);
-    expect(unavailable.body.data.serviceable).toBe(false);
+    const unconfigured = await request(app).get("/api/delivery/check-pincode?pincode=110001").expect(200);
+    expect(unconfigured.body.data.serviceable).toBe(true);
   });
 });
 
