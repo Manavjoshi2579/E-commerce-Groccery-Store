@@ -76,6 +76,7 @@ type Store = {
   addToCart: (id: string, qty?: number, variantId?: string, custom?: { unit?: string; price?: number; mrp?: number }) => void;
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
+  saveCartItemForLater: (id: string) => void;
   toggleWishlist: (id: string) => void;
   moveWishlistToCart: (id: string) => void;
   applyCoupon: (code: string) => boolean;
@@ -345,6 +346,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           toast(error instanceof Error ? error.message : "Could not remove cart item", "error");
         });
       }
+    },
+    saveCartItemForLater: (id) => {
+      if (!requireCustomerLogin()) return;
+      const current = cart.find((item) => item.productId === id || item.id === id);
+      if (!current?.id) {
+        toast("Could not find this cart item. Please refresh and try again.", "error");
+        return;
+      }
+      const previousCart = cart;
+      const previousWishlist = wishlist;
+      setCart((items) => items.filter((item) => item.id !== current.id));
+      setWishlist((items) => (items.includes(current.productId) ? items : [...items, current.productId]));
+      addBackendWishlistItem(current.productId).then(async (wishlistSummary) => {
+        const cartSummary = await removeBackendCartItem(current.id!);
+        applyBackendWishlist(wishlistSummary);
+        applyBackendCart(cartSummary);
+        toast("Saved for later", "success");
+      }).catch((error) => {
+        setCart(previousCart);
+        setWishlist(previousWishlist);
+        toast(error instanceof Error ? error.message : "Could not save item for later", "error");
+      });
     },
     toggleWishlist: (id) => {
       if (!requireCustomerLogin()) return;
