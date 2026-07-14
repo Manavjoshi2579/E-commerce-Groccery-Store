@@ -1,4 +1,4 @@
-import { DeliveryStatus, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, ReturnStatus, StockMovementType } from "@prisma/client";
+import { DeliveryStatus, FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, ReturnStatus, SettingType, StockMovementType } from "@prisma/client";
 import { db } from "../lib/db.js";
 import type { RbacPrismaClient } from "../lib/prisma-rbac.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
@@ -79,6 +79,7 @@ export function mapOrder(order: any) {
     deliveryDate: order.deliveryDate?.toISOString?.().slice(0, 10) ?? order.deliveryDate,
     deliverySlot: order.deliverySlot?.label ?? "",
     deliverySlotId: order.deliverySlotId,
+    fulfillmentType: order.fulfillmentType ?? FulfillmentType.DELIVERY,
     paymentMethod: order.payment?.method === PaymentMethod.RAZORPAY ? "Razorpay" : "COD",
     paymentStatus: paymentLabel(order.payment?.status),
     razorpayOrderId: order.payment?.razorpayOrderId,
@@ -134,19 +135,55 @@ function orderNumber() {
   return `EC-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
 }
 
-async function validateCheckoutSelection(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate: Date }) {
+async function nextSequence(tx: Prisma.TransactionClient, key: string) {
+  const current = await tx.setting.findUnique({ where: { key } });
+  const next = Number(current?.value || "0") + 1;
+  await tx.setting.upsert({
+    where: { key },
+    update: { value: String(next) },
+    create: { key, value: String(next), type: SettingType.NUMBER },
+  });
+  return next;
+}
+
+async function createInvoiceForOrder(tx: Prisma.TransactionClient, order: any) {
+  const year = new Date().getFullYear();
+  const sequence = await nextSequence(tx, `invoice:${year}`);
+  return tx.invoice.create({
+    data: {
+      invoiceNumber: `EM-${year}-${String(sequence).padStart(6, "0")}`,
+      orderId: order.id,
+      subtotal: order.subtotal,
+      couponDiscount: order.couponDiscount,
+      deliveryCharge: order.deliveryCharge,
+      handlingCharge: order.handlingCharge,
+      gstTotal: order.gstTotal,
+      grandTotal: order.grandTotal,
+    },
+  });
+}
+
+type CheckoutSelection = { addressId: string; deliverySlotId?: string | null; deliveryDate: Date; fulfillmentType?: "DELIVERY" | "PICKUP" };
+
+async function validateCheckoutSelection(userId: string, input: CheckoutSelection) {
+  const fulfillmentType = input.fulfillmentType === "PICKUP" ? FulfillmentType.PICKUP : FulfillmentType.DELIVERY;
   const [cart, address, slot] = await Promise.all([
     getOrCreateCart(userId),
     db.address.findFirst({ where: { id: input.addressId, userId, deletedAt: null } }),
-    db.deliverySlot.findFirst({ where: { id: input.deliverySlotId, active: true } }),
+    input.deliverySlotId ? db.deliverySlot.findFirst({ where: { id: input.deliverySlotId, active: true } }) : null,
   ]);
   if (!cart.items.length) throw new Error("Cart is empty.");
   if (!address) throw new Error("Delivery address not found.");
-  const zone = await findZoneByPincode(address.pincode);
-  if (!zone) throw new Error("Delivery pincode is not serviceable.");
-  if (!slot) throw new Error("Delivery slot is not available.");
+  const zone = fulfillmentType === FulfillmentType.DELIVERY ? await findZoneByPincode(address.pincode) : null;
+  if (fulfillmentType === FulfillmentType.DELIVERY && !zone) throw new Error("Delivery pincode is not serviceable.");
+  if (fulfillmentType === FulfillmentType.DELIVERY && !slot) throw new Error("Delivery slot is not available.");
   if (cart.coupon?.code) await validateCouponForCart(userId, cart.coupon.code, false);
-  return { cart, summary: mapCart(cart), address, slot, zone };
+  const summary = mapCart(cart);
+  if (fulfillmentType === FulfillmentType.PICKUP) {
+    summary.deliveryCharge = 0;
+    summary.total = summary.subtotal - summary.discount - summary.couponDiscount + summary.tax + summary.handlingCharge;
+  }
+  return { cart, summary, address, slot, zone, fulfillmentType };
 }
 
 async function assertStock(tx: Prisma.TransactionClient, cart: Awaited<ReturnType<typeof getOrCreateCart>>) {
@@ -169,12 +206,12 @@ export async function checkoutSummary(userId: string, input?: { addressId?: stri
   return { cart: mapCart(cart), address, addresses, deliveryZones: zones, deliverySlots: slots, selected: input ?? null };
 }
 
-export async function validateCheckout(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate: Date }) {
+export async function validateCheckout(userId: string, input: CheckoutSelection) {
   const validated = await validateCheckoutSelection(userId, input);
   return { valid: true, message: "Checkout is valid.", summary: validated.summary };
 }
 
-export async function placeCodOrder(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate: Date }) {
+export async function placeCodOrder(userId: string, input: CheckoutSelection) {
   const validated = await validateCheckoutSelection(userId, input);
 
   return db.$transaction(async (tx) => {
@@ -193,7 +230,8 @@ export async function placeCodOrder(userId: string, input: { addressId: string; 
         addressState: validated.address.state,
         addressPincode: validated.address.pincode,
         deliveryDate: input.deliveryDate,
-        deliverySlotId: validated.slot.id,
+        deliverySlotId: validated.slot?.id,
+        fulfillmentType: validated.fulfillmentType,
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.COD_PENDING,
         paymentMethod: PaymentMethod.COD,
@@ -224,6 +262,7 @@ export async function placeCodOrder(userId: string, input: { addressId: string; 
       },
       include: orderInclude,
     });
+    await createInvoiceForOrder(tx, order);
 
     for (const item of validated.cart.items) {
       const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId } });
@@ -241,11 +280,12 @@ export async function placeCodOrder(userId: string, input: { addressId: string; 
     await tx.cartItem.deleteMany({ where: { cartId: validated.cart.id } });
     await tx.cart.update({ where: { id: validated.cart.id }, data: { couponId: null } });
 
-    return { order: mapOrder(order), orderNumber: order.orderNumber };
+    const fresh = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
+    return { order: mapOrder(fresh), orderNumber: order.orderNumber };
   });
 }
 
-export async function placeOnlinePlaceholderOrder(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate: Date }) {
+export async function placeOnlinePlaceholderOrder(userId: string, input: CheckoutSelection) {
   const validated = await validateCheckoutSelection(userId, input);
   const order = await db.order.create({
     data: {
@@ -260,7 +300,8 @@ export async function placeOnlinePlaceholderOrder(userId: string, input: { addre
       addressState: validated.address.state,
       addressPincode: validated.address.pincode,
       deliveryDate: input.deliveryDate,
-      deliverySlotId: validated.slot.id,
+      deliverySlotId: validated.slot?.id,
+      fulfillmentType: validated.fulfillmentType,
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.PENDING,
       paymentMethod: PaymentMethod.RAZORPAY,
@@ -290,6 +331,9 @@ export async function placeOnlinePlaceholderOrder(userId: string, input: { addre
       payment: { create: { method: PaymentMethod.RAZORPAY, status: PaymentStatus.PENDING, amount: validated.summary.total } },
     },
     include: orderInclude,
+  });
+  await db.$transaction(async (tx) => {
+    await createInvoiceForOrder(tx, order);
   });
   return { order: mapOrder(order), orderNumber: order.orderNumber };
 }

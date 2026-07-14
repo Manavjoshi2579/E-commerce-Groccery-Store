@@ -16,6 +16,28 @@ enum UserStatus {
 enum AdminStatus {
   ACTIVE
   INACTIVE
+  BLOCKED
+}
+
+enum AuthActorKind {
+  CUSTOMER
+  ADMIN
+}
+
+enum AuthSessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+}
+
+enum OtpPurpose {
+  MOBILE_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum RoleName {
@@ -85,6 +107,11 @@ enum DeliveryStatus {
   FAILED
 }
 
+enum FulfillmentType {
+  DELIVERY
+  PICKUP
+}
+
 enum ReturnStatus {
   REQUESTED
   APPROVED
@@ -130,9 +157,17 @@ model User {
   id           String      @id @default(cuid())
   name         String
   email        String?     @unique
+  normalizedEmail String?  @unique
   phone        String?     @unique
+  mobileNumber String?     @unique
+  emailVerifiedAt DateTime?
+  mobileVerifiedAt DateTime?
   passwordHash String
   status       UserStatus  @default(ACTIVE)
+  failedLoginAttempts Int   @default(0)
+  lockedUntil  DateTime?
+  passwordChangedAt DateTime?
+  lastLoginAt  DateTime?
   deletedAt    DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -145,8 +180,15 @@ model User {
   couponUsages CouponUsage[]
   returns      ReturnRequest[]
   supportTickets SupportTicket[]
+  sessions     AuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  mobileOtpChallenges MobileOtpChallenge[]
+  oauthAccounts OAuthAccount[]
 
   @@index([status])
+  @@index([normalizedEmail])
+  @@index([mobileNumber])
   @@index([createdAt])
 }
 
@@ -188,9 +230,17 @@ model AdminUser {
   id             String          @id @default(cuid())
   name           String
   email          String          @unique
+  normalizedEmail String?        @unique
   passwordHash   String
   roleId         String
   status         AdminStatus     @default(ACTIVE)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil    DateTime?
+  totpEnabled    Boolean         @default(false)
+  encryptedTotpSecret String?    @db.Text
+  totpVerifiedAt DateTime?
+  passwordChangedAt DateTime?
+  lastLoginAt    DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -200,9 +250,133 @@ model AdminUser {
   settings       Setting[]
   assignedSupportTickets SupportTicket[] @relation("AssignedSupportTickets")
   resolvedSupportTickets SupportTicket[] @relation("ResolvedSupportTickets")
+  sessions       AuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  mfaRecoveryCodes AdminMfaRecoveryCode[]
 
   @@index([roleId])
   @@index([status])
+  @@index([normalizedEmail])
+}
+
+model AuthSession {
+  id          String            @id @default(cuid())
+  tokenHash   String            @unique
+  actorKind   AuthActorKind
+  userId      String?
+  adminUserId String?
+  status      AuthSessionStatus @default(ACTIVE)
+  ipHash      String?
+  userAgent   String?           @db.VarChar(255)
+  lastSeenAt  DateTime          @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  user        User?             @relation(fields: [userId], references: [id])
+  adminUser   AdminUser?        @relation(fields: [adminUserId], references: [id])
+
+  @@index([actorKind, userId])
+  @@index([actorKind, adminUserId])
+  @@index([status, expiresAt])
+}
+
+model PasswordResetToken {
+  id          String        @id @default(cuid())
+  tokenHash   String        @unique
+  actorKind   AuthActorKind
+  userId      String?
+  adminUserId String?
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  user        User?         @relation(fields: [userId], references: [id])
+  adminUser   AdminUser?    @relation(fields: [adminUserId], references: [id])
+
+  @@index([actorKind, userId, consumedAt])
+  @@index([actorKind, adminUserId, consumedAt])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}
+
+model MobileOtpChallenge {
+  id           String     @id @default(cuid())
+  otpHash      String
+  purpose      OtpPurpose
+  userId       String?
+  mobileNumber String
+  attempts     Int        @default(0)
+  maxAttempts  Int        @default(5)
+  resetGrantHash String?  @unique
+  expiresAt    DateTime
+  resendAfter  DateTime
+  verifiedAt   DateTime?
+  consumedAt   DateTime?
+  createdAt    DateTime   @default(now())
+
+  user         User?      @relation(fields: [userId], references: [id])
+
+  @@index([mobileNumber, purpose, consumedAt])
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+}
+
+model OAuthAccount {
+  id                String        @id @default(cuid())
+  userId            String
+  provider          OAuthProvider
+  providerAccountId String
+  providerEmail     String?
+  emailVerified     Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model AdminMfaRecoveryCode {
+  id          String    @id @default(cuid())
+  adminUserId String
+  codeHash    String    @unique
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId, usedAt])
+}
+
+model AuthAuditLog {
+  id          String        @id @default(cuid())
+  actorKind   AuthActorKind?
+  actorId     String?
+  eventType   String
+  success     Boolean
+  ipHash      String?
+  userAgent   String?       @db.VarChar(255)
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+
+  @@index([actorKind, actorId])
+  @@index([eventType])
+  @@index([createdAt])
 }
 
 model Category {
@@ -481,6 +655,7 @@ model Order {
   addressPincode      String
   deliveryDate        DateTime
   deliverySlotId      String?
+  fulfillmentType     FulfillmentType @default(DELIVERY)
   status              OrderStatus   @default(PENDING)
   paymentStatus       PaymentStatus @default(PENDING)
   paymentMethod       PaymentMethod

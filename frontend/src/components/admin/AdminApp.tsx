@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3, Boxes, ClipboardList, CreditCard, Eye, EyeOff, LayoutDashboard, LogOut, Package, Plus, Search,
+  BarChart3, Bell, Boxes, ClipboardList, CreditCard, Eye, EyeOff, LayoutDashboard, LogOut, Package, Plus, Search,
   Hash, Layers3, Menu, MessageCircle, Pencil, Save, Settings, ShieldCheck, Tags, Trash2, Truck, Users, WalletCards, X,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
@@ -26,12 +26,15 @@ import {
   fetchAdminProduct,
   fetchAdminProducts,
   fetchBrands,
+  bulkImportAdminProducts,
+  bulkImportAdminProductFile,
+  downloadProductBulkTemplate,
   updateAdminBrand,
   updateAdminCategory,
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, deleteAdminDeliveryStaff, fetchAdminDeliveryStaff, fetchAdminInventory, fetchAdminOrders, updateAdminOrderStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminOrders, updateAdminDeliverySlot, updateAdminOrderStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -103,6 +106,9 @@ function AdminShell({ section, children }: { section: string; children: React.Re
   const { admin, adminReady, logoutAdmin } = useStore();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+  const [latestOrderNumber, setLatestOrderNumber] = useState("");
+  const knownOrderNumbers = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (adminReady && !admin) router.replace("/admin/login");
   }, [adminReady, admin, router]);
@@ -113,6 +119,38 @@ function AdminShell({ section, children }: { section: string; children: React.Re
   const role = admin?.role?.name;
   const visibleNav = nav.filter(([href]) => canAdminAccess(role, href));
   const canViewSection = canAdminAccess(role, section);
+  useEffect(() => {
+    if (!admin || !canAdminAccess(role, "orders")) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const rows = await fetchAdminOrders();
+        const numbers = new Set(rows.map((order) => order.orderNumber));
+        if (!knownOrderNumbers.current) {
+          knownOrderNumbers.current = numbers;
+          setLatestOrderNumber(rows[0]?.orderNumber || "");
+          return;
+        }
+        const fresh = rows.filter((order) => !knownOrderNumbers.current!.has(order.orderNumber));
+        if (fresh.length) {
+          knownOrderNumbers.current = numbers;
+          setLatestOrderNumber(fresh[0].orderNumber);
+          setNewOrderCount((count) => count + fresh.length);
+          try {
+            const audio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+            await audio.play();
+          } catch {
+            // Browser may block sound until the admin interacts with the page.
+          }
+        }
+      } catch {
+        // Header polling should never interrupt admin work.
+      }
+    };
+    poll();
+    const timer = window.setInterval(() => { if (!stopped) void poll(); }, 15000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [admin, role]);
   useEffect(() => {
     if (adminReady && admin && !canViewSection) router.replace("/admin");
   }, [adminReady, admin, canViewSection, router]);
@@ -136,7 +174,7 @@ function AdminShell({ section, children }: { section: string; children: React.Re
         <header className="sticky top-0 z-30 border-b bg-[#f7f4ec]/90 px-4 py-4 backdrop-blur no-print">
           <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0"><h1 className="display-font truncate text-2xl font-black">{section ? title(section) : "Dashboard Overview"}</h1><p className="truncate text-sm text-black/55">Eagle Mart Grocery & Essentials control room</p></div>
-            <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3"><div className="flex min-w-[180px] flex-1 items-center rounded-md border bg-white px-3 py-2 md:flex-none"><Search size={17} className="shrink-0 text-black/45" /><input className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none md:w-56" placeholder="Search admin..." /></div>{admin && <span className="rounded-md bg-white px-2 py-2 text-xs font-bold text-black/55">{admin.role?.name || "Admin"}</span>}<button onClick={logout} className="rounded-md bg-black px-3 py-2 text-sm font-bold text-white">Logout</button></div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3"><div className="flex min-w-[180px] flex-1 items-center rounded-md border bg-white px-3 py-2 md:flex-none"><Search size={17} className="shrink-0 text-black/45" /><input className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none md:w-56" placeholder="Search admin..." /></div>{canAdminAccess(role, "orders") && <button type="button" onClick={() => { setNewOrderCount(0); router.push(latestOrderNumber ? `/admin/orders/${latestOrderNumber}` : "/admin/orders"); }} className="relative grid h-10 w-10 place-items-center rounded-md border bg-white text-black" aria-label="Order notifications"><Bell size={18} />{newOrderCount > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{newOrderCount}</span>}</button>}{admin && <span className="rounded-md bg-white px-2 py-2 text-xs font-bold text-black/55">{admin.role?.name || "Admin"}</span>}<button onClick={logout} className="rounded-md bg-black px-3 py-2 text-sm font-bold text-white">Logout</button></div>
           </div>
         </header>
         <div className="mx-auto max-w-7xl p-3 sm:p-4 md:p-6">{children}</div>
@@ -500,6 +538,8 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   const [productSearch, setProductSearch] = useState("");
   const [productPage, setProductPage] = useState(1);
   const [productPagination, setProductPagination] = useState({ page: 1, totalPages: 1, total: 0, hasNextPage: false, hasPreviousPage: false });
+  const [bulkSummary, setBulkSummary] = useState<Awaited<ReturnType<typeof bulkImportAdminProducts>> | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const pageSize = 25;
   useEffect(() => {
     if (mode) return;
@@ -575,6 +615,43 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     setVariantDrafts(variantsFromProduct(fetchedEditProduct));
   }, [adminBrands, adminCategories, fetchedEditProduct, mode]);
   const numberValue = (value: string) => Number(value.trim());
+  const refreshProducts = () => fetchAdminProducts({ page: productPage, limit: pageSize, search: productSearch }).then((result) => {
+    replaceProducts(result.products);
+    if (result.pagination) setProductPagination(result.pagination);
+  });
+  const downloadTemplate = async () => {
+    try {
+      const csv = await downloadProductBulkTemplate();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eagle-mart-product-template.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not download template.", "error");
+    }
+  };
+  const importBulkFile = async (file?: File | null) => {
+    if (!file) return;
+    if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
+      toast("Upload a CSV or XLSX product file.", "error");
+      return;
+    }
+    setBulkLoading(true);
+    setBulkSummary(null);
+    try {
+      const summary = /\.csv$/i.test(file.name) ? await bulkImportAdminProducts(await file.text()) : await bulkImportAdminProductFile(file);
+      setBulkSummary(summary);
+      await refreshProducts();
+      toast(`Imported ${summary.created} new and updated ${summary.updated} products.`, "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Bulk import failed.", "error");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
   const save = async () => {
     if (saving) return;
     const brand = adminBrands.find((item) => item.id === draft.brandId);
@@ -695,7 +772,7 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   };
   if (mode === "edit" && !fetchedEditProduct && !storedEditProduct) return <AdminShell section="products"><Panel title="Edit Product"><p className="rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 text-sm font-bold text-black/60">Loading selected product...</p></Panel></AdminShell>;
   if (mode) return <AdminShell section="products"><Panel title={mode === "new" ? "Add Product" : "Edit Product"}><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold">Name<input aria-label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Sku<input aria-label="Sku" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Brand<select aria-label="Brand" value={draft.brandId} onChange={(e) => setDraft({ ...draft, brandId: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose brand</option>{adminBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><label className="text-sm font-bold">Category<select aria-label="Category" value={draft.categoryId} onChange={(e) => changeCategory(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose category</option>{adminCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="text-sm font-bold">GST %<input aria-label="GST" inputMode="decimal" value={draft.gst} onChange={(e) => setDraft({ ...draft, gst: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.featured} onChange={(e) => setDraft({ ...draft, featured: e.target.checked })} /> Featured</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> Active</label></div><div className="mt-6 rounded-md border border-[#eadfca] bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfca] p-4"><div><h3 className="display-font font-bold">Variants</h3><p className="mt-1 text-xs font-bold text-black/50">Unit labels follow the selected category.</p></div><Button variant="outline" onClick={addVariantDraft}><Plus size={16} /> Add variant</Button></div><div className="grid gap-3 p-4">{variantDrafts.map((variant, index) => <div key={variant.id || index} className="grid gap-3 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 md:grid-cols-8"><label className="text-xs font-bold md:col-span-2">Unit label<select aria-label={`Variant ${index + 1} unit`} value={variant.unit} onChange={(e) => updateVariantDraft(index, { unit: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2">{mergeUnitOptions(categoryUnitOptions, variant.unit).map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label><label className="text-xs font-bold md:col-span-2">SKU<input aria-label={`Variant ${index + 1} SKU`} value={variant.sku} onChange={(e) => updateVariantDraft(index, { sku: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">MRP<input aria-label={`Variant ${index + 1} MRP`} inputMode="decimal" value={variant.mrp} onChange={(e) => updateVariantDraft(index, { mrp: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Price<input aria-label={`Variant ${index + 1} price`} inputMode="decimal" value={variant.price} onChange={(e) => updateVariantDraft(index, { price: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Stock<input aria-label={`Variant ${index + 1} stock`} inputMode="numeric" value={variant.stock} onChange={(e) => updateVariantDraft(index, { stock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Low<input aria-label={`Variant ${index + 1} low stock`} inputMode="numeric" value={variant.lowStock} onChange={(e) => updateVariantDraft(index, { lowStock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><div className="flex flex-wrap items-center gap-3 md:col-span-8"><label className="flex items-center gap-2 text-sm font-bold"><input type="radio" checked={variant.isDefault} onChange={() => updateVariantDraft(index, { isDefault: true })} /> Default</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.active} onChange={(e) => updateVariantDraft(index, { active: e.target.checked })} /> Active</label><Button variant="ghost" onClick={() => removeVariantDraft(index)}>Remove</Button></div></div>)}</div></div><div className="mt-5 flex gap-2"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Product"}</Button><Link href="/admin/products"><Button variant="outline">Back</Button></Link></div></Panel></AdminShell>;
-  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 flex flex-wrap justify-between gap-3"><input className="min-w-[220px] flex-1 rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} />{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div><DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-cover" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel></AdminShell>;
+  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><input className="min-w-[220px] rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><div className="flex flex-wrap gap-2">{canEditCatalog && <Button variant="outline" onClick={downloadTemplate}>Template</Button>}{canEditCatalog && <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-bold"><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => importBulkFile(event.target.files?.[0])} />{bulkLoading ? "Importing..." : "Bulk Upload"}</label>}{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{bulkSummary && <div className="mb-4 rounded-md border border-[#eadfca] bg-white p-3 text-sm"><b>Bulk summary:</b> {bulkSummary.created} created, {bulkSummary.updated} updated, {bulkSummary.invalidRows} invalid of {bulkSummary.totalRows} rows.{bulkSummary.errors.length > 0 && <div className="mt-2 grid gap-1 text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-cover" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel></AdminShell>;
 }
 
 function Inventory({ productId }: { productId?: string }) {
@@ -1069,7 +1146,7 @@ function AdminPayments() {
   const codPending = rows.filter((order) => order.paymentStatus === "COD Pending");
   const failed = rows.filter((order) => order.paymentStatus === "Failed");
   const pagedRows = usePagedItems(rows);
-  return <AdminShell section="payments"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Total Paid" value={money(paid.reduce((sum, order) => sum + amount(order), 0))} sub="Settled" /><Stat label="Razorpay Paid" value={money(razorpayPaid.reduce((sum, order) => sum + amount(order), 0))} sub="Online" /><Stat label="COD Pending" value={money(codPending.reduce((sum, order) => sum + amount(order), 0))} sub="Collectable" /><Stat label="Failed Payments" value={String(failed.length)} sub="Needs retry" /><Stat label="Refund Pending" value="0" sub="Placeholder" /></div><Panel title="Payments"><DataTable headers={["Payment ID", "Order Number", "Customer", "Method", "Razorpay Order ID", "Razorpay Payment ID", "Amount", "Status", "Date", "Actions"]} minWidth="min-w-[1180px]">{pagedRows.items.map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.paymentId || "-"}</td><td className="p-3"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link></td><td className="p-3">{order.customerName}</td><td className="p-3">{order.paymentMethod}</td><td className="p-3 break-all">{order.razorpayOrderId || "-"}</td><td className="p-3 break-all">{order.razorpayPaymentId || "-"}</td><td className="p-3">{money(amount(order))}</td><td className="p-3"><StatusBadge value={order.paymentStatus} /></td><td className="p-3">{new Date(order.createdAt).toLocaleDateString("en-IN")}</td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/orders/${order.orderNumber}`}>View</Link>{order.paymentMethod === "COD" && order.paymentStatus === "COD Pending" && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toast("Mark COD paid will be enabled in the next payment phase.", "info")}>Mark COD Paid</button>}<button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => toast("Refunds will be enabled in the next payment phase.", "info")}>Refund</button></div></td></tr>)}</DataTable><PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></AdminShell>;
+  return <AdminShell section="payments"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Total Paid" value={money(paid.reduce((sum, order) => sum + amount(order), 0))} sub="Settled" /><Stat label="Razorpay Paid" value={money(razorpayPaid.reduce((sum, order) => sum + amount(order), 0))} sub="Online" /><Stat label="COD Pending" value={money(codPending.reduce((sum, order) => sum + amount(order), 0))} sub="Collectable" /><Stat label="Failed Payments" value={String(failed.length)} sub="Needs retry" /><Stat label="Refund Pending" value="0" sub="Placeholder" /></div><Panel title="Payments"><DataTable headers={["Payment ID", "Order Number", "Customer", "Method", "Razorpay Order ID", "Razorpay Payment ID", "Amount", "Status", "Date", "Actions"]} minWidth="min-w-[1180px]">{pagedRows.items.map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.paymentId || "-"}</td><td className="p-3"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link></td><td className="p-3">{order.customerName}</td><td className="p-3">{order.paymentMethod}</td><td className="p-3 break-all">{order.razorpayOrderId || "-"}</td><td className="p-3 break-all">{order.razorpayPaymentId || "-"}</td><td className="p-3">{money(amount(order))}</td><td className="p-3"><StatusBadge value={order.paymentStatus} /></td><td className="p-3">{new Date(order.createdAt).toLocaleDateString("en-IN")}</td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/orders/${order.orderNumber}`}>View</Link></div></td></tr>)}</DataTable><PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></AdminShell>;
 }
 
 function DeliveryAdmin() {
@@ -1084,6 +1161,9 @@ function DeliveryAdmin() {
   const [savingOrder, setSavingOrder] = useState("");
   const [savingStaff, setSavingStaff] = useState(false);
   const [deletingStaff, setDeletingStaff] = useState("");
+  const [slots, setSlots] = useState<any[]>([]);
+  const [slotDraft, setSlotDraft] = useState({ label: "", startTime: "", endTime: "", capacity: "40" });
+  const [savingSlot, setSavingSlot] = useState(false);
   const returnWorkflowStatuses: OrderStatus[] = ["Return Requested", "Refunded"];
   const deliveryStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery", "Delivered"];
   const returnStatusOptions: OrderStatus[] = ["Return Requested", "Refunded", "Cancelled"];
@@ -1093,7 +1173,30 @@ function DeliveryAdmin() {
   useEffect(() => {
     fetchAdminOrders().then(setRemoteOrders).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery orders.", "error"));
     fetchAdminDeliveryStaff().then(setStaffRows).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery staff.", "error"));
+    fetchAdminDeliverySlots().then(setSlots).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery slots.", "error"));
   }, [toast]);
+  const saveSlot = async () => {
+    if (!slotDraft.label.trim() || !slotDraft.startTime.trim() || !slotDraft.endTime.trim()) return toast("Slot label and timing are required.", "error");
+    setSavingSlot(true);
+    try {
+      const slot = await createAdminDeliverySlot({ label: slotDraft.label.trim(), startTime: slotDraft.startTime.trim(), endTime: slotDraft.endTime.trim(), capacity: Number(slotDraft.capacity || 0) });
+      setSlots((items) => [slot, ...items]);
+      setSlotDraft({ label: "", startTime: "", endTime: "", capacity: "40" });
+      toast("Delivery slot added", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not save delivery slot.", "error");
+    } finally {
+      setSavingSlot(false);
+    }
+  };
+  const toggleSlot = async (slot: any) => {
+    const saved = await updateAdminDeliverySlot(slot.id, { active: !slot.active });
+    setSlots((items) => items.map((item) => item.id === slot.id ? { ...item, ...saved } : item));
+  };
+  const removeSlot = async (slot: any) => {
+    await deleteAdminDeliverySlot(slot.id);
+    setSlots((items) => items.filter((item) => item.id !== slot.id));
+  };
   const deliveryOrders = remoteOrders.filter((order) => !["Cancelled", "Delivered"].includes(order.status) || order.deliveryStaff);
   const filteredOrders = deliveryOrders.filter((order) => {
     const term = query.trim().toLowerCase();
@@ -1182,6 +1285,19 @@ function DeliveryAdmin() {
         <Stat label="Unassigned" value={String(unassigned.length)} sub="Needs action" />
         <Stat label="Out for delivery" value={String(outForDelivery.length)} sub={`${delivered.length} delivered`} />
       </div>
+      <Panel title="Delivery Slot Management">
+        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr_120px_auto]">
+          <input aria-label="Slot label" value={slotDraft.label} onChange={(event) => setSlotDraft((current) => ({ ...current, label: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="Slot label" />
+          <input aria-label="Slot start time" value={slotDraft.startTime} onChange={(event) => setSlotDraft((current) => ({ ...current, startTime: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="Start time" />
+          <input aria-label="Slot end time" value={slotDraft.endTime} onChange={(event) => setSlotDraft((current) => ({ ...current, endTime: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="End time" />
+          <input aria-label="Slot capacity" value={slotDraft.capacity} onChange={(event) => setSlotDraft((current) => ({ ...current, capacity: event.target.value }))} className="rounded-md border px-3 py-2" inputMode="numeric" placeholder="Capacity" />
+          <Button variant="gold" disabled={savingSlot} onClick={saveSlot}>{savingSlot ? "Saving..." : "Add Slot"}</Button>
+        </div>
+        <DataTable headers={["Label", "Timing", "Capacity", "Status", "Actions"]} minWidth="min-w-[760px]">
+          {slots.map((slot) => <tr key={slot.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{slot.label}</td><td className="p-3">{slot.startTime} - {slot.endTime}</td><td className="p-3">{slot.capacity}</td><td className="p-3"><StatusBadge value={slot.active ? "Active" : "Inactive"} /></td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Button variant="outline" onClick={() => toggleSlot(slot)}>{slot.active ? "Disable" : "Enable"}</Button><Button variant="ghost" onClick={() => removeSlot(slot)}>Delete</Button></div></td></tr>)}
+        </DataTable>
+        {!slots.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No delivery slots found in database.</p>}
+      </Panel>
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_380px]">
         <Panel title="Delivery Management">
           <div className="mb-4 grid gap-3 md:grid-cols-5">
@@ -1746,21 +1862,41 @@ function Reports() {
 }
 
 function AdminLoginForm() {
-  const { loginAdmin } = useStore();
+  const { loginAdmin, verifyAdminMfa } = useStore();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [challengeId, setChallengeId] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    if (challengeId) {
+      if (!mfaCode.trim()) return setError("Verification code is required.");
+      setLoading(true);
+      try {
+        const nextAdmin = await verifyAdminMfa({ challengeId, code: mfaCode.trim() });
+        router.push(roleLandingPath(nextAdmin.role?.name));
+      } catch (loginError) {
+        setError(loginError instanceof Error ? loginError.message : "MFA verification failed.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setError("Enter a valid admin email.");
     if (!password) return setError("Password is required.");
     setLoading(true);
     try {
       const nextAdmin = await loginAdmin({ email, password });
+      if ("mfaRequired" in nextAdmin) {
+        setChallengeId(nextAdmin.challengeId);
+        setPassword("");
+        return;
+      }
       router.push(roleLandingPath(nextAdmin.role?.name));
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Admin login failed.");
@@ -1768,7 +1904,7 @@ function AdminLoginForm() {
       setLoading(false);
     }
   };
-  return <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] p-4 text-white"><section className="w-full max-w-md rounded-md border border-[#d4af37]/20 bg-[#20201f]/95 p-8 shadow-2xl"><Logo invert /><div className="mt-8 text-center"><ShieldCheck className="mx-auto text-[#e7c766]" size={44} /><h1 className="display-font mt-4 text-2xl font-black text-[#e7c766]">Eagle Mart Admin Portal</h1><p className="mt-2 text-sm text-white/60">Secure access for store operations</p></div><form onSubmit={submit} className="mt-8 grid gap-4"><input aria-label="Admin email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Admin email" type="email" /><div className="relative"><input aria-label="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder="Admin password" type={show ? "text" : "password"} /><button type="button" aria-label="Toggle admin password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading}>{loading ? "Loading..." : "Login"}</Button></form><p className="mt-4 rounded-md border border-[#d4af37]/20 bg-black/30 p-3 text-xs text-white/60">Use the seeded admin credentials from your backend seed.</p><p className="mt-6 text-center text-xs uppercase text-white/40">Authorized personnel only</p></section></div>;
+  return <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] p-4 text-white"><section className="w-full max-w-md rounded-md border border-[#d4af37]/20 bg-[#20201f]/95 p-8 shadow-2xl"><Logo invert /><div className="mt-8 text-center"><ShieldCheck className="mx-auto text-[#e7c766]" size={44} /><h1 className="display-font mt-4 text-2xl font-black text-[#e7c766]">Eagle Mart Admin Portal</h1><p className="mt-2 text-sm text-white/60">{challengeId ? "Enter your verification code" : "Secure access for store operations"}</p></div><form onSubmit={submit} className="mt-8 grid gap-4">{!challengeId ? <><input aria-label="Admin email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Admin email" type="email" /><div className="relative"><input aria-label="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder="Admin password" type={show ? "text" : "password"} /><button type="button" aria-label="Toggle admin password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div></> : <><input aria-label="Admin verification code" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\s/g, "").slice(0, 16))} className="rounded-md border border-white/10 bg-black px-3 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-[#d4af37]" placeholder="000000" inputMode="numeric" /><Button type="button" variant="outline" onClick={() => { setChallengeId(""); setMfaCode(""); }}>Back</Button></>}{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading}>{loading ? "Loading..." : challengeId ? "Verify" : "Login"}</Button></form><p className="mt-6 text-center text-xs uppercase text-white/40">Authorized personnel only</p></section></div>;
 }
 
 function Login() {
@@ -1839,3 +1975,6 @@ function Router({ slug }: { slug: string[] }) {
 export function AdminApp({ slug }: { slug: string[] }) {
   return <Router slug={slug} />;
 }
+
+
+

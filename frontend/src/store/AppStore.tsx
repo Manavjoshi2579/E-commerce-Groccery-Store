@@ -27,6 +27,7 @@ import {
 } from "@/services/checkout";
 import {
   getAdminMe,
+  verifyAdminMfa as verifyBackendAdminMfa,
   getCustomerMe,
   loginAdmin as loginBackendAdmin,
   loginCustomer as loginBackendCustomer,
@@ -66,10 +67,11 @@ type Store = {
   refreshCustomerData: () => Promise<void>;
   refreshCustomerProfile: () => Promise<CustomerSession>;
   loginCustomer: (input: { email: string; password: string }) => Promise<CustomerSession>;
-  registerCustomer: (input: { name: string; email: string; phone?: string; password: string }) => Promise<CustomerSession>;
+  registerCustomer: (input: { name: string; email: string; phone: string; password: string; terms?: boolean }) => Promise<CustomerSession>;
   updateCustomerProfile: (input: { name?: string; phone?: string }) => Promise<CustomerSession>;
   logoutCustomer: () => Promise<void>;
-  loginAdmin: (input: { email: string; password: string }) => Promise<AdminSession>;
+  loginAdmin: (input: { email: string; password: string }) => Promise<AdminSession | { mfaRequired: true; challengeId: string }>;
+  verifyAdminMfa: (input: { challengeId: string; code: string }) => Promise<AdminSession>;
   refreshAdminProfile: () => Promise<AdminSession>;
   updateAdminProfile: (input: { name?: string }) => Promise<AdminSession>;
   logoutAdmin: () => Promise<void>;
@@ -85,7 +87,7 @@ type Store = {
   updateAddress: (address: Address) => void;
   deleteAddress: (id: string) => void;
   placeOrder: (input: Pick<Order, "address" | "deliveryDate" | "deliverySlot" | "paymentMethod" | "paymentStatus">) => Order;
-  placeBackendCodOrder: (input: { addressId: string; deliverySlotId: string; deliveryDate: string }) => Promise<Order>;
+  placeBackendCodOrder: (input: { addressId: string; deliverySlotId?: string | null; deliveryDate: string; fulfillmentType?: "DELIVERY" | "PICKUP" }) => Promise<Order>;
   reorder: (order: Order) => void;
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
@@ -265,7 +267,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toast("Logged out");
     },
     loginAdmin: async (input) => {
-      const nextAdmin = await loginBackendAdmin(input);
+      const result = await loginBackendAdmin(input);
+      if (result.mfaRequired && result.challengeId) {
+        toast("Enter your verification code", "info");
+        return { mfaRequired: true, challengeId: result.challengeId };
+      }
+      const nextAdmin = result.admin;
+      if (!nextAdmin) throw new Error("Admin login failed.");
+      setAdmin(nextAdmin);
+      setAdminReady(true);
+      toast("Admin login successful", "success");
+      return nextAdmin;
+    },
+    verifyAdminMfa: async (input) => {
+      const nextAdmin = await verifyBackendAdminMfa(input);
       setAdmin(nextAdmin);
       setAdminReady(true);
       toast("Admin login successful", "success");

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import Razorpay from "razorpay";
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, StockMovementType } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, SettingType, StockMovementType } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
 import { findZoneByPincode } from "./delivery.service.js";
@@ -13,6 +13,7 @@ const orderInclude = {
   deliverySlot: true,
   deliveryAssignment: { include: { deliveryStaff: true } },
   coupon: true,
+  invoice: true,
 };
 
 function decimal(value: Prisma.Decimal | number | null | undefined) {
@@ -31,6 +32,13 @@ function razorpayAvailable() {
   return Boolean(razorpayKeyId() && razorpaySecret());
 }
 
+export function paymentProviderStatus() {
+  return {
+    razorpay: razorpayAvailable(),
+    onlinePayment: razorpayAvailable(),
+  };
+}
+
 function tomorrow() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
@@ -43,6 +51,23 @@ function newOrderNumber() {
 
 function signature(orderId: string, paymentId: string) {
   return crypto.createHmac("sha256", razorpaySecret()).update(`${orderId}|${paymentId}`).digest("hex");
+}
+
+async function nextSequence(tx: Prisma.TransactionClient, key: string) {
+  const current = await tx.setting.findUnique({ where: { key } });
+  const next = Number(current?.value || "0") + 1;
+  await tx.setting.upsert({
+    where: { key },
+    update: { value: String(next) },
+    create: { key, value: String(next), type: SettingType.NUMBER },
+  });
+  return next;
+}
+
+async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
+  const year = new Date().getFullYear();
+  const sequence = await nextSequence(tx, `invoice:${year}`);
+  return `EM-${year}-${String(sequence).padStart(6, "0")}`;
 }
 
 function webhookSignature(body: Buffer) {
@@ -162,7 +187,7 @@ async function finalizePaidOrder(tx: Prisma.TransactionClient, orderId: string, 
   await tx.invoice.upsert({
     where: { orderId },
     create: {
-      invoiceNumber: `INV-${order.orderNumber}`,
+      invoiceNumber: await nextInvoiceNumber(tx),
       orderId,
       subtotal: order.subtotal,
       couponDiscount: order.couponDiscount,

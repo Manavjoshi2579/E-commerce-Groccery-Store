@@ -151,3 +151,28 @@ export async function listSlotsForPincode(pincode: string, date: Date) {
   const slots = await ensureDefaultSlots(zone.id);
   return { serviceable: true, zone: mapZone(zone), slots: slots.map((slot) => mapSlot(slot, date)) };
 }
+
+export async function listAdminSlots() {
+  const slots = await db.deliverySlot.findMany({ include: { zone: true }, orderBy: [{ active: "desc" }, { startTime: "asc" }] });
+  return slots.map((slot) => ({ ...mapSlot(slot), zone: slot.zone ? mapZone(slot.zone) : null, zoneId: slot.zoneId }));
+}
+
+export async function createDeliverySlot(input: { label: string; startTime: string; endTime: string; capacity: number; zoneId?: string | null; active?: boolean }) {
+  const slot = await db.deliverySlot.create({ data: { ...input, active: input.active ?? true } });
+  return mapSlot(slot);
+}
+
+export async function updateDeliverySlot(id: string, input: Partial<{ label: string; startTime: string; endTime: string; capacity: number; zoneId: string | null; active: boolean }>) {
+  const slot = await db.deliverySlot.update({ where: { id }, data: input });
+  return mapSlot(slot);
+}
+
+export async function deleteDeliverySlot(id: string) {
+  const orders = await db.order.count({ where: { deliverySlotId: id } });
+  if (orders > 0) {
+    await db.deliverySlot.update({ where: { id }, data: { active: false } });
+    return { deleted: false, deactivated: true };
+  }
+  await db.deliverySlot.delete({ where: { id } });
+  return { deleted: true, deactivated: false };
+}

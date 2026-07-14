@@ -4,8 +4,9 @@ import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdminRole } from "../../../middleware/auth.js";
 import { requireAdminCapability } from "../../../middleware/rbac.js";
 import { assignDelivery, getAdminOrder, listAdminOrders, updateAdminOrderStatus, updateDeliveryOrderStatus } from "../../../services/order.service.js";
+import { createDeliverySlot, deleteDeliverySlot, listAdminSlots, updateDeliverySlot } from "../../../services/delivery.service.js";
 import { db } from "../../../lib/db.js";
-import { adminOrderStatusSchema, assignDeliverySchema, deliveryStaffSchema } from "../../../validators/checkout.js";
+import { adminOrderStatusSchema, assignDeliverySchema, deliveryStaffSchema, deliverySlotAdminSchema } from "../../../validators/checkout.js";
 
 export const adminOrderRouter = Router();
 
@@ -26,6 +27,30 @@ adminOrderRouter.get("/delivery-staff", requireAdminRole(orderViewRoles), async 
     include: { _count: { select: { assignments: true } } },
   });
   return sendOk(res, { staff });
+});
+
+adminOrderRouter.get("/delivery-slots", requireAdminRole(orderViewRoles), async (_req, res) => {
+  return sendOk(res, { slots: await listAdminSlots() });
+});
+
+adminOrderRouter.post("/delivery-slots", requireAdminRole(orderManageRoles), async (req, res) => {
+  const parsed = deliverySlotAdminSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid delivery slot.");
+  return sendOk(res, { slot: await createDeliverySlot(parsed.data) }, 201);
+});
+
+adminOrderRouter.patch("/delivery-slots/:id", requireAdminRole(orderManageRoles), async (req, res) => {
+  const parsed = deliverySlotAdminSchema.partial().safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid delivery slot.");
+  return sendOk(res, { slot: await updateDeliverySlot(param(req.params.id), parsed.data) });
+});
+
+adminOrderRouter.delete("/delivery-slots/:id", requireAdminRole(orderManageRoles), async (req, res) => {
+  try {
+    return sendOk(res, await deleteDeliverySlot(param(req.params.id)));
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not delete delivery slot.");
+  }
 });
 
 adminOrderRouter.post("/delivery-staff", requireAdminRole(deliveryStaffManageRoles), async (req, res) => {

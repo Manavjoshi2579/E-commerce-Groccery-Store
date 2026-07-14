@@ -16,8 +16,9 @@ export const addressSchema = z.object({
 
 export const checkoutSelectionSchema = z.object({
   addressId: z.string().min(8),
-  deliverySlotId: z.string().min(8),
+  deliverySlotId: z.string().min(8).optional().nullable(),
   deliveryDate: z.coerce.date(),
+  fulfillmentType: z.enum(["DELIVERY", "PICKUP"]).optional().default("DELIVERY"),
 });
 
 export const pincodeQuerySchema = z.object({
@@ -59,6 +60,15 @@ export const deliveryStaffSchema = z.object({
   name: z.string().trim().min(2).max(120),
   phone: phoneSchema,
   zoneId: z.string().min(8).optional().nullable(),
+});
+
+export const deliverySlotAdminSchema = z.object({
+  label: z.string().trim().min(2).max(80),
+  startTime: z.string().trim().min(2).max(20),
+  endTime: z.string().trim().min(2).max(20),
+  capacity: z.coerce.number().int().min(1).max(10000),
+  zoneId: z.string().min(8).optional().nullable(),
+  active: z.coerce.boolean().optional(),
 });
 
 export const inventoryPatchSchema = z.object({

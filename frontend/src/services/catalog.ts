@@ -2,7 +2,7 @@
 
 import { products as seedProducts } from "@/data/products";
 import type { Category, Product } from "@/types";
-import { requestApi } from "./api";
+import { API_BASE, requestApi } from "./api";
 
 const productFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryFallback = "/assets/placeholders/category-placeholder.svg";
@@ -178,6 +178,34 @@ export async function updateAdminProduct(product: Product) {
 
 export async function deleteAdminProduct(id: string) {
   await requestApi<{ deleted: boolean }>(`/api/admin/products/${id}`, { method: "DELETE" });
+}
+
+export async function downloadProductBulkTemplate() {
+  const response = await fetch(`${API_BASE}/api/admin/products/bulk-template`, { credentials: "include" });
+  if (!response.ok) throw new Error("Could not download product template.");
+  return response.text();
+}
+
+export async function bulkImportAdminProducts(csv: string) {
+  const data = await requestApi<{ summary: { totalRows: number; validRows: number; invalidRows: number; created: number; updated: number; errors: { row: number; errors: string[] }[] } }>("/api/admin/products/bulk-import", {
+    method: "POST",
+    body: JSON.stringify({ csv }),
+  });
+  return data.summary;
+}
+
+export async function bulkImportAdminProductFile(file: File) {
+  const contentBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read import file."));
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.readAsDataURL(file);
+  });
+  const data = await requestApi<{ summary: { totalRows: number; validRows: number; invalidRows: number; created: number; updated: number; errors: { row: number; errors: string[] }[] } }>("/api/admin/products/bulk-import", {
+    method: "POST",
+    body: JSON.stringify({ filename: file.name, contentBase64 }),
+  });
+  return data.summary;
 }
 
 function toAdminPayload(product: Product) {

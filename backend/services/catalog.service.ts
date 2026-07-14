@@ -1,4 +1,5 @@
-import { Prisma, ProductStatus } from "@prisma/client";
+import { Prisma, ProductStatus, SettingType } from "@prisma/client";
+import * as XLSX from "xlsx";
 import { db } from "../lib/db.js";
 import type { productListQuerySchema } from "../validators/catalog.js";
 import type { z } from "zod";
@@ -431,6 +432,29 @@ function variantSku(productSku: string, variant: any, index: number) {
   return (variant.sku || `${productSku}-${String(index + 1).padStart(2, "0")}`).trim();
 }
 
+async function nextSequence(tx: Prisma.TransactionClient, key: string) {
+  const current = await tx.setting.findUnique({ where: { key } });
+  const next = Number(current?.value || "0") + 1;
+  await tx.setting.upsert({
+    where: { key },
+    update: { value: String(next) },
+    create: { key, value: String(next), type: SettingType.NUMBER },
+  });
+  return next;
+}
+
+async function generateSku(tx: Prisma.TransactionClient, categoryId: string) {
+  const category = await tx.category.findUniqueOrThrow({ where: { id: categoryId } });
+  const prefix = (category.slug || category.name).replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase().padEnd(3, "X");
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const sequence = await nextSequence(tx, `sku:${prefix}`);
+    const sku = `${prefix}-${String(sequence).padStart(6, "0")}`;
+    const existing = await tx.product.findUnique({ where: { sku } });
+    if (!existing) return sku;
+  }
+  throw new Error("Could not generate a unique SKU.");
+}
+
 export async function createProduct(input: any) {
   const categoryId = await resolveCategory(input);
   const brandId = await resolveBrand(input);
@@ -438,11 +462,12 @@ export async function createProduct(input: any) {
   const variants = normalizedVariants(input);
 
   const productId = await db.$transaction(async (tx) => {
+    const sku = input.sku?.trim() || await generateSku(tx, categoryId);
     const product = await tx.product.create({
       data: {
         name: input.name,
         slug,
-        sku: input.sku,
+        sku,
         categoryId,
         brandId,
         description: input.description,
@@ -460,7 +485,7 @@ export async function createProduct(input: any) {
       const variant = await tx.productVariant.create({
         data: {
           productId: product.id,
-          sku: variantSku(input.sku, variantInput, index),
+          sku: variantSku(sku, variantInput, index),
           label: variantInput.label,
           unit: variantInput.unit,
           mrp: variantInput.mrp,
@@ -628,4 +653,141 @@ export async function updateBrand(id: string, input: any) {
 
 export async function softDeleteBrand(id: string) {
   await db.brand.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.INACTIVE } });
+}
+
+function parseCsvLine(line: string) {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === "\"" && quoted && next === "\"") {
+      current += "\"";
+      index += 1;
+    } else if (char === "\"") {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseCsv(text: string) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (!lines.length) return [];
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+  return lines.slice(1).map((line, index) => {
+    const cells = parseCsvLine(line);
+    return {
+      rowNumber: index + 2,
+      data: Object.fromEntries(headers.map((header, cellIndex) => [header, cells[cellIndex] || ""])),
+    };
+  });
+}
+
+function normalizeHeader(header: string) {
+  return header.trim().toLowerCase();
+}
+
+function parseXlsx(base64: string) {
+  const workbook = XLSX.read(Buffer.from(base64, "base64"), { type: "buffer", cellDates: false });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "" });
+  return rows.map((row, index) => ({
+    rowNumber: index + 2,
+    data: Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeHeader(key), String(value ?? "").trim()])),
+  }));
+}
+
+function csvTemplate() {
+  return "sku,name,category,brand,description,gst,unit,mrp,price,stock,lowStockThreshold,tags,featured,organic,local,status\n,Fresh Apple 1kg,Fruits & Vegetables,Eagle Mart,Fresh apples,5,1 kg,180,149,25,5,\"fruit,fresh\",false,false,true,ACTIVE\n";
+}
+
+export function productBulkTemplate() {
+  return csvTemplate();
+}
+
+export async function bulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }) {
+  const fileInput = typeof input === "string" ? null : input;
+  const filename = fileInput?.filename || "products.csv";
+  const csvText = typeof input === "string" ? input : input.csv;
+  const rows = csvText != null
+    ? parseCsv(csvText)
+    : filename.toLowerCase().endsWith(".xlsx") || filename.toLowerCase().endsWith(".xls")
+      ? parseXlsx(fileInput?.contentBase64 || "")
+      : parseCsv(Buffer.from(fileInput?.contentBase64 || "", "base64").toString("utf8"));
+  const errors: { row: number; errors: string[] }[] = [];
+  let created = 0;
+  let updated = 0;
+  const validRows: any[] = [];
+
+  for (const row of rows) {
+    const data = row.data;
+    const rowErrors: string[] = [];
+    ["name", "category", "brand", "unit", "mrp", "price", "stock"].forEach((field) => {
+      if (!data[field]) rowErrors.push(`${field} is required`);
+    });
+    const mrp = Number(data.mrp);
+    const price = Number(data.price);
+    const stock = Number(data.stock);
+    if (!Number.isFinite(mrp) || mrp < 0) rowErrors.push("mrp must be a positive number");
+    if (!Number.isFinite(price) || price < 0) rowErrors.push("price must be a positive number");
+    if (!Number.isInteger(stock) || stock < 0) rowErrors.push("stock must be a non-negative integer");
+    if (rowErrors.length) {
+      errors.push({ row: row.rowNumber, errors: rowErrors });
+      continue;
+    }
+    validRows.push({ rowNumber: row.rowNumber, data: { ...data, mrp, price, stock } });
+  }
+
+  await db.$transaction(async (tx) => {
+    for (const row of validRows) {
+      const data = row.data;
+      let category = await tx.category.findFirst({ where: { OR: [{ name: data.category }, { slug: slugify(data.category) }], deletedAt: null } });
+      if (!category) category = await tx.category.create({ data: { name: data.category, slug: slugify(data.category), image: null } });
+      let brand = await tx.brand.findFirst({ where: { OR: [{ name: data.brand }, { slug: slugify(data.brand) }], deletedAt: null } });
+      if (!brand) brand = await tx.brand.create({ data: { name: data.brand, slug: slugify(data.brand), logo: null } });
+      const sku = data.sku || await generateSku(tx, category.id);
+      const existing = await tx.product.findUnique({ where: { sku }, include: { variants: { orderBy: { createdAt: "asc" } } } });
+      const productData = {
+        name: data.name,
+        slug: existing?.slug || slugify(data.name),
+        sku,
+        categoryId: category.id,
+        brandId: brand.id,
+        description: data.description || data.name,
+        gst: Number(data.gst || 0),
+        tags: data.tags ? data.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean) : [],
+        featured: data.featured === "true",
+        organic: data.organic === "true",
+        local: data.local === "true",
+        status: data.status === "INACTIVE" ? ProductStatus.INACTIVE : ProductStatus.ACTIVE,
+      };
+      const product = existing
+        ? await tx.product.update({ where: { id: existing.id }, data: productData })
+        : await tx.product.create({ data: productData });
+      const variant = existing?.variants[0] || await tx.productVariant.create({
+        data: { productId: product.id, sku: `${sku}-01`, label: data.unit, unit: data.unit, mrp: data.mrp, price: data.price, status: ProductStatus.ACTIVE },
+      });
+      if (existing?.variants[0]) {
+        await tx.productVariant.update({ where: { id: variant.id }, data: { label: data.unit, unit: data.unit, mrp: data.mrp, price: data.price, status: ProductStatus.ACTIVE } });
+      }
+      await tx.inventory.upsert({
+        where: { productId_variantId: { productId: product.id, variantId: variant.id } },
+        update: { stock: data.stock, lowStockThreshold: Number(data.lowstockthreshold || 10) },
+        create: { productId: product.id, variantId: variant.id, stock: data.stock, lowStockThreshold: Number(data.lowstockthreshold || 10) },
+      });
+      if (existing) updated += 1;
+      else created += 1;
+    }
+  });
+
+  return { totalRows: rows.length, validRows: validRows.length, invalidRows: errors.length, created, updated, errors };
 }

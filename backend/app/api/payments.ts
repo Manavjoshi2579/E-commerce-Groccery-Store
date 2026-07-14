@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { sendError, sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
-import { createRazorpayOrder, handleRazorpayWebhook, markRazorpayFailed, verifyRazorpayPayment } from "../../services/payment.service.js";
+import { createRazorpayOrder, handleRazorpayWebhook, markRazorpayFailed, paymentProviderStatus, verifyRazorpayPayment } from "../../services/payment.service.js";
 import { razorpayCreateOrderSchema, razorpayFailedSchema, razorpayVerifySchema } from "../../validators/payments.js";
 
 export const paymentRouter = Router();
+
+paymentRouter.get("/config", (_req, res) => sendOk(res, { providers: paymentProviderStatus() }));
 
 paymentRouter.post("/razorpay/create-order", requireCustomer, async (req, res) => {
   const parsed = razorpayCreateOrderSchema.safeParse(req.body);

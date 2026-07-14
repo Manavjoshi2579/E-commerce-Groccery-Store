@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BadgePercent, ChevronRight, CreditCard, Eye, EyeOff, Heart, Home, LogOut, MapPin, Menu, Minus, PackageCheck,
+  ArrowLeft, BadgePercent, ChevronRight, CreditCard, Eye, EyeOff, Heart, Home, LogOut, MapPin, Menu, Minus, Package, PackageCheck,
   Plus, Search, ShieldCheck, ShoppingBag, Star, Truck, User, X, FileText, RotateCcw, MessageCircle,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
@@ -16,8 +16,10 @@ import { deliverySlots } from "@/data/delivery";
 import { fetchCategories, fetchProduct, fetchProducts } from "@/services/catalog";
 import { checkPincode, checkoutSummary, fetchAdminOrder, fetchOrder, fetchOrders, fetchTracking, fetchDeliverySlots, requestReturnBackend, reverseGeocodeLocation } from "@/services/checkout";
 import { faqCategories, fetchFaqs } from "@/services/faqs";
-import { createRazorpayOrder, loadRazorpayScript, markRazorpayFailed, verifyRazorpayPayment, type RazorpayCreateOrderResponse } from "@/services/payments";
+import { createRazorpayOrder, fetchPaymentConfig, loadRazorpayScript, markRazorpayFailed, verifyRazorpayPayment, type RazorpayCreateOrderResponse } from "@/services/payments";
 import { createSupportTicket, fetchSupportTickets } from "@/services/support";
+import { forgotCustomerPassword, getAuthConfig, resetCustomerPassword, verifyCustomerResetOtp, type AuthProviderConfig } from "@/services/auth";
+import { ApiError } from "@/services/api";
 import { money } from "@/lib/money";
 import type { Address, CartItem, Category, FAQ, Order, Product, SupportTicket } from "@/types";
 
@@ -495,7 +497,7 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
         </div>
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
           <div><p className="display-font text-lg font-extrabold">{money(price)}</p><p className="text-xs text-black/45 line-through">{money(mrp)}</p>{!available && <p className="mt-1 text-xs font-bold text-red-600">Out of stock</p>}</div>
-          <Button variant="gold" className={available ? "h-10 w-10 px-0" : "h-10 min-w-[4.5rem] px-3 text-xs"} disabled={!authReady || !available} onClick={() => addToCart(product.id, 1, selectedVariant?.id)} aria-label={`Add ${product.name}`}>{available ? <Plus size={18} /> : "Out"}</Button>
+          <Button variant="gold" className={available ? "h-14 w-14 px-0 text-xl font-black shadow-md" : "h-11 min-w-[4.5rem] px-3 text-xs"} disabled={!authReady || !available} onClick={() => addToCart(product.id, 1, selectedVariant?.id)} aria-label={`Add ${product.name}`}>{available ? <Plus size={28} strokeWidth={3.25} /> : "Out"}</Button>
         </div>
       </div>
       {footer && <div className="grid grid-cols-2 gap-2 border-t border-[#eadfca] bg-white p-3">{footer}</div>}
@@ -905,7 +907,7 @@ function Summary({ t, code, coupons, setCode, applyCoupon }: { t: ReturnType<typ
 function WishlistPage() {
   const { wishlist, products, moveWishlistToCart, toggleWishlist } = useStore();
   const list = products.filter((p) => wishlist.includes(p.id));
-  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Wishlist</h1>{list.length ? <div className="responsive-scroll mt-6 flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{list.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 lg:min-w-0 lg:max-w-none"><ProductCard product={p} footer={<><Button variant="gold" onClick={() => moveWishlistToCart(p.id)}>Move</Button><Button variant="outline" onClick={() => toggleWishlist(p.id)}>Remove</Button></>} /></div>)}</div> : <Empty title="Your wishlist is empty" cta="Browse products" href="/products" />}</main></CustomerShell>;
+  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Wishlist</h1>{list.length ? <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{list.map((product) => <ProductCard key={product.id} product={product} footer={<div className="mt-3 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => moveWishlistToCart(product.id)}>Move to cart</Button><Button variant="ghost" onClick={() => toggleWishlist(product.id)}>Remove</Button></div>} />)}</div> : <Empty title="Wishlist is empty" cta="Browse products" href="/products" />}</main></CustomerShell>;
 }
 
 type AddressInput = Omit<Address, "id">;
@@ -990,10 +992,12 @@ function CheckoutPage() {
   const [step, setStep] = useState(1);
   const [address, setAddress] = useState<Address | null>(addresses[0] || null);
   const [payment, setPayment] = useState<"COD" | "Razorpay">(searchParams.get("payment") === "razorpay" ? "Razorpay" : "COD");
+  const [fulfillmentType, setFulfillmentType] = useState<"DELIVERY" | "PICKUP">("DELIVERY");
   const [deliveryDate, setDeliveryDate] = useState(defaultDeliveryDate);
   const [slot, setSlot] = useState(deliverySlots[0]);
   const [slotId, setSlotId] = useState("");
   const [remoteSlots, setRemoteSlots] = useState<{ id: string; label: string; startTime?: string; endTime?: string }[]>([]);
+  const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [processing, setProcessing] = useState<{ label: string; amount?: number; orderNumber?: string } | null>(null);
   const [cancelled, setCancelled] = useState<RazorpayCreateOrderResponse | null>(null);
@@ -1012,6 +1016,15 @@ function CheckoutPage() {
     }
     setDeliveryDate(value);
   };
+  useEffect(() => {
+    fetchPaymentConfig().then((config) => {
+      setOnlinePaymentEnabled(Boolean(config.onlinePayment));
+      if (!config.onlinePayment) setPayment("COD");
+    }).catch(() => {
+      setOnlinePaymentEnabled(false);
+      setPayment("COD");
+    });
+  }, []);
   useEffect(() => {
     if (!addresses.length) {
       setAddress(null);
@@ -1055,6 +1068,7 @@ function CheckoutPage() {
   }, [address?.pincode, deliveryDate, deliveryDateIsPast, toast]);
   const startRazorpay = async () => {
     if (placing) return;
+    if (!onlinePaymentEnabled) return toast("Online Payment Coming Soon", "info");
     if (!terms) return toast("Please accept terms to place the order.", "error");
     if (!address) {
       setStep(1);
@@ -1064,7 +1078,7 @@ function CheckoutPage() {
       setStep(2);
       return toast("Past delivery dates are not available. Please choose today or a future date.", "error");
     }
-    if (!slotId) {
+    if (fulfillmentType === "DELIVERY" && !slotId) {
       setStep(2);
       return toast("Please select a delivery slot.", "error");
     }
@@ -1143,8 +1157,8 @@ function CheckoutPage() {
     setPlacing(true);
     let order: Order;
     try {
-      if (!address?.id || !slotId) throw new Error("Checkout requires a saved address and delivery slot from the database.");
-      order = await placeBackendCodOrder({ addressId: address.id, deliverySlotId: slotId, deliveryDate });
+      if (!address?.id || (fulfillmentType === "DELIVERY" && !slotId)) throw new Error("Checkout requires a saved address and delivery slot from the database.");
+      order = await placeBackendCodOrder({ addressId: address.id, deliverySlotId: fulfillmentType === "PICKUP" ? null : slotId, deliveryDate, fulfillmentType });
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not place order.", "error");
       setPlacing(false);
@@ -1155,7 +1169,29 @@ function CheckoutPage() {
   if (!customer) {
     return <CustomerShell><main className="container-premium flex min-h-[60vh] items-center justify-center py-10"><section className="premium-card max-w-lg p-8 text-center"><User className="mx-auto text-[#8a6500]" size={46} /><h1 className="display-font mt-4 text-3xl font-black">Login Required</h1><p className="mt-2 text-black/60">Please login first to checkout, manage cart, and place orders.</p><div className="mt-6 flex justify-center gap-3"><Link href="/login"><Button variant="gold">Login</Button></Link><Link href="/signup"><Button variant="outline">Create Account</Button></Link></div></section></main></CustomerShell>;
   }
-  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/cart" label="Back to cart" /><h1 className="display-font text-3xl font-black">Secure Checkout</h1><div className="mt-4 max-w-lg"><PincodeChecker /></div><div className="responsive-scroll mt-4 flex gap-2 overflow-x-auto pb-1">{["Address", "Delivery Slot", "Payment", "Review"].map((x, i) => <button key={x} onClick={() => setStep(i + 1)} className={`min-w-fit rounded-full px-3 py-2 text-xs font-bold ${step === i + 1 ? "bg-black text-white" : "bg-white"}`}>{i + 1}. {x}</button>)}</div><div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"><section className="premium-card min-w-0 p-4 sm:p-5">{step === 1 && <AddressManager selectedId={address?.id} onSelect={setAddress} />}{step === 2 && <div><h2 className="display-font text-xl font-bold">Delivery Slot</h2><label className="mt-4 block text-sm font-bold">Delivery date<input aria-label="Delivery date" type="date" min={minDeliveryDate} value={deliveryDate} onChange={(event) => selectDeliveryDate(event.target.value)} className="mt-1 block w-full rounded-md border px-3 py-2 sm:w-auto" /></label>{deliveryDateIsPast && <p className="mt-2 text-sm font-bold text-red-600">Past delivery dates are not available.</p>}{remoteSlots.length && !deliveryDateIsPast ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{remoteSlots.map((remote) => <button key={remote.id} disabled={deliveryDateIsPast} onClick={() => { setSlot(remote.label); setSlotId(remote.id); }} className={`rounded-md border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50 ${slotId === remote.id ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Truck className="mb-2" /><b>{remote.label}</b>{remote.startTime && remote.endTime && <span className="mt-1 block text-sm text-black/55">{remote.startTime} - {remote.endTime}</span>}</button>)}</div> : <div className="mt-4 rounded-md border border-[#eadfca] bg-white p-4 text-sm font-semibold text-black/60">Select a saved India address and a valid delivery date to load delivery slots.</div>}</div>}{step === 3 && <div><h2 className="display-font text-xl font-bold">Payment Method</h2><div className="mt-4 grid gap-3 md:grid-cols-2"><PaymentCard active={payment === "COD"} title="Cash on Delivery" text="Pay when your groceries arrive." onClick={() => setPayment("COD")}><div className="mt-3 rounded-md bg-black/5 p-3 text-xs font-bold text-black/60">No online payment needed. COD pending until delivery.</div></PaymentCard><PaymentCard active={payment === "Razorpay"} title="Razorpay Online Payment" text="Pay securely using UPI, cards, net banking or wallets." onClick={() => setPayment("Razorpay")}><div className="mt-3 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-white px-2 py-1">UPI</span><span className="rounded-full bg-white px-2 py-1">Cards</span><span className="rounded-full bg-white px-2 py-1">Net Banking</span><span className="rounded-full bg-white px-2 py-1">Wallets</span></div><div className="mt-3 flex items-center gap-2 text-xs font-bold text-green-700"><ShieldCheck size={16} />100% secure payment powered by Razorpay</div><p className="mt-3 rounded-md bg-green-50 p-3 text-xs font-bold text-green-800">Secure checkout will open after you confirm the order.</p></PaymentCard></div>{payment === "Razorpay" && <Button className="mt-5 w-full sm:w-auto" variant="gold" disabled={placing || !address || !slotId || deliveryDateIsPast} onClick={startRazorpay}>{placing ? "Creating secure payment..." : `Pay Securely ${money(t.total)}`}</Button>}</div>}{step === 4 && <div><h2 className="display-font text-xl font-bold">Review Order</h2><p className="mt-2 text-sm text-black/60">{cart.length} items, delivery {deliveryDate} at {slot}, payment {payment}</p>{address && <p className="mt-2 text-sm text-black/60">Deliver to {address.name}, {address.line}, {address.city} - {address.pincode}</p>}<label className="mt-5 flex gap-2 text-sm"><input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} /> I agree to terms, easy cancellation, and freshness policy.</label><Button variant="gold" className="mt-5 w-full sm:w-auto" onClick={() => finish(true)} disabled={placing || deliveryDateIsPast}>{placing ? payment === "Razorpay" ? "Creating secure payment..." : "Placing..." : payment === "Razorpay" ? `Pay Securely ${money(t.total)}` : "Place COD Order"}</Button></div>}<div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:justify-between"><Button variant="ghost" onClick={() => setStep(Math.max(1, step - 1))}>Back</Button><Button onClick={() => setStep(Math.min(4, step + 1))}>Next</Button></div></section><Summary t={t} code="" coupons={coupons} setCode={() => {}} applyCoupon={() => {}} /></div></main>{processing && <RazorpayProcessing state={processing} />}{cancelled && <PaymentCancelledModal onRetry={() => { const next = cancelled; setCancelled(null); if (next) startRazorpay(); }} onCod={() => { setCancelled(null); setPayment("COD"); setStep(3); }} onShop={() => router.push("/products")} />}</CustomerShell>;
+  return (
+    <CustomerShell>
+      <main className="container-premium py-8">
+        <BackNav fallback="/cart" label="Back to cart" />
+        <h1 className="display-font text-3xl font-black">Secure Checkout</h1>
+        <div className="mt-4 max-w-lg"><PincodeChecker /></div>
+        <div className="responsive-scroll mt-4 flex gap-2 overflow-x-auto pb-1">
+          {["Address", "Delivery", "Review"].map((x, i) => <button key={x} onClick={() => setStep(i + 1)} className={`min-w-fit rounded-full px-3 py-2 text-xs font-bold ${step === i + 1 ? "bg-black text-white" : "bg-white"}`}>{i + 1}. {x}</button>)}
+        </div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="premium-card min-w-0 p-4 sm:p-5">
+            {step === 1 && <AddressManager selectedId={address?.id} onSelect={setAddress} />}
+            {step === 2 && <div><h2 className="display-font text-xl font-bold">Delivery</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setFulfillmentType("DELIVERY")} className={`rounded-md border p-4 text-left ${fulfillmentType === "DELIVERY" ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Truck className="mb-2" /><b>Home Delivery</b></button><button type="button" onClick={() => { setFulfillmentType("PICKUP"); setPayment("COD"); }} className={`rounded-md border p-4 text-left ${fulfillmentType === "PICKUP" ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Package className="mb-2" /><b>Pickup From Store</b><span className="mt-1 block text-sm text-black/55">No delivery charge or slot required</span></button></div><label className="mt-4 block text-sm font-bold">Date<input aria-label="Delivery date" type="date" min={minDeliveryDate} value={deliveryDate} onChange={(event) => selectDeliveryDate(event.target.value)} className="mt-1 block w-full rounded-md border px-3 py-2 sm:w-auto" /></label>{deliveryDateIsPast && <p className="mt-2 text-sm font-bold text-red-600">Past dates are not available.</p>}{fulfillmentType === "DELIVERY" && (remoteSlots.length && !deliveryDateIsPast ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{remoteSlots.map((remote) => <button key={remote.id} disabled={deliveryDateIsPast} onClick={() => { setSlot(remote.label); setSlotId(remote.id); }} className={`rounded-md border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50 ${slotId === remote.id ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Truck className="mb-2" /><b>{remote.label}</b>{remote.startTime && remote.endTime && <span className="mt-1 block text-sm text-black/55">{remote.startTime} - {remote.endTime}</span>}</button>)}</div> : <div className="mt-4 rounded-md border border-[#eadfca] bg-white p-4 text-sm font-semibold text-black/60">Select a saved India address and a valid delivery date to load delivery slots.</div>)}</div>}
+            {step === 3 && <div><h2 className="display-font text-xl font-bold">Review Order</h2><div className="mt-4 grid gap-3 md:grid-cols-2"><PaymentCard active={payment === "COD"} title="Cash on Delivery" text={fulfillmentType === "PICKUP" ? "Pay when you pick up your groceries." : "Pay when your groceries arrive."} onClick={() => setPayment("COD")}><div className="mt-3 rounded-md bg-black/5 p-3 text-xs font-bold text-black/60">COD pending until fulfillment.</div></PaymentCard><PaymentCard active={payment === "Razorpay"} title={onlinePaymentEnabled ? "Online Payment" : "Online Payment Coming Soon"} text={onlinePaymentEnabled ? "Pay securely online." : "Online payment is disabled until production Razorpay is ready."} onClick={() => onlinePaymentEnabled && fulfillmentType === "DELIVERY" ? setPayment("Razorpay") : toast("Online Payment Coming Soon", "info")}>{!onlinePaymentEnabled && <p className="mt-3 rounded-md bg-[#fff8df] p-3 text-xs font-bold text-[#8a6500]">Coming Soon</p>}</PaymentCard></div><p className="mt-5 text-sm text-black/60">{cart.length} items, {fulfillmentType === "PICKUP" ? "pickup from store" : `delivery ${deliveryDate} at ${slot}`}, payment {payment}</p>{address && <p className="mt-2 text-sm text-black/60">{fulfillmentType === "PICKUP" ? "Customer" : "Deliver to"} {address.name}, {address.line}, {address.city} - {address.pincode}</p>}<label className="mt-5 flex gap-2 text-sm"><input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} /> I agree to terms, easy cancellation, and freshness policy.</label><Button variant="gold" className="mt-5 w-full sm:w-auto" onClick={() => finish(true)} disabled={placing || deliveryDateIsPast}>{placing ? "Placing..." : "Place Order"}</Button></div>}
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:justify-between"><Button variant="ghost" onClick={() => setStep(Math.max(1, step - 1))}>Back</Button>{step < 3 && <Button onClick={() => setStep(Math.min(3, step + 1))}>Next</Button>}</div>
+          </section>
+          <Summary t={fulfillmentType === "PICKUP" ? { ...t, delivery: 0, total: t.total - t.delivery } : t} code="" coupons={coupons} setCode={() => {}} applyCoupon={() => {}} />
+        </div>
+      </main>
+      {processing && <RazorpayProcessing state={processing} />}
+      {cancelled && <PaymentCancelledModal onRetry={() => { const next = cancelled; setCancelled(null); if (next) startRazorpay(); }} onCod={() => { setCancelled(null); setPayment("COD"); setStep(3); }} onShop={() => router.push("/products")} />}
+    </CustomerShell>
+  );
 }
 
 function storedOrder(number?: string) {
@@ -1701,35 +1737,81 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [providerConfig, setProviderConfig] = useState<AuthProviderConfig | null>(null);
+  const [channel, setChannel] = useState<"email" | "sms">("email");
+  const [otp, setOtp] = useState("");
+  const [grant, setGrant] = useState("");
+  const [retryAfter, setRetryAfter] = useState(0);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirm: "", terms: false, remember: true });
   const update = (key: keyof typeof form, value: string | boolean) => setForm((next) => ({ ...next, [key]: value }));
+  useEffect(() => {
+    getAuthConfig().then(setProviderConfig).catch(() => setProviderConfig(null));
+  }, []);
+  useEffect(() => {
+    if (retryAfter <= 0) return;
+    const timer = window.setInterval(() => setRetryAfter((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAfter]);
+  const passwordChecks = [
+    ["At least 8 characters", form.password.length >= 8],
+    ["Letters and numbers", /[A-Za-z]/.test(form.password) && /\d/.test(form.password)],
+    ["Passwords match", mode !== "signup" || (!!form.confirm && form.password === form.confirm)],
+  ];
+  const safeNext = () => {
+    const next = params.get("next");
+    return next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    if (mode === "forgot-password" || mode === "reset-password") {
-      toast("Password reset will be enabled soon.", "info");
-      return;
-    }
-    if (!form.email || !/^\S+@\S+\.\S+$/.test(form.email)) return setError("Enter a valid email address.");
-    if (!form.password) return setError("Password is required.");
-    if (mode === "signup") {
-      if (!form.name.trim()) return setError("Full name is required.");
-      if (form.password !== form.confirm) return setError("Passwords do not match.");
-      if (!form.terms) return setError("Accept the terms to create an account.");
-    }
+    setStatus("");
     setLoading(true);
     try {
+      if (mode === "forgot-password") {
+        const result = await forgotCustomerPassword(channel === "email" ? { channel, email: form.email } : { channel, phone: form.phone });
+        setStatus(result.providerConfigured ? result.message : "Recovery is configured safely, but this delivery provider is not enabled yet.");
+        return;
+      }
+      if (mode === "reset-password") {
+        await resetCustomerPassword({ token: params.get("token") || undefined, grant: grant || undefined, password: form.password, confirmPassword: form.confirm });
+        toast("Password reset complete. Please login.", "success");
+        router.push("/login");
+        return;
+      }
+      if (!form.email || !/^\S+@\S+\.\S+$/.test(form.email)) return setError("Enter a valid email address.");
+      if (!form.password) return setError("Password is required.");
+      if (mode === "signup") {
+        if (!form.name.trim()) return setError("Full name is required.");
+        if (!/^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, "").slice(-10))) return setError("Enter a valid 10 digit mobile number.");
+        if (form.password !== form.confirm) return setError("Passwords do not match.");
+        if (!form.terms) return setError("Accept the terms to create an account.");
+      }
       if (mode === "login") await loginCustomer({ email: form.email, password: form.password });
-      if (mode === "signup") await registerCustomer({ name: form.name, email: form.email, phone: form.phone, password: form.password });
-      router.push(params.get("next") || "/account");
+      if (mode === "signup") await registerCustomer({ name: form.name, email: form.email, phone: form.phone, password: form.password, terms: form.terms });
+      router.push(safeNext());
     } catch (authError) {
+      if (authError instanceof ApiError && authError.retryAfterSeconds) setRetryAfter(authError.retryAfterSeconds);
       setError(authError instanceof Error ? authError.message : "Authentication failed.");
     } finally {
       setLoading(false);
     }
   };
+  const verifyOtp = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await verifyCustomerResetOtp({ phone: form.phone, otp });
+      setGrant(result.grant);
+      setStatus("Verification complete. Set a new password.");
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : "Verification failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
   const title = mode === "signup" ? "Create Account" : mode === "forgot-password" ? "Forgot Password" : mode === "reset-password" ? "Reset Password" : "Login";
-  return <CustomerShell><main className="min-h-[78vh] bg-[#131313] text-white"><div className="container-premium grid min-h-[78vh] items-center gap-8 py-10 lg:grid-cols-2"><section className="hidden lg:block"><Logo invert /><h1 className="display-font mt-8 text-5xl font-black">Welcome to Eagle Mart</h1><p className="mt-4 max-w-md text-white/65">Premium grocery access, order history, saved addresses, and curated essentials in one secure account.</p></section><section className="rounded-md border border-[#d4af37]/20 bg-[#20201f] p-6 shadow-2xl md:p-8"><Logo invert /><h2 className="display-font mt-6 text-2xl font-black">{title}</h2><p className="mt-1 text-sm text-white/60">Eagle Mart Grocery & Essentials</p><form onSubmit={submit} className="mt-6 grid gap-4">{mode === "signup" && <input aria-label="Full name" value={form.name} onChange={(e) => update("name", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Full name" />}<input aria-label="Email or phone" value={form.email} onChange={(e) => update("email", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Email or phone" />{mode === "signup" && <input aria-label="Phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Phone" />}{mode !== "forgot-password" && <div className="relative"><input aria-label="Password" value={form.password} onChange={(e) => update("password", e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder="Password" type={show ? "text" : "password"} /><button type="button" aria-label="Toggle password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>}{mode === "signup" && <input aria-label="Confirm password" value={form.confirm} onChange={(e) => update("confirm", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Confirm password" type="password" />}{mode === "login" && <div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input checked={form.remember} onChange={(e) => update("remember", e.target.checked)} type="checkbox" /> Remember me</label><Link href="/forgot-password" className="text-[#e7c766]">Forgot password?</Link></div>}{mode === "signup" && <label className="flex items-center gap-2 text-sm text-white/75"><input checked={form.terms} onChange={(e) => update("terms", e.target.checked)} type="checkbox" /> I agree to Eagle Mart terms</label>}{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading}>{loading ? "Loading..." : title}</Button></form><div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{mode !== "login" ? <Link href="/login" className="text-[#e7c766]">Back to login</Link> : <Link href="/signup" className="text-[#e7c766]">Create account</Link>}</div></section></div></main></CustomerShell>;
+  return <CustomerShell><main className="min-h-[78vh] bg-[#131313] text-white"><div className="container-premium grid min-h-[78vh] items-center gap-8 py-10 lg:grid-cols-2"><section className="hidden lg:block"><Logo invert /><h1 className="display-font mt-8 text-5xl font-black">Welcome to Eagle Mart</h1><p className="mt-4 max-w-md text-white/65">Premium grocery access, order history, saved addresses, and curated essentials in one secure account.</p></section><section className="rounded-md border border-[#d4af37]/20 bg-[#20201f] p-6 shadow-2xl md:p-8"><Logo invert /><h2 className="display-font mt-6 text-2xl font-black">{title}</h2><p className="mt-1 text-sm text-white/60">Eagle Mart Grocery & Essentials</p>{(mode === "login" || mode === "signup") && <div className="mt-5 grid gap-2">{providerConfig?.google && <a className="rounded-md border border-white/15 bg-white px-4 py-3 text-center text-sm font-black text-black" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/google`}>Continue with Google</a>}{providerConfig?.apple && <a className="rounded-md border border-white/15 bg-black px-4 py-3 text-center text-sm font-black text-white" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/apple`}>Continue with Apple</a>}</div>}<form onSubmit={submit} className="mt-6 grid gap-4">{mode === "forgot-password" && <div className="grid grid-cols-2 gap-2 rounded-md bg-black p-1"><button type="button" onClick={() => setChannel("email")} className={`rounded px-3 py-2 text-sm font-bold ${channel === "email" ? "bg-[#d4af37] text-black" : "text-white/70"}`}>Email</button><button type="button" onClick={() => setChannel("sms")} className={`rounded px-3 py-2 text-sm font-bold ${channel === "sms" ? "bg-[#d4af37] text-black" : "text-white/70"}`}>Mobile SMS</button></div>}{mode === "signup" && <input aria-label="Full name" value={form.name} onChange={(e) => update("name", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Full name" />}{(mode === "login" || mode === "signup" || (mode === "forgot-password" && channel === "email")) && <input aria-label="Email address" value={form.email} onChange={(e) => update("email", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Email address" type="email" />}{(mode === "signup" || (mode === "forgot-password" && channel === "sms")) && <input aria-label="Mobile number" value={form.phone} onChange={(e) => update("phone", e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="10 digit mobile number" />}{mode === "forgot-password" && channel === "sms" && <div className="grid grid-cols-[1fr_auto] gap-2"><input aria-label="Six digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} className="rounded-md border border-white/10 bg-black px-3 py-3 tracking-[0.4em] outline-none focus:border-[#d4af37]" placeholder="000000" /><Button type="button" variant="outline" disabled={loading || otp.length !== 6} onClick={verifyOtp}>Verify</Button></div>}{mode !== "forgot-password" && <div className="relative"><input aria-label="Password" value={form.password} onChange={(e) => update("password", e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder={mode === "reset-password" ? "New password" : "Password"} type={show ? "text" : "password"} /><button type="button" aria-label="Toggle password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>}{(mode === "signup" || mode === "reset-password") && <input aria-label="Confirm password" value={form.confirm} onChange={(e) => update("confirm", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Confirm password" type="password" />}{(mode === "signup" || mode === "reset-password") && <div className="grid gap-1 text-xs text-white/65">{passwordChecks.map(([label, ok]) => <span key={String(label)} className={ok ? "text-[#e7c766]" : "text-white/50"}>{ok ? "OK" : "-"} {label}</span>)}</div>}{mode === "login" && <div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input checked={form.remember} onChange={(e) => update("remember", e.target.checked)} type="checkbox" /> Remember me</label><Link href="/forgot-password" className="text-[#e7c766]">Forgot password?</Link></div>}{mode === "signup" && <label className="flex items-center gap-2 text-sm text-white/75"><input checked={form.terms} onChange={(e) => update("terms", e.target.checked)} type="checkbox" /> I agree to Eagle Mart terms</label>}{retryAfter > 0 && <p className="rounded-md bg-[#d4af37]/15 p-3 text-sm text-[#e7c766]">Try again in {String(Math.floor(retryAfter / 60)).padStart(2, "0")}:{String(retryAfter % 60).padStart(2, "0")}</p>}{status && <p className="rounded-md bg-green-500/15 p-3 text-sm text-green-100">{status}</p>}{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading || retryAfter > 0}>{loading ? "Loading..." : title}</Button></form><div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{mode !== "login" ? <Link href="/login" className="text-[#e7c766]">Back to login</Link> : <Link href="/signup" className="text-[#e7c766]">Create account</Link>}</div></section></div></main></CustomerShell>;
 }
 
 function Empty({ title, cta, href = "/products" }: { title: string; cta: string; href?: string }) {
@@ -1766,3 +1848,5 @@ function Router({ slug }: { slug: string[] }) {
 export function CustomerApp({ slug }: { slug: string[] }) {
   return <StoreProvider><Router slug={slug} /></StoreProvider>;
 }
+
+

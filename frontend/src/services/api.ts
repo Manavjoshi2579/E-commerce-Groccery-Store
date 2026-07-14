@@ -3,7 +3,13 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 export const API_UNAVAILABLE_MESSAGE = "Database connection failed. Please check backend database configuration.";
 
-export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string } };
+export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string; code?: string; retryAfterSeconds?: number } };
+
+export class ApiError extends Error {
+  constructor(message: string, public code?: string, public retryAfterSeconds?: number) {
+    super(message);
+  }
+}
 
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
@@ -28,7 +34,7 @@ export async function requestApi<T>(path: string, init?: RequestInit): Promise<T
   }
 
   if (!response.ok || !body.ok) {
-    throw new Error(body.ok ? `API ${response.status}: request failed` : body.error.message);
+    throw body.ok ? new ApiError(`API ${response.status}: request failed`) : new ApiError(body.error.message, body.error.code, body.error.retryAfterSeconds);
   }
 
   return body.data;

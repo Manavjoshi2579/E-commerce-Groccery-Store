@@ -66,6 +66,11 @@ export function createRazorpayOrder(input: { addressId: string; deliverySlotId: 
   return requestApi<RazorpayCreateOrderResponse>("/api/payments/razorpay/create-order", { method: "POST", body: JSON.stringify(input) });
 }
 
+export async function fetchPaymentConfig() {
+  const data = await requestApi<{ providers: { razorpay: boolean; onlinePayment: boolean } }>("/api/payments/config");
+  return data.providers;
+}
+
 export async function verifyRazorpayPayment(input: { orderNumber: string } & RazorpayCheckoutResponse) {
   const data = await requestApi<{ success: boolean; orderNumber: string; order: any }>("/api/payments/razorpay/verify", { method: "POST", body: JSON.stringify(input) });
   return { ...data, order: data.order ? mapOrder(data.order) as Order : undefined };

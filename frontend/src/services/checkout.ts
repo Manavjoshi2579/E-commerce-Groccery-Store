@@ -128,7 +128,7 @@ export async function checkoutSummary() {
   };
 }
 
-export async function placeCodOrder(input: { addressId: string; deliverySlotId: string; deliveryDate: string }) {
+export async function placeCodOrder(input: { addressId: string; deliverySlotId?: string | null; deliveryDate: string; fulfillmentType?: "DELIVERY" | "PICKUP" }) {
   const data = await requestApi<{ order: any; orderNumber: string }>("/api/checkout/place-cod-order", { method: "POST", body: JSON.stringify(input) });
   return mapOrder(data.order);
 }
@@ -199,6 +199,25 @@ export async function createAdminDeliveryStaff(input: { name: string; phone: str
 
 export async function deleteAdminDeliveryStaff(id: string) {
   return requestApi<{ deleted: boolean; deactivated: boolean }>(`/api/admin/delivery-staff/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function fetchAdminDeliverySlots() {
+  const data = await requestApi<{ slots: any[] }>("/api/admin/delivery-slots");
+  return data.slots;
+}
+
+export async function createAdminDeliverySlot(input: { label: string; startTime: string; endTime: string; capacity: number; active?: boolean }) {
+  const data = await requestApi<{ slot: any }>("/api/admin/delivery-slots", { method: "POST", body: JSON.stringify(input) });
+  return data.slot;
+}
+
+export async function updateAdminDeliverySlot(id: string, input: Partial<{ label: string; startTime: string; endTime: string; capacity: number; active: boolean }>) {
+  const data = await requestApi<{ slot: any }>(`/api/admin/delivery-slots/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  return data.slot;
+}
+
+export async function deleteAdminDeliverySlot(id: string) {
+  return requestApi<{ deleted: boolean; deactivated: boolean }>(`/api/admin/delivery-slots/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function fetchAdminInventory() {

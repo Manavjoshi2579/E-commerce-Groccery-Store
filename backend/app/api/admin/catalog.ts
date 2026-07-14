@@ -6,6 +6,7 @@ import {
   createBrand,
   createCategory,
   createProduct,
+  bulkImportProducts,
   getAdminProduct,
   listBrands,
   listCategories,
@@ -16,6 +17,7 @@ import {
   updateBrand,
   updateCategory,
   updateProduct,
+  productBulkTemplate,
 } from "../../../services/catalog.service.js";
 import { brandSchema, categorySchema, productListQuerySchema, productSchema, productUpdateSchema } from "../../../validators/catalog.js";
 
@@ -32,6 +34,24 @@ adminCatalogRouter.get("/products", requireAdminRole(catalogViewRoles), async (r
   const parsed = productListQuerySchema.safeParse(req.query);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid product filters.");
   return sendOk(res, await listProducts(parsed.data, true));
+});
+
+adminCatalogRouter.get("/products/bulk-template", requireAdminRole(catalogViewRoles), async (_req, res) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=\"eagle-mart-product-template.csv\"");
+  return res.send(productBulkTemplate());
+});
+
+adminCatalogRouter.post("/products/bulk-import", requireAdminRole(catalogManageRoles), async (req, res) => {
+  const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+  const contentBase64 = typeof req.body?.contentBase64 === "string" ? req.body.contentBase64 : "";
+  const filename = typeof req.body?.filename === "string" ? req.body.filename : "products.csv";
+  if (!csv.trim() && !contentBase64.trim()) return sendError(res, 400, "CSV or XLSX file content is required.");
+  try {
+    return sendOk(res, { summary: await bulkImportProducts(csv.trim() ? csv : { filename, contentBase64 }) }, 201);
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not import products.");
+  }
 });
 
 adminCatalogRouter.post("/products", requireAdminRole(catalogManageRoles), async (req, res) => {
