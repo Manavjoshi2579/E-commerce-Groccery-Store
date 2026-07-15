@@ -56,6 +56,12 @@ enum ProductStatus {
   OUT_OF_STOCK
 }
 
+enum ImageStatus {
+  VERIFIED
+  PLACEHOLDER
+  NEEDS_REVIEW
+}
+
 enum StockMovementType {
   SALE
   RETURN
@@ -434,6 +440,9 @@ model Product {
   featured    Boolean       @default(false)
   organic     Boolean       @default(false)
   local       Boolean       @default(false)
+  imageStatus ImageStatus   @default(PLACEHOLDER)
+  imageSource String?
+  imageCheckedAt DateTime?
   status      ProductStatus @default(ACTIVE)
   deletedAt   DateTime?
   createdAt   DateTime      @default(now())
@@ -456,6 +465,7 @@ model Product {
   @@index([slug])
   @@index([sku])
   @@index([clientProductCode])
+  @@index([imageStatus])
 }
 
 model ProductImage {

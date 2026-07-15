@@ -7,7 +7,9 @@ import {
   createCategory,
   createProduct,
   bulkImportProducts,
+  bulkSyncProductImages,
   getAdminProduct,
+  imageSyncReport,
   listBrands,
   listCategories,
   listProducts,
@@ -19,6 +21,7 @@ import {
   updateProduct,
   productBulkTemplate,
   productBulkTemplateXlsx,
+  refreshProductImage,
 } from "../../../services/catalog.service.js";
 import { brandSchema, categorySchema, productListQuerySchema, productSchema, productUpdateSchema } from "../../../validators/catalog.js";
 
@@ -63,6 +66,20 @@ adminCatalogRouter.post("/products/bulk-import", requireAdminRole(catalogManageR
   }
 });
 
+adminCatalogRouter.get("/products/image-report", requireAdminRole(catalogViewRoles), async (_req, res) => {
+  return sendOk(res, { report: await imageSyncReport() });
+});
+
+adminCatalogRouter.post("/products/bulk-image-sync", requireAdminRole(catalogManageRoles), async (req, res) => {
+  const dryRun = Boolean(req.body?.dryRun);
+  const limit = Number(req.body?.limit || 50);
+  try {
+    return sendOk(res, { report: await bulkSyncProductImages({ dryRun, limit }) });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not sync product images.");
+  }
+});
+
 adminCatalogRouter.post("/products", requireAdminRole(catalogManageRoles), async (req, res) => {
   const parsed = productSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid product payload.");
@@ -77,6 +94,15 @@ adminCatalogRouter.get("/products/:id", requireAdminRole(catalogViewRoles), asyn
   const product = await getAdminProduct(param(req.params.id));
   if (!product) return sendError(res, 404, "Product not found.", "PRODUCT_NOT_FOUND");
   return sendOk(res, { product });
+});
+
+adminCatalogRouter.post("/products/:id/refresh-image", requireAdminRole(catalogManageRoles), async (req, res) => {
+  const dryRun = Boolean(req.body?.dryRun);
+  try {
+    return sendOk(res, await refreshProductImage(param(req.params.id), dryRun ? "scan" : "update"));
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not refresh product image.");
+  }
 });
 
 adminCatalogRouter.patch("/products/:id", requireAdminRole(catalogManageRoles), async (req, res) => {

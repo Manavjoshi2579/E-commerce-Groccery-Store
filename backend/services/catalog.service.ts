@@ -1,4 +1,4 @@
-import { Prisma, ProductStatus, SettingType } from "@prisma/client";
+import { ImageStatus, Prisma, ProductStatus, SettingType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { db } from "../lib/db.js";
 import type { productListQuerySchema } from "../validators/catalog.js";
@@ -21,9 +21,34 @@ const productInclude = {
 };
 
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
+type ImageSyncMode = "scan" | "update";
 
 const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryImageFallback = "/assets/placeholders/category-placeholder.svg";
+const googleImageApiKey = () => process.env.GOOGLE_CUSTOM_SEARCH_API_KEY || process.env.GOOGLE_CSE_API_KEY || "";
+const googleImageEngineId = () => process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID || process.env.GOOGLE_CSE_ID || "";
+const blockedImageHosts = [
+  "amazon.", "flipkart.", "bigbasket.", "blinkit.", "swiggy.", "instamart.", "jiomart.", "dmart.", "meesho.",
+];
+const officialBrandHosts: Record<string, string[]> = {
+  amul: ["amul.com"],
+  nestle: ["nestle.in", "nestle.com"],
+  britannia: ["britannia.co.in"],
+  colgate: ["colgate.com", "colgatepalmolive.co.in"],
+  dove: ["dove.com"],
+  himalaya: ["himalayawellness.in", "himalayawellness.com"],
+  parle: ["parleproducts.com"],
+  fortune: ["adaniwilmar.com", "fortunebrand.com"],
+  tata: ["tataconsumer.com"],
+  aashirvaad: ["aashirvaad.com", "itcstore.in"],
+  maggi: ["maggi.in", "nestle.in"],
+  dettol: ["dettol.co.in", "dettol.com"],
+  haldiram: ["haldirams.com"],
+  nivea: ["nivea.in"],
+  ponds: ["ponds.in"],
+  garnier: ["garnier.in", "garnierusa.com"],
+  "clinic plus": ["clinicplus.in", "unilever.com"],
+};
 
 export function slugify(value: string) {
   return value
@@ -90,8 +115,101 @@ function searchTerms(value: string) {
   return Array.from(terms);
 }
 
+function normalizePack(value: string) {
+  const normalized = normalizeSearch(value)
+    .replace(/\b(\d+)\s*(g|gm|gram|grams)\b/g, "$1 g")
+    .replace(/\b(\d+)\s*(kg|kilogram|kilograms)\b/g, "$1 kg")
+    .replace(/\b(\d+)\s*(ml|millilitre|milliliter)\b/g, "$1 ml")
+    .replace(/\b(\d+)\s*(l|ltr|litre|liter)\b/g, "$1 l")
+    .replace(/\b0\.5\s*kg\b/g, "500 g")
+    .replace(/\b0\.5\s*l\b/g, "500 ml");
+  return normalized.replace(/\s+/g, " ").trim();
+}
+
+function officialHostsForBrand(brand: string) {
+  const key = normalizeSearch(brand);
+  return officialBrandHosts[key] || [];
+}
+
+function hostAllowedForImage(urlValue: string, brand: string) {
+  try {
+    const host = new URL(urlValue).hostname.toLowerCase().replace(/^www\./, "");
+    if (blockedImageHosts.some((blocked) => host.includes(blocked))) return false;
+    const officialHosts = officialHostsForBrand(brand);
+    if (!officialHosts.length) return false;
+    return officialHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  } catch {
+    return false;
+  }
+}
+
+type ImageSearchItem = {
+  title?: string;
+  link?: string;
+  displayLink?: string;
+  snippet?: string;
+  mime?: string;
+  image?: { contextLink?: string; width?: number; height?: number; byteSize?: number };
+};
+
+function scoreImageCandidate(item: ImageSearchItem, product: ProductWithCatalog) {
+  const variant = mainVariant(product);
+  const unit = normalizePack(variant?.unit || "");
+  const haystack = normalizePack([item.title, item.snippet, item.displayLink, item.image?.contextLink].filter(Boolean).join(" "));
+  const nameTokens = searchTerms(product.name).filter((term) => !["product", "pack", "image"].includes(term));
+  const matchedName = nameTokens.filter((token) => haystack.includes(token)).length;
+  const exactName = haystack.includes(normalizeSearch(product.name)) ? 6 : 0;
+  const brand = normalizeSearch(product.brand.name);
+  const brandScore = brand && brand !== "unbranded" && haystack.includes(brand) ? 5 : -5;
+  const categoryScore = searchTerms(product.category.name).some((token) => haystack.includes(token)) ? 1 : 0;
+  const unitScore = unit && haystack.includes(unit) ? 4 : unit ? -3 : 0;
+  const image = item.image;
+  const qualityScore = image?.width && image?.height && image.width >= 400 && image.height >= 400 ? 2 : 0;
+  const mimeScore = item.mime?.startsWith("image/") ? 1 : 0;
+  return exactName + matchedName + brandScore + categoryScore + unitScore + qualityScore + mimeScore;
+}
+
+async function searchOfficialProductImage(product: ProductWithCatalog) {
+  const key = googleImageApiKey();
+  const cx = googleImageEngineId();
+  if (!key || !cx) return { skipped: true, reason: "Google image search is not configured." };
+  if (!officialHostsForBrand(product.brand.name).length) return { skipped: true, reason: "No official image source configured for this brand." };
+  const variant = mainVariant(product);
+  const siteQuery = officialHostsForBrand(product.brand.name).map((host) => `site:${host}`).join(" OR ");
+  const query = `${product.brand.name} ${product.name} ${variant?.unit || ""} product packshot (${siteQuery})`;
+  const params = new URLSearchParams({
+    key,
+    cx,
+    q: query,
+    searchType: "image",
+    imgType: "photo",
+    safe: "active",
+    num: "5",
+  });
+  const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
+  if (!response.ok) return { skipped: true, reason: `Google image search returned ${response.status}.` };
+  const data = await response.json() as { items?: ImageSearchItem[] };
+  const candidates = (data.items || [])
+    .map((item) => ({ item, url: item.link || "", score: scoreImageCandidate(item, product) }))
+    .filter((candidate) => candidate.url && hostAllowedForImage(candidate.url, product.brand.name))
+    .sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  if (!best || best.score < 13) return { skipped: true, reason: "No high-confidence official image match found." };
+  return { skipped: false, url: best.url, score: best.score, source: new URL(best.url).hostname };
+}
+
+function hasVerifiedExistingImage(product: ProductWithCatalog) {
+  return product.imageStatus === ImageStatus.VERIFIED && product.images.some((image) => image.isPrimary && image.url !== productImageFallback);
+}
+
 function mainVariant(product: ProductWithCatalog) {
   return product.variants.find((variant) => variant.status === ProductStatus.ACTIVE) ?? product.variants[0];
+}
+
+function primaryImageStatus(product: ProductWithCatalog) {
+  if (product.imageStatus === ImageStatus.VERIFIED) return "Verified";
+  if (product.imageStatus === ImageStatus.NEEDS_REVIEW) return "Needs Review";
+  return "Placeholder";
 }
 
 function variantInventory(product: ProductWithCatalog, variantId: string) {
@@ -168,6 +286,8 @@ export function mapProduct(product: ProductWithCatalog) {
     stock: stock.stock,
     lowStock: stock.lowStock,
     stockStatus: stock.stockStatus,
+    imageStatus: primaryImageStatus(product),
+    imageSource: product.imageSource,
     image,
     images: product.images.map((item) => ({ id: item.id, url: item.url || productImageFallback, alt: item.alt ?? product.name, isPrimary: item.isPrimary })),
     tags: tags(product.tags),
@@ -240,6 +360,7 @@ function buildProductWhere(query: ProductQuery, admin = false): Prisma.ProductWh
   if (query.rating != null) where.ratingAvg = { gte: query.rating };
   if (query.organic != null) where.organic = query.organic;
   if (query.local != null) where.local = query.local;
+  if (admin && query.imageStatus) where.imageStatus = query.imageStatus;
   if (query.availability === "in_stock") where.inventory = { some: { stock: { gt: 0 } } };
   if (query.availability === "out_of_stock") where.inventory = { every: { stock: { lte: 0 } } };
   if (query.availability === "low_stock") {
@@ -492,6 +613,9 @@ export async function createProduct(input: any) {
         featured: input.featured,
         organic: input.organic,
         local: input.local,
+        imageStatus: input.image ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
+        imageSource: input.image || null,
+        imageCheckedAt: input.image ? new Date() : null,
         status: input.status,
         images: input.image ? { create: { url: input.image, alt: input.name, isPrimary: true } } : undefined,
       },
@@ -547,6 +671,7 @@ export async function updateProduct(id: string, input: any) {
     await tx.product.update({ where: { id }, data });
 
     if (input.image) {
+      await tx.product.update({ where: { id }, data: { imageStatus: ImageStatus.VERIFIED, imageSource: input.image, imageCheckedAt: new Date() } });
       await tx.productImage.deleteMany({ where: { productId: id } });
       await tx.productImage.create({ data: { productId: id, url: input.image, alt: input.name, isPrimary: true } });
     }
@@ -672,6 +797,96 @@ export async function updateBrand(id: string, input: any) {
 
 export async function softDeleteBrand(id: string) {
   await db.brand.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.INACTIVE } });
+}
+
+export async function imageSyncReport() {
+  const [products, verified, placeholder, needsReview] = await Promise.all([
+    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE } }),
+    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.VERIFIED } }),
+    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.PLACEHOLDER } }),
+    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.NEEDS_REVIEW } }),
+  ]);
+  return {
+    products,
+    imagesFound: verified,
+    imagesUpdated: 0,
+    alreadyVerified: verified,
+    placeholderRemaining: placeholder,
+    needsManualReview: needsReview,
+  };
+}
+
+export async function refreshProductImage(productId: string, mode: ImageSyncMode = "update") {
+  const product = await db.product.findFirst({ where: { id: productId, deletedAt: null }, include: productInclude });
+  if (!product) throw new Error("Product not found.");
+  if (hasVerifiedExistingImage(product)) {
+    return { product: mapAdminProduct(product), report: { imagesFound: 1, imagesUpdated: 0, alreadyVerified: 1, placeholderRemaining: 0, needsManualReview: 0, message: "Existing verified image preserved." } };
+  }
+  const result = await searchOfficialProductImage(product);
+  if (result.skipped || !result.url) {
+    const updated = mode === "update"
+      ? await db.product.update({ where: { id: product.id }, data: { imageStatus: ImageStatus.NEEDS_REVIEW, imageSource: result.reason, imageCheckedAt: new Date() }, include: productInclude })
+      : product;
+    return { product: mapAdminProduct(updated), report: { imagesFound: 0, imagesUpdated: 0, alreadyVerified: 0, placeholderRemaining: 1, needsManualReview: 1, message: result.reason } };
+  }
+  if (mode === "scan") {
+    return { product: mapAdminProduct(product), report: { imagesFound: 1, imagesUpdated: 0, alreadyVerified: 0, placeholderRemaining: 0, needsManualReview: 0, imageUrl: result.url, message: "High-confidence image found." } };
+  }
+  const updated = await db.$transaction(async (tx) => {
+    await tx.productImage.updateMany({ where: { productId: product.id }, data: { isPrimary: false } });
+    const primary = product.images.find((image) => image.isPrimary) || product.images[0];
+    if (primary) {
+      await tx.productImage.update({ where: { id: primary.id }, data: { url: result.url, alt: product.name, isPrimary: true, sortOrder: 0 } });
+    } else {
+      await tx.productImage.create({ data: { productId: product.id, url: result.url, alt: product.name, isPrimary: true, sortOrder: 0 } });
+    }
+    return tx.product.update({
+      where: { id: product.id },
+      data: { imageStatus: ImageStatus.VERIFIED, imageSource: result.source || result.url, imageCheckedAt: new Date() },
+      include: productInclude,
+    });
+  });
+  return { product: mapAdminProduct(updated), report: { imagesFound: 1, imagesUpdated: 1, alreadyVerified: 0, placeholderRemaining: 0, needsManualReview: 0, imageUrl: result.url, message: "Product image updated." } };
+}
+
+export async function bulkSyncProductImages(input: { dryRun?: boolean; limit?: number } = {}) {
+  const limit = Math.max(1, Math.min(input.limit || 50, 200));
+  const products = await db.product.findMany({
+    where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: { not: ImageStatus.VERIFIED } },
+    include: productInclude,
+    orderBy: [{ imageStatus: "asc" }, { name: "asc" }],
+    take: limit,
+  });
+  const report = {
+    products: products.length,
+    imagesFound: 0,
+    imagesUpdated: 0,
+    alreadyVerified: 0,
+    placeholderRemaining: 0,
+    needsManualReview: 0,
+    rows: [] as { id: string; name: string; imageStatus: string; message: string; imageUrl?: string }[],
+  };
+  for (const product of products) {
+    if (hasVerifiedExistingImage(product)) {
+      report.alreadyVerified += 1;
+      report.rows.push({ id: product.id, name: product.name, imageStatus: "Verified", message: "Already verified." });
+      continue;
+    }
+    const result = await refreshProductImage(product.id, input.dryRun ? "scan" : "update");
+    report.imagesFound += result.report.imagesFound;
+    report.imagesUpdated += result.report.imagesUpdated;
+    report.alreadyVerified += result.report.alreadyVerified;
+    report.placeholderRemaining += result.report.placeholderRemaining;
+    report.needsManualReview += result.report.needsManualReview;
+    report.rows.push({
+      id: product.id,
+      name: product.name,
+      imageStatus: result.product.imageStatus,
+      message: result.report.message || "No image update.",
+      imageUrl: result.report.imageUrl,
+    });
+  }
+  return report;
 }
 
 const bulkColumns = [
@@ -1029,6 +1244,9 @@ export async function bulkImportProducts(input: string | { filename?: string; co
         featured: data.featured,
         organic: data.organic,
         local: data.local,
+        imageStatus: data.imageUrls.length ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
+        imageSource: data.imageUrls[0] || null,
+        imageCheckedAt: data.imageUrls.length ? new Date() : null,
         status: data.status,
       };
       const product = existing
@@ -1259,6 +1477,9 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
         featured: false,
         organic: false,
         local: false,
+        imageStatus: existing?.imageStatus === ImageStatus.VERIFIED ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
+        imageSource: existing?.imageSource || null,
+        imageCheckedAt: existing?.imageCheckedAt || null,
         status: ProductStatus.ACTIVE,
         deletedAt: null,
       };

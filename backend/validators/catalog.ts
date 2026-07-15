@@ -1,4 +1,4 @@
-import { ProductStatus } from "@prisma/client";
+import { ImageStatus, ProductStatus } from "@prisma/client";
 import { z } from "zod";
 
 const slugSchema = z.string().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Expected a lowercase URL slug");
@@ -12,6 +12,7 @@ export const productListQuerySchema = z.object({
   maxPrice: z.coerce.number().nonnegative().optional(),
   discount: z.coerce.number().min(0).max(95).optional(),
   availability: z.enum(["in_stock", "out_of_stock", "low_stock"]).optional(),
+  imageStatus: z.nativeEnum(ImageStatus).optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
   organic: z.coerce.boolean().optional(),
   local: z.coerce.boolean().optional(),

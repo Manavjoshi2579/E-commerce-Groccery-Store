@@ -57,6 +57,8 @@ export function mapApiProduct(input: any): Product {
     stock: Number(input.stock ?? 0),
     lowStock: Number(input.lowStock ?? 10),
     image: productAsset(input),
+    imageStatus: input.imageStatus || "Placeholder",
+    imageSource: input.imageSource,
     images: input.images,
     variants,
     tags: Array.isArray(input.tags) ? input.tags : [],
@@ -105,6 +107,37 @@ export async function fetchAdminProducts(params: Record<string, string | number 
   const search = new URLSearchParams({ limit: "25", ...Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== "").map(([key, value]) => [key, String(value)])) });
   const data = await requestApi<{ products: any[]; pagination?: any }>(`/api/admin/products?${search}`);
   return { products: data.products.map(mapApiProduct), pagination: data.pagination };
+}
+
+export type ProductImageReport = {
+  products: number;
+  imagesFound: number;
+  imagesUpdated: number;
+  alreadyVerified: number;
+  placeholderRemaining: number;
+  needsManualReview: number;
+  rows?: { id: string; name: string; imageStatus: string; message: string; imageUrl?: string }[];
+};
+
+export async function fetchProductImageReport() {
+  const data = await requestApi<{ report: ProductImageReport }>("/api/admin/products/image-report");
+  return data.report;
+}
+
+export async function refreshAdminProductImage(id: string, dryRun = false) {
+  const data = await requestApi<{ product: any; report: ProductImageReport & { message?: string; imageUrl?: string } }>(`/api/admin/products/${encodeURIComponent(id)}/refresh-image`, {
+    method: "POST",
+    body: JSON.stringify({ dryRun }),
+  });
+  return { product: mapApiProduct(data.product), report: data.report };
+}
+
+export async function bulkSyncAdminProductImages(input: { dryRun?: boolean; limit?: number } = {}) {
+  const data = await requestApi<{ report: ProductImageReport }>("/api/admin/products/bulk-image-sync", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return data.report;
 }
 
 export async function fetchAdminProduct(id: string) {
