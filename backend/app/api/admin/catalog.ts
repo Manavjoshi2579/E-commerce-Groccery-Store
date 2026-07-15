@@ -18,6 +18,7 @@ import {
   updateCategory,
   updateProduct,
   productBulkTemplate,
+  productBulkTemplateXlsx,
 } from "../../../services/catalog.service.js";
 import { brandSchema, categorySchema, productListQuerySchema, productSchema, productUpdateSchema } from "../../../validators/catalog.js";
 
@@ -42,13 +43,21 @@ adminCatalogRouter.get("/products/bulk-template", requireAdminRole(catalogViewRo
   return res.send(productBulkTemplate());
 });
 
+adminCatalogRouter.get("/products/bulk-template.xlsx", requireAdminRole(catalogViewRoles), async (_req, res) => {
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", "attachment; filename=\"eagle-mart-product-template.xlsx\"");
+  return res.send(productBulkTemplateXlsx());
+});
+
 adminCatalogRouter.post("/products/bulk-import", requireAdminRole(catalogManageRoles), async (req, res) => {
   const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
   const contentBase64 = typeof req.body?.contentBase64 === "string" ? req.body.contentBase64 : "";
   const filename = typeof req.body?.filename === "string" ? req.body.filename : "products.csv";
+  const mode = typeof req.body?.mode === "string" ? req.body.mode : "create_update";
+  const dryRun = Boolean(req.body?.dryRun);
   if (!csv.trim() && !contentBase64.trim()) return sendError(res, 400, "CSV or XLSX file content is required.");
   try {
-    return sendOk(res, { summary: await bulkImportProducts(csv.trim() ? csv : { filename, contentBase64 }) }, 201);
+    return sendOk(res, { summary: await bulkImportProducts(csv.trim() ? csv : { filename, contentBase64 }, mode as any, dryRun) }, dryRun ? 200 : 201);
   } catch (error) {
     return sendError(res, 400, error instanceof Error ? error.message : "Could not import products.");
   }

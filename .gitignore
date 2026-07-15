@@ -11,6 +11,7 @@ frontend/.next/
 test-results/
 frontend/test-results/
 *.tsbuildinfo
+products.xlsx
 
 stitch*/
 stitch*

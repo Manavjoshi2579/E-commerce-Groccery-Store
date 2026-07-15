@@ -421,6 +421,9 @@ model Product {
   slug        String        @unique
   name        String
   sku         String        @unique
+  clientProductCode String?
+  importIdentity String?   @unique
+  sourceCategory String?
   categoryId  String
   brandId     String
   description String        @db.Text
@@ -452,6 +455,7 @@ model Product {
   @@index([status])
   @@index([slug])
   @@index([sku])
+  @@index([clientProductCode])
 }
 
 model ProductImage {
@@ -477,6 +481,8 @@ model ProductVariant {
   unit      String
   mrp       Decimal       @db.Decimal(10, 2)
   price     Decimal       @db.Decimal(10, 2)
+  costPrice Decimal?      @db.Decimal(10, 2)
+  sourceUnit String?
   status    ProductStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt

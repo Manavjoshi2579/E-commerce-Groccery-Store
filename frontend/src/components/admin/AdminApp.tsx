@@ -28,7 +28,9 @@ import {
   fetchBrands,
   bulkImportAdminProducts,
   bulkImportAdminProductFile,
+  downloadProductBulkTemplateXlsx,
   downloadProductBulkTemplate,
+  type BulkImportMode,
   updateAdminBrand,
   updateAdminCategory,
   updateAdminProduct,
@@ -540,6 +542,9 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   const [productPagination, setProductPagination] = useState({ page: 1, totalPages: 1, total: 0, hasNextPage: false, hasPreviousPage: false });
   const [bulkSummary, setBulkSummary] = useState<Awaited<ReturnType<typeof bulkImportAdminProducts>> | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkMode, setBulkMode] = useState<BulkImportMode>("create_update");
+  const [bulkPreviewSearch, setBulkPreviewSearch] = useState("");
   const pageSize = 25;
   useEffect(() => {
     if (mode) return;
@@ -633,16 +638,47 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
       toast(error instanceof Error ? error.message : "Could not download template.", "error");
     }
   };
-  const importBulkFile = async (file?: File | null) => {
+  const downloadXlsxTemplate = async () => {
+    try {
+      const blob = await downloadProductBulkTemplateXlsx();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eagle-mart-product-template.xlsx";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not download XLSX template.", "error");
+    }
+  };
+  const previewBulkFile = async (file?: File | null) => {
     if (!file) return;
     if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
       toast("Upload a CSV or XLSX product file.", "error");
       return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Bulk file must be 5 MB or smaller.", "error");
+      return;
+    }
+    setBulkFile(file);
     setBulkLoading(true);
     setBulkSummary(null);
     try {
-      const summary = /\.csv$/i.test(file.name) ? await bulkImportAdminProducts(await file.text()) : await bulkImportAdminProductFile(file);
+      const summary = /\.csv$/i.test(file.name) ? await bulkImportAdminProducts(await file.text(), bulkMode, true) : await bulkImportAdminProductFile(file, bulkMode, true);
+      setBulkSummary(summary);
+      toast(`Preview ready: ${summary.validRows} usable rows, ${summary.invalidRows} invalid rows.`, summary.invalidRows ? "error" : "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Bulk preview failed.", "error");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+  const confirmBulkImport = async () => {
+    if (!bulkFile || bulkLoading) return;
+    setBulkLoading(true);
+    try {
+      const summary = /\.csv$/i.test(bulkFile.name) ? await bulkImportAdminProducts(await bulkFile.text(), bulkMode, false) : await bulkImportAdminProductFile(bulkFile, bulkMode, false);
       setBulkSummary(summary);
       await refreshProducts();
       toast(`Imported ${summary.created} new and updated ${summary.updated} products.`, "success");
@@ -651,6 +687,21 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     } finally {
       setBulkLoading(false);
     }
+  };
+  const resetBulkImport = () => {
+    setBulkFile(null);
+    setBulkSummary(null);
+    setBulkPreviewSearch("");
+  };
+  const downloadFailedRows = () => {
+    if (!bulkSummary?.failedRowsCsv) return;
+    const blob = new Blob([bulkSummary.failedRowsCsv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "eagle-mart-failed-product-rows.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   };
   const save = async () => {
     if (saving) return;
@@ -770,9 +821,14 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
       return next.some((item) => item.isDefault) ? next : next.map((item, itemIndex) => ({ ...item, isDefault: itemIndex === 0 }));
     });
   };
+  const filteredBulkRows = (bulkSummary?.rows || []).filter((row) => {
+    const needle = bulkPreviewSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return [row.row, row.status, row.action, row.data?.name, row.data?.sku, row.data?.category, row.data?.brand].some((value) => String(value || "").toLowerCase().includes(needle));
+  }).slice(0, 25);
   if (mode === "edit" && !fetchedEditProduct && !storedEditProduct) return <AdminShell section="products"><Panel title="Edit Product"><p className="rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 text-sm font-bold text-black/60">Loading selected product...</p></Panel></AdminShell>;
   if (mode) return <AdminShell section="products"><Panel title={mode === "new" ? "Add Product" : "Edit Product"}><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold">Name<input aria-label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Sku<input aria-label="Sku" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Brand<select aria-label="Brand" value={draft.brandId} onChange={(e) => setDraft({ ...draft, brandId: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose brand</option>{adminBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><label className="text-sm font-bold">Category<select aria-label="Category" value={draft.categoryId} onChange={(e) => changeCategory(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose category</option>{adminCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="text-sm font-bold">GST %<input aria-label="GST" inputMode="decimal" value={draft.gst} onChange={(e) => setDraft({ ...draft, gst: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.featured} onChange={(e) => setDraft({ ...draft, featured: e.target.checked })} /> Featured</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> Active</label></div><div className="mt-6 rounded-md border border-[#eadfca] bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfca] p-4"><div><h3 className="display-font font-bold">Variants</h3><p className="mt-1 text-xs font-bold text-black/50">Unit labels follow the selected category.</p></div><Button variant="outline" onClick={addVariantDraft}><Plus size={16} /> Add variant</Button></div><div className="grid gap-3 p-4">{variantDrafts.map((variant, index) => <div key={variant.id || index} className="grid gap-3 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 md:grid-cols-8"><label className="text-xs font-bold md:col-span-2">Unit label<select aria-label={`Variant ${index + 1} unit`} value={variant.unit} onChange={(e) => updateVariantDraft(index, { unit: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2">{mergeUnitOptions(categoryUnitOptions, variant.unit).map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label><label className="text-xs font-bold md:col-span-2">SKU<input aria-label={`Variant ${index + 1} SKU`} value={variant.sku} onChange={(e) => updateVariantDraft(index, { sku: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">MRP<input aria-label={`Variant ${index + 1} MRP`} inputMode="decimal" value={variant.mrp} onChange={(e) => updateVariantDraft(index, { mrp: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Price<input aria-label={`Variant ${index + 1} price`} inputMode="decimal" value={variant.price} onChange={(e) => updateVariantDraft(index, { price: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Stock<input aria-label={`Variant ${index + 1} stock`} inputMode="numeric" value={variant.stock} onChange={(e) => updateVariantDraft(index, { stock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Low<input aria-label={`Variant ${index + 1} low stock`} inputMode="numeric" value={variant.lowStock} onChange={(e) => updateVariantDraft(index, { lowStock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><div className="flex flex-wrap items-center gap-3 md:col-span-8"><label className="flex items-center gap-2 text-sm font-bold"><input type="radio" checked={variant.isDefault} onChange={() => updateVariantDraft(index, { isDefault: true })} /> Default</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.active} onChange={(e) => updateVariantDraft(index, { active: e.target.checked })} /> Active</label><Button variant="ghost" onClick={() => removeVariantDraft(index)}>Remove</Button></div></div>)}</div></div><div className="mt-5 flex gap-2"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Product"}</Button><Link href="/admin/products"><Button variant="outline">Back</Button></Link></div></Panel></AdminShell>;
-  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><input className="min-w-[220px] rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><div className="flex flex-wrap gap-2">{canEditCatalog && <Button variant="outline" onClick={downloadTemplate}>Template</Button>}{canEditCatalog && <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-bold"><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => importBulkFile(event.target.files?.[0])} />{bulkLoading ? "Importing..." : "Bulk Upload"}</label>}{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{bulkSummary && <div className="mb-4 rounded-md border border-[#eadfca] bg-white p-3 text-sm"><b>Bulk summary:</b> {bulkSummary.created} created, {bulkSummary.updated} updated, {bulkSummary.invalidRows} invalid of {bulkSummary.totalRows} rows.{bulkSummary.errors.length > 0 && <div className="mt-2 grid gap-1 text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-cover" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel></AdminShell>;
+  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><input className="min-w-[220px] rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><div className="flex flex-wrap gap-2">{canEditCatalog && <Button variant="outline" onClick={downloadTemplate}>CSV template</Button>}{canEditCatalog && <Button variant="outline" onClick={downloadXlsxTemplate}>XLSX template</Button>}{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{canEditCatalog && <section className="mb-4 rounded-md border border-[#eadfca] bg-[#faf7ef] p-4"><div className="grid gap-3 lg:grid-cols-[1fr_220px_auto_auto] lg:items-end"><label className="grid cursor-pointer gap-2 rounded-md border-2 border-dashed border-[#d4af37] bg-white p-4 text-sm font-bold"><span>{bulkFile ? bulkFile.name : "Drop or choose CSV/XLSX product file"}</span><span className="text-xs font-normal text-black/55">Accepted: CSV, XLSX, XLS up to 5 MB and 1000 rows.</span><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => previewBulkFile(event.target.files?.[0])} /></label><label className="text-sm font-bold">Import mode<select value={bulkMode} onChange={(event) => setBulkMode(event.target.value as BulkImportMode)} className="mt-1 w-full rounded-md border px-3 py-3"><option value="create_update">Create and update existing</option><option value="create_only">Create new products only</option><option value="update_only">Update existing products only</option></select></label><Button variant="gold" disabled={!bulkFile || bulkLoading || Boolean(bulkSummary?.invalidRows)} onClick={confirmBulkImport}>{bulkLoading ? "Working..." : "Confirm import"}</Button><Button variant="outline" onClick={resetBulkImport}>Cancel/reset</Button></div>{bulkSummary && <div className="mt-4 grid gap-3"><div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">{[["Total rows", bulkSummary.totalRows], ["Valid rows", bulkSummary.validRows], ["Invalid rows", bulkSummary.invalidRows], ["New products", bulkSummary.newProducts ?? 0], ["To update", bulkSummary.productsToUpdate ?? 0], ["Created", bulkSummary.created], ["Updated", bulkSummary.updated]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/50">{String(label)}</p><b className="text-lg">{String(value)}</b></div>)}</div><div className="flex flex-wrap items-center gap-2"><input className="rounded-md border px-3 py-2 text-sm" placeholder="Search preview rows" value={bulkPreviewSearch} onChange={(event) => setBulkPreviewSearch(event.target.value)} />{bulkSummary.failedRowsCsv && <Button variant="outline" onClick={downloadFailedRows}>Download failed rows</Button>}</div>{filteredBulkRows.length > 0 && <DataTable headers={["Row", "Status", "Action", "SKU", "Product", "Messages"]} minWidth="min-w-[760px]">{filteredBulkRows.map((row) => <tr key={row.row} className="border-b bg-white"><td className="p-3 font-bold">{row.row}</td><td><StatusBadge value={row.status} /></td><td className="capitalize">{row.action}</td><td>{row.data?.sku || "Auto"}</td><td>{row.data?.name}</td><td className="max-w-md text-sm text-black/65">{[...(row.errors || []).map((item) => item.message), ...(row.warnings || []).map((item) => item.message)].join("; ") || "Ready"}</td></tr>)}</DataTable>}{bulkSummary.errors.length > 0 && <div className="grid gap-1 text-sm text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}</section>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-cover" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel></AdminShell>;
 }
 
 function Inventory({ productId }: { productId?: string }) {

@@ -3,6 +3,7 @@ export type Product = {
   slug: string;
   name: string;
   sku: string;
+  clientProductCode?: string | null;
   brand: string;
   brandId?: string;
   brandSlug?: string;
@@ -35,6 +36,7 @@ export type ProductVariant = {
   unit: string;
   mrp: number;
   price: number;
+  costPrice?: number | null;
   stock?: number;
   lowStock?: number;
   lowStockThreshold?: number;

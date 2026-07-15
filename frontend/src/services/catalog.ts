@@ -28,6 +28,7 @@ export function mapApiProduct(input: any): Product {
     unit: variant.unit,
     mrp: Number(variant.mrp || 0),
     price: Number(variant.price ?? variant.sellingPrice ?? 0),
+    costPrice: variant.costPrice == null ? null : Number(variant.costPrice),
     stock: Number(variant.stock ?? input.stock ?? 0),
     lowStock: Number(variant.lowStock ?? variant.lowStockThreshold ?? 10),
     lowStockThreshold: Number(variant.lowStockThreshold ?? variant.lowStock ?? 10),
@@ -40,6 +41,7 @@ export function mapApiProduct(input: any): Product {
     slug: input.slug,
     name: input.name,
     sku: input.sku,
+    clientProductCode: input.clientProductCode,
     brand: input.brand,
     brandId: input.brandId,
     brandSlug: input.brandSlug,
@@ -186,24 +188,50 @@ export async function downloadProductBulkTemplate() {
   return response.text();
 }
 
-export async function bulkImportAdminProducts(csv: string) {
-  const data = await requestApi<{ summary: { totalRows: number; validRows: number; invalidRows: number; created: number; updated: number; errors: { row: number; errors: string[] }[] } }>("/api/admin/products/bulk-import", {
+export async function downloadProductBulkTemplateXlsx() {
+  const response = await fetch(`${API_BASE}/api/admin/products/bulk-template.xlsx`, { credentials: "include" });
+  if (!response.ok) throw new Error("Could not download XLSX product template.");
+  return response.blob();
+}
+
+export type BulkImportMode = "create_update" | "create_only" | "update_only";
+export type BulkImportSummary = {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  created: number;
+  updated: number;
+  skipped?: number;
+  failed?: number;
+  valid?: number;
+  warnings?: { row: number; warnings: string[] }[] | number;
+  invalid?: number;
+  newProducts?: number;
+  productsToUpdate?: number;
+  conflicts?: number;
+  rows?: { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; errors: { message: string }[]; warnings: { message: string }[]; data?: Record<string, string> }[];
+  failedRowsCsv?: string;
+  errors: { row: number; errors: string[] }[];
+};
+
+export async function bulkImportAdminProducts(csv: string, mode: BulkImportMode = "create_update", dryRun = false) {
+  const data = await requestApi<{ summary: BulkImportSummary }>("/api/admin/products/bulk-import", {
     method: "POST",
-    body: JSON.stringify({ csv }),
+    body: JSON.stringify({ csv, mode, dryRun }),
   });
   return data.summary;
 }
 
-export async function bulkImportAdminProductFile(file: File) {
+export async function bulkImportAdminProductFile(file: File, mode: BulkImportMode = "create_update", dryRun = false) {
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read import file."));
     reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
     reader.readAsDataURL(file);
   });
-  const data = await requestApi<{ summary: { totalRows: number; validRows: number; invalidRows: number; created: number; updated: number; errors: { row: number; errors: string[] }[] } }>("/api/admin/products/bulk-import", {
+  const data = await requestApi<{ summary: BulkImportSummary }>("/api/admin/products/bulk-import", {
     method: "POST",
-    body: JSON.stringify({ filename: file.name, contentBase64 }),
+    body: JSON.stringify({ filename: file.name, contentBase64, mode, dryRun }),
   });
   return data.summary;
 }
@@ -216,6 +244,7 @@ function toAdminPayload(product: Product) {
     unit: variant.unit,
     mrp: variant.mrp,
     price: variant.price,
+    costPrice: variant.costPrice ?? undefined,
     stock: variant.stock ?? (index === 0 ? product.stock : 0),
     lowStockThreshold: variant.lowStockThreshold ?? variant.lowStock ?? product.lowStock,
     active: variant.active !== false,
@@ -236,6 +265,7 @@ function toAdminPayload(product: Product) {
     name: product.name,
     slug: product.slug,
     sku: product.sku,
+    clientProductCode: product.clientProductCode,
     categoryId: product.categoryId,
     category: product.category,
     brandId: product.brandId,

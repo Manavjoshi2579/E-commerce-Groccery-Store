@@ -203,6 +203,20 @@ export function mapProduct(product: ProductWithCatalog) {
   };
 }
 
+function mapAdminProduct(product: ProductWithCatalog) {
+  const mapped = mapProduct(product);
+  return {
+    ...mapped,
+    clientProductCode: product.clientProductCode,
+    sourceCategory: product.sourceCategory,
+    variants: mapped.variants.map((variant, index) => ({
+      ...variant,
+      costPrice: decimal(product.variants[index]?.costPrice),
+      sourceUnit: product.variants[index]?.sourceUnit,
+    })),
+  };
+}
+
 function buildProductWhere(query: ProductQuery, admin = false): Prisma.ProductWhereInput {
   const search = query.q || query.search;
   const where: Prisma.ProductWhereInput = admin ? { deletedAt: null } : { deletedAt: null, status: ProductStatus.ACTIVE };
@@ -212,6 +226,7 @@ function buildProductWhere(query: ProductQuery, admin = false): Prisma.ProductWh
     where.OR = [
       ...terms.map((term) => ({ name: { contains: term } })),
       ...terms.map((term) => ({ sku: { contains: term } })),
+      ...(admin ? terms.map((term) => ({ clientProductCode: { contains: term } })) : []),
       ...terms.map((term) => ({ description: { contains: term } })),
       ...terms.map((term) => ({ brand: { name: { contains: term } } })),
       ...terms.map((term) => ({ category: { name: { contains: term } } })),
@@ -310,7 +325,7 @@ export async function listProducts(query: ProductQuery, admin = false) {
     ]);
 
     return {
-      products: rows.map(mapProduct),
+        products: rows.map((row) => admin ? mapAdminProduct(row) : mapProduct(row)),
       pagination: {
         page: query.page,
         limit: query.limit,
@@ -336,7 +351,7 @@ export async function listProducts(query: ProductQuery, admin = false) {
   });
   const filtered = applyComputedFilters(rows, query);
   const total = filtered.length;
-  const products = filtered.slice(start, start + query.limit).map(mapProduct);
+  const products = filtered.slice(start, start + query.limit).map((row) => admin ? mapAdminProduct(row) : mapProduct(row));
 
   return {
     products,
@@ -468,6 +483,7 @@ export async function createProduct(input: any) {
         name: input.name,
         slug,
         sku,
+        clientProductCode: input.clientProductCode || null,
         categoryId,
         brandId,
         description: input.description,
@@ -490,6 +506,7 @@ export async function createProduct(input: any) {
           unit: variantInput.unit,
           mrp: variantInput.mrp,
           price: variantInput.price,
+          costPrice: variantInput.costPrice ?? null,
           status: variantInput.status,
         },
       });
@@ -515,6 +532,7 @@ export async function updateProduct(id: string, input: any) {
   if (input.name != null) data.name = input.name;
   if (input.slug != null) data.slug = input.slug;
   if (input.sku != null) data.sku = input.sku;
+  if (input.clientProductCode !== undefined) data.clientProductCode = input.clientProductCode || null;
   if (input.description != null) data.description = input.description;
   if (input.gst != null) data.gst = input.gst;
   if (input.tags != null) data.tags = input.tags;
@@ -546,6 +564,7 @@ export async function updateProduct(id: string, input: any) {
           unit: variantInput.unit,
           mrp: variantInput.mrp,
           price: variantInput.price,
+          costPrice: variantInput.costPrice ?? null,
           status: variantInput.status,
         };
         let variantId = variantInput.id;
@@ -655,6 +674,16 @@ export async function softDeleteBrand(id: string) {
   await db.brand.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.INACTIVE } });
 }
 
+const bulkColumns = [
+  "sku", "clientProductCode", "name", "category", "subcategory", "brand", "description", "shortDescription", "barcode", "unit", "packSize", "weight", "weightUnit", "gst", "mrp", "sellingPrice", "costPrice", "discountPercentage", "stock", "lowStockThreshold", "supplier", "countryOfOrigin", "shelfLifeDays", "storageType", "organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable", "imageUrl1", "imageUrl2", "imageUrl3", "tags", "status",
+];
+const bulkRequired = ["name", "category", "brand", "unit", "mrp", "sellingPrice", "stock", "lowStockThreshold", "gst", "status"];
+const booleanColumns = ["organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable"];
+const allowedImportModes = ["create_update", "create_only", "update_only"] as const;
+type BulkImportMode = typeof allowedImportModes[number];
+type BulkIssue = { field: string; value: string; message: string };
+type BulkPreviewRow = { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; data: Record<string, string>; errors: BulkIssue[]; warnings: BulkIssue[]; normalized?: any; existingProductId?: string };
+
 function parseCsvLine(line: string) {
   const cells: string[] = [];
   let current = "";
@@ -692,7 +721,21 @@ function parseCsv(text: string) {
 }
 
 function normalizeHeader(header: string) {
-  return header.trim().toLowerCase();
+  const trimmed = header.trim();
+  const canonical = bulkColumns.find((column) => column.toLowerCase() === trimmed.toLowerCase());
+  if (canonical) return canonical;
+  const aliases: Record<string, string> = {
+    "product name": "name",
+    "category name": "category",
+    "unit name": "unit",
+    "product code": "clientProductCode",
+    "buying price": "costPrice",
+    "our price": "sellingPrice",
+    price: "sellingPrice",
+    lowstockthreshold: "lowStockThreshold",
+  };
+  if (aliases[trimmed.toLowerCase()]) return aliases[trimmed.toLowerCase()];
+  return trimmed;
 }
 
 function parseXlsx(base64: string) {
@@ -706,88 +749,590 @@ function parseXlsx(base64: string) {
   }));
 }
 
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, "\"\"")}"` : safe;
+}
+
+function buildCsv(headers: string[], rows: Record<string, unknown>[]) {
+  return `\uFEFF${headers.join(",")}\n${rows.map((row) => headers.map((header) => csvEscape(row[header])).join(",")).join("\n")}\n`;
+}
+
+function templateSample() {
+  return {
+    sku: "",
+    name: "Fresh Apple 1kg",
+    category: "Fruits & Vegetables",
+    subcategory: "Fresh Fruits",
+    brand: "Eagle Mart Farms",
+    description: "Fresh, crisp apples selected for everyday household use.",
+    shortDescription: "Fresh and crisp apples.",
+    barcode: "",
+    unit: "1 kg",
+    packSize: "1",
+    weight: "1",
+    weightUnit: "kg",
+    gst: "0",
+    mrp: "180",
+    sellingPrice: "149",
+    costPrice: "110",
+    discountPercentage: "",
+    stock: "25",
+    lowStockThreshold: "5",
+    supplier: "",
+    countryOfOrigin: "India",
+    shelfLifeDays: "7",
+    storageType: "Refrigerated",
+    organic: "false",
+    local: "true",
+    eagleMartSelect: "false",
+    featured: "true",
+    newArrival: "false",
+    bestseller: "false",
+    returnable: "true",
+    codAvailable: "true",
+    pickupAvailable: "true",
+    deliveryAvailable: "true",
+    imageUrl1: "/assets/products/fresh-apple-1kg.png",
+    imageUrl2: "",
+    imageUrl3: "",
+    tags: "fresh,fruit,local",
+    status: "ACTIVE",
+  };
+}
+
 function csvTemplate() {
-  return "sku,name,category,brand,description,gst,unit,mrp,price,stock,lowStockThreshold,tags,featured,organic,local,status\n,Fresh Apple 1kg,Fruits & Vegetables,Eagle Mart,Fresh apples,5,1 kg,180,149,25,5,\"fruit,fresh\",false,false,true,ACTIVE\n";
+  return buildCsv(bulkColumns, [templateSample()]);
 }
 
 export function productBulkTemplate() {
   return csvTemplate();
 }
 
-export async function bulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }) {
+export function productBulkTemplateXlsx() {
+  const worksheet = XLSX.utils.json_to_sheet([templateSample()], { header: bulkColumns });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
+  return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+}
+
+function normalizeSku(value: string) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+}
+
+function validSku(value: string) {
+  return /^[A-Z0-9]{3,}-\d{6}$/.test(value);
+}
+
+function parseNumber(value: string, field: string, issues: BulkIssue[], options: { required?: boolean; min?: number; max?: number; integer?: boolean; positive?: boolean } = {}) {
+  if (!value.trim()) {
+    if (options.required) issues.push({ field, value, message: `${field} is required` });
+    return undefined;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || (options.integer && !Number.isInteger(number)) || (options.positive && number <= 0) || (options.min != null && number < options.min) || (options.max != null && number > options.max)) {
+    issues.push({ field, value, message: `${field} has an invalid value` });
+    return undefined;
+  }
+  return options.integer ? Math.trunc(number) : number;
+}
+
+function parseBoolean(value: string, field: string, issues: BulkIssue[], defaultValue = false) {
+  if (!value.trim()) return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "yes", "1"].includes(normalized)) return true;
+  if (["false", "no", "0"].includes(normalized)) return false;
+  issues.push({ field, value, message: `${field} must be true, false, yes, no, 1, or 0` });
+  return defaultValue;
+}
+
+function parseStatus(value: string, issues: BulkIssue[]) {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "ACTIVE") return ProductStatus.ACTIVE;
+  if (normalized === "INACTIVE") return ProductStatus.INACTIVE;
+  if (normalized === "OUT_OF_STOCK") return ProductStatus.OUT_OF_STOCK;
+  issues.push({ field: "status", value, message: "status must be ACTIVE, INACTIVE, or OUT_OF_STOCK" });
+  return ProductStatus.INACTIVE;
+}
+
+function normalizeTags(value: string) {
+  const seen = new Set<string>();
+  return value.split(",").map((tag) => tag.trim()).filter((tag) => {
+    const key = tag.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isValidImageUrl(value: string) {
+  if (!value.trim()) return true;
+  if (value.startsWith("/assets/") || value.startsWith("/uploads/")) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function matchByText<T extends { id: string; slug: string; name: string }>(items: T[], value: string) {
+  const normalized = value.trim().toLowerCase();
+  return items.find((item) => item.id === value || item.slug.toLowerCase() === normalized || item.name.toLowerCase() === normalized);
+}
+
+function failedRowsCsv(rows: BulkPreviewRow[]) {
+  const headers = [...bulkColumns, "importStatus", "errorMessage", "warningMessage"];
+  return buildCsv(headers, rows.map((row) => ({
+    ...row.data,
+    importStatus: row.status,
+    errorMessage: row.errors.map((issue) => `Row ${row.row}: ${issue.message}`).join("; "),
+    warningMessage: row.warnings.map((issue) => `Row ${row.row}: ${issue.message}`).join("; "),
+  })));
+}
+
+async function parseBulkRows(input: string | { filename?: string; contentBase64?: string; csv?: string }) {
   const fileInput = typeof input === "string" ? null : input;
   const filename = fileInput?.filename || "products.csv";
   const csvText = typeof input === "string" ? input : input.csv;
+  if (fileInput?.contentBase64 && Buffer.byteLength(fileInput.contentBase64, "base64") > 5 * 1024 * 1024) throw new Error("Import file must be 5 MB or smaller.");
   const rows = csvText != null
     ? parseCsv(csvText)
     : filename.toLowerCase().endsWith(".xlsx") || filename.toLowerCase().endsWith(".xls")
       ? parseXlsx(fileInput?.contentBase64 || "")
       : parseCsv(Buffer.from(fileInput?.contentBase64 || "", "base64").toString("utf8"));
-  const errors: { row: number; errors: string[] }[] = [];
-  let created = 0;
-  let updated = 0;
-  const validRows: any[] = [];
+  if (rows.length > 1000) throw new Error("Import supports up to 1000 rows at a time.");
+  return rows;
+}
+
+export async function previewBulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }, mode: BulkImportMode = "create_update") {
+  const rows = await parseBulkRows(input);
+  const [categories, brands, existingProducts] = await Promise.all([
+    db.category.findMany({ where: { deletedAt: null } }),
+    db.brand.findMany({ where: { deletedAt: null } }),
+    db.product.findMany({ where: { deletedAt: null }, select: { id: true, sku: true } }),
+  ]);
+  const existingBySku = new Map(existingProducts.map((product) => [product.sku.toUpperCase(), product]));
+  const previewRows: BulkPreviewRow[] = [];
 
   for (const row of rows) {
     const data = row.data;
-    const rowErrors: string[] = [];
-    ["name", "category", "brand", "unit", "mrp", "price", "stock"].forEach((field) => {
-      if (!data[field]) rowErrors.push(`${field} is required`);
+    const errors: BulkIssue[] = [];
+    const warnings: BulkIssue[] = [];
+    bulkRequired.forEach((field) => {
+      if (!String(data[field] || "").trim()) errors.push({ field, value: String(data[field] || ""), message: `${field} is required` });
     });
-    const mrp = Number(data.mrp);
-    const price = Number(data.price);
-    const stock = Number(data.stock);
-    if (!Number.isFinite(mrp) || mrp < 0) rowErrors.push("mrp must be a positive number");
-    if (!Number.isFinite(price) || price < 0) rowErrors.push("price must be a positive number");
-    if (!Number.isInteger(stock) || stock < 0) rowErrors.push("stock must be a non-negative integer");
-    if (rowErrors.length) {
-      errors.push({ row: row.rowNumber, errors: rowErrors });
-      continue;
+    const category = matchByText(categories, String(data.category || ""));
+    const subcategory = data.subcategory ? matchByText(categories, String(data.subcategory)) : undefined;
+    const brand = matchByText(brands, String(data.brand || ""));
+    if (!category) errors.push({ field: "category", value: String(data.category || ""), message: "Unknown category" });
+    if (data.subcategory && !subcategory) errors.push({ field: "subcategory", value: String(data.subcategory), message: "Unknown subcategory" });
+    if (subcategory && category && subcategory.parentId !== category.id) errors.push({ field: "subcategory", value: String(data.subcategory), message: "Subcategory does not belong to selected category" });
+    if (!brand) errors.push({ field: "brand", value: String(data.brand || ""), message: "Unknown brand" });
+    const sku = normalizeSku(String(data.sku || ""));
+    if (sku && !validSku(sku)) errors.push({ field: "sku", value: String(data.sku), message: "SKU must look like FRU-000001" });
+    const existing = sku ? existingBySku.get(sku) : undefined;
+    let action: BulkPreviewRow["action"] = existing ? "update" : "create";
+    if (existing && mode === "create_only") {
+      action = "skip";
+      errors.push({ field: "sku", value: sku, message: "SKU already exists in create-only mode" });
     }
-    validRows.push({ rowNumber: row.rowNumber, data: { ...data, mrp, price, stock } });
+    if (!existing && mode === "update_only") {
+      action = "skip";
+      errors.push({ field: "sku", value: sku || "(blank)", message: "No existing SKU found in update-only mode" });
+    }
+    const mrp = parseNumber(String(data.mrp || ""), "mrp", errors, { required: true, positive: true });
+    const price = parseNumber(String(data.sellingPrice || ""), "sellingPrice", errors, { required: true, min: 0 });
+    const costPrice = parseNumber(String(data.costPrice || ""), "costPrice", errors, { min: 0 });
+    const gst = parseNumber(String(data.gst || ""), "gst", errors, { required: true, min: 0, max: 100 });
+    const stock = parseNumber(String(data.stock || ""), "stock", errors, { required: true, min: 0, integer: true });
+    const lowStockThreshold = parseNumber(String(data.lowStockThreshold || ""), "lowStockThreshold", errors, { required: true, min: 0, integer: true });
+    const discountPercentage = parseNumber(String(data.discountPercentage || ""), "discountPercentage", errors, { min: 0, max: 100 });
+    if (mrp != null && price != null && price > mrp) errors.push({ field: "sellingPrice", value: String(data.sellingPrice), message: "sellingPrice must not be greater than MRP" });
+    if (discountPercentage != null && mrp != null && price != null) {
+      const calculated = Math.round(((mrp - price) / mrp) * 100);
+      if (Math.abs(calculated - discountPercentage) > 1) warnings.push({ field: "discountPercentage", value: String(data.discountPercentage), message: "Discount conflicts with MRP and sellingPrice; price values will be used" });
+    }
+    booleanColumns.forEach((field) => parseBoolean(String(data[field] || ""), field, errors));
+    const status = parseStatus(String(data.status || ""), errors);
+    ["imageUrl1", "imageUrl2", "imageUrl3"].forEach((field) => {
+      if (!isValidImageUrl(String(data[field] || ""))) warnings.push({ field, value: String(data[field]), message: `${field} must be HTTPS or an internal asset path` });
+    });
+    previewRows.push({
+      row: row.rowNumber,
+      status: errors.length ? "error" : warnings.length ? "warning" : "valid",
+      action,
+      data,
+      errors,
+      warnings,
+      existingProductId: existing?.id,
+      normalized: errors.length ? undefined : {
+        sku,
+        categoryId: category?.id,
+        brandId: brand?.id,
+        name: String(data.name).trim(),
+        description: String(data.description || data.shortDescription || data.name).trim(),
+        unit: String(data.unit).trim(),
+        mrp,
+        price,
+        gst,
+        stock,
+        lowStockThreshold,
+        tags: normalizeTags(String(data.tags || "")),
+        featured: parseBoolean(String(data.featured || data.eagleMartSelect || data.bestseller || ""), "featured", warnings),
+        organic: parseBoolean(String(data.organic || ""), "organic", warnings),
+        local: parseBoolean(String(data.local || ""), "local", warnings),
+        status,
+        imageUrls: ["imageUrl1", "imageUrl2", "imageUrl3"].map((field) => String(data[field] || "").trim()).filter(isValidImageUrl).filter(Boolean),
+      },
+    });
   }
+  const summary = {
+    total: previewRows.length,
+    valid: previewRows.filter((row) => row.status === "valid").length,
+    warnings: previewRows.filter((row) => row.status === "warning").length,
+    invalid: previewRows.filter((row) => row.status === "error").length,
+    newProducts: previewRows.filter((row) => row.action === "create" && row.status !== "error").length,
+    productsToUpdate: previewRows.filter((row) => row.action === "update" && row.status !== "error").length,
+    conflicts: previewRows.filter((row) => row.action === "skip" || row.errors.some((issue) => issue.field === "sku")).length,
+  };
+  return { rows: previewRows, summary, failedRowsCsv: failedRowsCsv(previewRows.filter((row) => row.status === "error")) };
+}
+
+export async function bulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }, mode: BulkImportMode = "create_update", dryRun = false) {
+  if (!allowedImportModes.includes(mode)) throw new Error("Invalid import mode.");
+  const preview = await previewBulkImportProducts(input, mode);
+  if (dryRun) return { ...preview.summary, created: 0, updated: 0, skipped: preview.summary.conflicts, failed: preview.summary.invalid, errors: preview.rows.filter((row) => row.status === "error").map((row) => ({ row: row.row, errors: row.errors.map((issue) => issue.message) })), warnings: preview.rows.filter((row) => row.warnings.length).map((row) => ({ row: row.row, warnings: row.warnings.map((issue) => issue.message) })), rows: preview.rows, failedRowsCsv: preview.failedRowsCsv };
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  const importableRows = preview.rows.filter((row) => row.status !== "error" && row.action !== "skip");
 
   await db.$transaction(async (tx) => {
-    for (const row of validRows) {
-      const data = row.data;
-      let category = await tx.category.findFirst({ where: { OR: [{ name: data.category }, { slug: slugify(data.category) }], deletedAt: null } });
-      if (!category) category = await tx.category.create({ data: { name: data.category, slug: slugify(data.category), image: null } });
-      let brand = await tx.brand.findFirst({ where: { OR: [{ name: data.brand }, { slug: slugify(data.brand) }], deletedAt: null } });
-      if (!brand) brand = await tx.brand.create({ data: { name: data.brand, slug: slugify(data.brand), logo: null } });
-      const sku = data.sku || await generateSku(tx, category.id);
-      const existing = await tx.product.findUnique({ where: { sku }, include: { variants: { orderBy: { createdAt: "asc" } } } });
+    for (const row of importableRows) {
+      const data = row.normalized;
+      const sku = data.sku || await generateSku(tx, data.categoryId);
+      const existing = await tx.product.findUnique({ where: { sku }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } });
+      if (existing && mode === "create_only") { skipped += 1; continue; }
+      if (!existing && mode === "update_only") { skipped += 1; continue; }
       const productData = {
         name: data.name,
         slug: existing?.slug || slugify(data.name),
         sku,
-        categoryId: category.id,
-        brandId: brand.id,
+        categoryId: data.categoryId,
+        brandId: data.brandId,
         description: data.description || data.name,
-        gst: Number(data.gst || 0),
-        tags: data.tags ? data.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean) : [],
-        featured: data.featured === "true",
-        organic: data.organic === "true",
-        local: data.local === "true",
-        status: data.status === "INACTIVE" ? ProductStatus.INACTIVE : ProductStatus.ACTIVE,
+        gst: data.gst,
+        tags: data.tags,
+        featured: data.featured,
+        organic: data.organic,
+        local: data.local,
+        status: data.status,
       };
       const product = existing
         ? await tx.product.update({ where: { id: existing.id }, data: productData })
         : await tx.product.create({ data: productData });
-      const variant = existing?.variants[0] || await tx.productVariant.create({
+      const existingVariant = existing?.variants[0];
+      const variantSkuValue = existingVariant?.sku || `${sku}-01`;
+      const variant = existingVariant || await tx.productVariant.create({
         data: { productId: product.id, sku: `${sku}-01`, label: data.unit, unit: data.unit, mrp: data.mrp, price: data.price, status: ProductStatus.ACTIVE },
       });
-      if (existing?.variants[0]) {
+      if (existingVariant) {
         await tx.productVariant.update({ where: { id: variant.id }, data: { label: data.unit, unit: data.unit, mrp: data.mrp, price: data.price, status: ProductStatus.ACTIVE } });
+      } else if (variantSkuValue !== variant.sku) {
+        await tx.productVariant.update({ where: { id: variant.id }, data: { sku: variantSkuValue } });
       }
       await tx.inventory.upsert({
         where: { productId_variantId: { productId: product.id, variantId: variant.id } },
-        update: { stock: data.stock, lowStockThreshold: Number(data.lowstockthreshold || 10) },
-        create: { productId: product.id, variantId: variant.id, stock: data.stock, lowStockThreshold: Number(data.lowstockthreshold || 10) },
+        update: { stock: data.stock, lowStockThreshold: data.lowStockThreshold },
+        create: { productId: product.id, variantId: variant.id, stock: data.stock, lowStockThreshold: data.lowStockThreshold },
       });
+      if (data.imageUrls.length) {
+        const existingUrls = new Set((existing?.images || []).map((image) => image.url));
+        const hasPrimary = Boolean(existing?.images?.some((image) => image.isPrimary));
+        for (const [index, url] of data.imageUrls.entries()) {
+          if (existingUrls.has(url)) continue;
+          await tx.productImage.create({ data: { productId: product.id, url, alt: data.name, isPrimary: !hasPrimary && index === 0, sortOrder: index } });
+        }
+      }
       if (existing) updated += 1;
       else created += 1;
     }
   });
 
-  return { totalRows: rows.length, validRows: validRows.length, invalidRows: errors.length, created, updated, errors };
+  const errorRows = preview.rows.filter((row) => row.status === "error");
+  return {
+    ok: true,
+    totalRows: preview.summary.total,
+    validRows: preview.summary.valid + preview.summary.warnings,
+    invalidRows: errorRows.length,
+    created,
+    updated,
+    skipped,
+    failed: errorRows.length,
+    errors: errorRows.map((row) => ({ row: row.row, errors: row.errors.map((issue) => issue.message) })),
+    warnings: preview.rows.filter((row) => row.warnings.length).map((row) => ({ row: row.row, warnings: row.warnings.map((issue) => issue.message) })),
+    rows: preview.rows,
+    failedRowsCsv: preview.failedRowsCsv,
+  };
+}
+
+const clientCategoryNames: Record<string, string> = {
+  "food items": "Food Items",
+  "skin care": "Skin Care",
+  haircare: "Hair Care",
+  "home care": "Home Care",
+  "personal care": "Personal Care",
+  cleaning: "Cleaning",
+  detergent: "Detergents",
+  disposal: "Disposables",
+  toothpaste: "Toothpaste & Oral Care",
+  dishwash: "Dishwashing",
+  "baby care": "Baby Care",
+  pooja: "Pooja Essentials",
+  study: "Stationery",
+  "electric applience": "Electrical Appliances",
+  "body-care": "Body Care",
+  "bars-covered-with-chocolate": "Chocolates & Confectionery",
+};
+
+const clientBrandPrefixes: [RegExp, string][] = [
+  [/^aashirv(?:aa|a)d\b/i, "Aashirvaad"],
+  [/^aashirbaad\b/i, "Aashirvaad"],
+  [/^amul\b/i, "Amul"],
+  [/^garnier\b/i, "Garnier"],
+  [/^maggi\b/i, "Maggi"],
+  [/^dettol\b/i, "Dettol"],
+  [/^colgate\b/i, "Colgate"],
+  [/^dove\b/i, "Dove"],
+  [/^himalaya\b/i, "Himalaya"],
+  [/^parle\b/i, "Parle"],
+  [/^fortune\b/i, "Fortune"],
+  [/^everest\b/i, "Everest"],
+  [/^haldiram'?s?\b/i, "Haldiram"],
+];
+
+function normalizedIdentity(name: string, category: string, unit: string) {
+  return [name, category, unit].map((value) => normalizeSearch(value)).join("|");
+}
+
+function cleanName(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizeClientUnit(value: string) {
+  const raw = cleanName(value);
+  if (!raw) return "";
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return `${raw} pc`;
+  return raw
+    .replace(/(\d)\s*(kg|g|ml|l|pc|pcs|pack|dozen)\b/gi, (_, amount, unit) => `${amount} ${unit.toLowerCase()}`)
+    .replace(/\bl\b/g, "L")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeClientCategory(value: string) {
+  const raw = cleanName(value);
+  return clientCategoryNames[raw.toLowerCase()] || raw.replace(/\w\S*/g, (word) => word[0].toUpperCase() + word.slice(1).toLowerCase());
+}
+
+function extractClientBrand(name: string) {
+  const match = clientBrandPrefixes.find(([pattern]) => pattern.test(name));
+  return match?.[1] || "Unbranded";
+}
+
+async function uniqueSlug(tx: Prisma.TransactionClient, base: string, exceptProductId?: string) {
+  const root = slugify(base) || "eagle-mart-product";
+  let slug = root;
+  for (let index = 0; index < 50; index += 1) {
+    const existing = await tx.product.findUnique({ where: { slug }, select: { id: true } });
+    if (!existing || existing.id === exceptProductId) return slug;
+    slug = `${root}-${index + 2}`;
+  }
+  throw new Error(`Could not create a unique slug for ${base}`);
+}
+
+export async function replaceClientCatalogFromWorkbook(input: string | { filename?: string; contentBase64?: string; csv?: string }, dryRun = false) {
+  const rows = await parseBulkRows(input);
+  const duplicateCounts = new Map<string, number>();
+  const prepared = rows.map((row) => {
+    const source = row.data;
+    const name = cleanName(String(source.name || ""));
+    const sourceCategory = cleanName(String(source.category || ""));
+    const category = normalizeClientCategory(sourceCategory);
+    const sourceUnit = cleanName(String(source.unit || ""));
+    const unit = normalizeClientUnit(sourceUnit);
+    const identity = normalizedIdentity(name, category, unit);
+    duplicateCounts.set(identity, (duplicateCounts.get(identity) || 0) + 1);
+    return { row, source, name, sourceCategory, category, sourceUnit, unit, identity };
+  });
+
+  const failedRows: BulkPreviewRow[] = [];
+  const validRows: typeof prepared = [];
+  for (const item of prepared) {
+    const errors: BulkIssue[] = [];
+    if (!item.name) errors.push({ field: "name", value: "", message: "Product Name is required" });
+    if (!item.category) errors.push({ field: "category", value: item.sourceCategory, message: "Category Name is required" });
+    if (!item.unit) errors.push({ field: "unit", value: item.sourceUnit, message: "Unit Name is required" });
+    const mrp = parseNumber(String(item.source.mrp || ""), "mrp", errors, { required: true, positive: true });
+    const sellingPrice = parseNumber(String(item.source.sellingPrice || ""), "sellingPrice", errors, { required: true, min: 0 });
+    const costPrice = parseNumber(String(item.source.costPrice || ""), "costPrice", errors, { min: 0 });
+    const stock = parseNumber(String(item.source.stock || ""), "stock", errors, { required: true, min: 0, integer: true });
+    if (mrp != null && sellingPrice != null && sellingPrice > mrp) errors.push({ field: "sellingPrice", value: String(item.source.sellingPrice), message: "Our Price must not be greater than MRP" });
+    if ((duplicateCounts.get(item.identity) || 0) > 1) errors.push({ field: "identity", value: item.identity, message: "Duplicate Product Name + Category + Unit in workbook" });
+    if (errors.length) {
+      failedRows.push({ row: item.row.rowNumber, status: "error", action: "skip", data: item.source, errors, warnings: [], normalized: { normalizedCategory: item.category, normalizedUnit: item.unit } });
+      continue;
+    }
+    (item as any).numbers = { mrp, sellingPrice, costPrice, stock };
+    validRows.push(item);
+  }
+
+  const summary = {
+    workbookRows: rows.length,
+    validRows: validRows.length,
+    importedProducts: 0,
+    updatedProducts: 0,
+    draftInactiveProducts: 0,
+    rejectedRows: failedRows.length,
+    duplicateConflictRows: failedRows.filter((row) => row.errors.some((issue) => issue.field === "identity")).length,
+    generatedSkus: 0,
+    createdCategories: 0,
+    createdBrands: 0,
+    unbrandedProducts: 0,
+    archivedOldProducts: 0,
+    deletedSafeDemoProducts: 0,
+    deactivatedCoupons: 0,
+    deletedCoupons: 0,
+    failedRowsCsv: failedRowsCsv(failedRows),
+    backupCommand: "mysqldump --single-transaction --routines --triggers \"$DATABASE_URL\" > eagle-mart-catalog-backup.sql",
+  };
+
+  if (dryRun) return summary;
+
+  const activeIdentities = new Set<string>();
+  await db.$transaction(async (tx) => {
+    const categoryIds = new Map<string, string>();
+    const brandIds = new Map<string, string>();
+    for (const name of [...new Set(validRows.map((item) => item.category))]) {
+      const slug = slugify(name);
+      const existing = await tx.category.findFirst({ where: { OR: [{ slug }, { name }], deletedAt: null }, select: { id: true } });
+      const row = existing || await tx.category.create({ data: { name, slug, image: null, status: ProductStatus.ACTIVE }, select: { id: true } });
+      if (!existing) summary.createdCategories += 1;
+      else await tx.category.update({ where: { id: row.id }, data: { name, status: ProductStatus.ACTIVE } });
+      categoryIds.set(name, row.id);
+    }
+    for (const name of [...new Set(validRows.map((item) => extractClientBrand(item.name)))]) {
+      const slug = slugify(name);
+      const existing = await tx.brand.findFirst({ where: { OR: [{ slug }, { name }], deletedAt: null }, select: { id: true } });
+      const row = existing || await tx.brand.create({ data: { name, slug, logo: null, status: ProductStatus.ACTIVE }, select: { id: true } });
+      if (!existing) summary.createdBrands += 1;
+      else await tx.brand.update({ where: { id: row.id }, data: { name, status: ProductStatus.ACTIVE } });
+      brandIds.set(name, row.id);
+    }
+
+    for (const item of validRows) {
+      const numbers = (item as any).numbers as { mrp: number; sellingPrice: number; costPrice?: number; stock: number };
+      const brandName = extractClientBrand(item.name);
+      if (brandName === "Unbranded") summary.unbrandedProducts += 1;
+      const existing = await tx.product.findUnique({ where: { importIdentity: item.identity }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } });
+      const categoryId = categoryIds.get(item.category)!;
+      const brandId = brandIds.get(brandName)!;
+      const sku = existing?.sku || await generateSku(tx, categoryId);
+      if (!existing) summary.generatedSkus += 1;
+      const productData = {
+        name: item.name,
+        slug: existing?.slug || await uniqueSlug(tx, item.name),
+        sku,
+        clientProductCode: cleanName(String(item.source.clientProductCode || "")) || null,
+        importIdentity: item.identity,
+        sourceCategory: item.sourceCategory || null,
+        categoryId,
+        brandId,
+        description: `${item.name} available in ${item.unit}.`,
+        gst: 0,
+        ratingAvg: 0,
+        reviewCount: 0,
+        tags: [],
+        featured: false,
+        organic: false,
+        local: false,
+        status: ProductStatus.ACTIVE,
+        deletedAt: null,
+      };
+      const product = existing
+        ? await tx.product.update({ where: { id: existing.id }, data: { ...productData, description: existing.description || productData.description } })
+        : await tx.product.create({ data: productData });
+      const variant = existing?.variants[0] || await tx.productVariant.create({
+        data: { productId: product.id, sku: `${sku}-01`, label: item.unit, unit: item.unit, sourceUnit: item.sourceUnit || null, mrp: numbers.mrp, price: numbers.sellingPrice, costPrice: numbers.costPrice, status: ProductStatus.ACTIVE },
+      });
+      if (existing?.variants[0]) {
+        await tx.productVariant.update({ where: { id: variant.id }, data: { label: item.unit, unit: item.unit, sourceUnit: item.sourceUnit || null, mrp: numbers.mrp, price: numbers.sellingPrice, costPrice: numbers.costPrice, status: ProductStatus.ACTIVE } });
+      }
+      await tx.inventory.upsert({
+        where: { productId_variantId: { productId: product.id, variantId: variant.id } },
+        update: { stock: numbers.stock, lowStockThreshold: 5 },
+        create: { productId: product.id, variantId: variant.id, stock: numbers.stock, lowStockThreshold: 5 },
+      });
+      if (!existing?.images.length) {
+        await tx.productImage.create({ data: { productId: product.id, url: productImageFallback, alt: item.name, isPrimary: true, sortOrder: 1 } });
+      }
+      activeIdentities.add(item.identity);
+      if (existing) summary.updatedProducts += 1;
+      else summary.importedProducts += 1;
+    }
+
+    const oldProducts = await tx.product.findMany({
+      where: { deletedAt: null, OR: [{ importIdentity: null }, { importIdentity: { notIn: [...activeIdentities] } }] },
+      select: { id: true },
+    });
+    for (const product of oldProducts) {
+      const [orders, carts, wishlists, reviews, moves] = await Promise.all([
+        tx.orderItem.count({ where: { productId: product.id } }),
+        tx.cartItem.count({ where: { productId: product.id } }),
+        tx.wishlistItem.count({ where: { productId: product.id } }),
+        tx.review.count({ where: { productId: product.id } }),
+        tx.stockMovement.count({ where: { productId: product.id } }),
+      ]);
+      if (orders || moves) {
+        await tx.product.update({ where: { id: product.id }, data: { status: ProductStatus.INACTIVE, deletedAt: new Date() } });
+        await tx.productVariant.updateMany({ where: { productId: product.id }, data: { status: ProductStatus.INACTIVE } });
+        await tx.inventory.updateMany({ where: { productId: product.id }, data: { stock: 0 } });
+        summary.archivedOldProducts += 1;
+      } else {
+        await tx.cartItem.deleteMany({ where: { productId: product.id } });
+        await tx.wishlistItem.deleteMany({ where: { productId: product.id } });
+        await tx.review.deleteMany({ where: { productId: product.id } });
+        await tx.inventory.deleteMany({ where: { productId: product.id } });
+        await tx.productImage.deleteMany({ where: { productId: product.id } });
+        await tx.productVariant.deleteMany({ where: { productId: product.id } });
+        await tx.product.delete({ where: { id: product.id } });
+        summary.deletedSafeDemoProducts += 1;
+      }
+      void carts; void wishlists; void reviews;
+    }
+
+    const coupons = await tx.coupon.findMany({ where: { deletedAt: null }, select: { id: true, _count: { select: { orders: true, usages: true, carts: true } } } });
+    for (const coupon of coupons) {
+      if (coupon._count.orders || coupon._count.usages || coupon._count.carts) {
+        await tx.coupon.update({ where: { id: coupon.id }, data: { active: false, deletedAt: new Date() } });
+        summary.deactivatedCoupons += 1;
+      } else {
+        await tx.coupon.delete({ where: { id: coupon.id } });
+        summary.deletedCoupons += 1;
+      }
+    }
+
+    await tx.category.updateMany({ where: { products: { none: { deletedAt: null, status: ProductStatus.ACTIVE } } }, data: { status: ProductStatus.INACTIVE, deletedAt: new Date() } });
+    await tx.brand.updateMany({ where: { products: { none: { deletedAt: null, status: ProductStatus.ACTIVE } } }, data: { status: ProductStatus.INACTIVE, deletedAt: new Date() } });
+    await tx.setting.upsert({
+      where: { key: "catalog:client-imported-at" },
+      update: { value: new Date().toISOString(), type: SettingType.STRING },
+      create: { key: "catalog:client-imported-at", value: new Date().toISOString(), type: SettingType.STRING },
+    });
+  }, { timeout: 120000 });
+
+  return summary;
 }
