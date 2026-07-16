@@ -581,8 +581,26 @@ async function nextSequence(tx: Prisma.TransactionClient, key: string) {
 
 async function generateSku(tx: Prisma.TransactionClient, categoryId: string) {
   const category = await tx.category.findUniqueOrThrow({ where: { id: categoryId } });
-  const prefix = (category.slug || category.name).replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase().padEnd(3, "X");
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  const clientPrefixes: Record<string, string> = {
+    "food-items": "FOO",
+    "skin-care": "SKN",
+    "hair-care": "HAI",
+    "home-care": "HOM",
+    "personal-care": "PER",
+    cleaning: "CLN",
+    detergents: "DET",
+    disposables: "DIS",
+    "oral-care": "ORA",
+    dishwashing: "DSH",
+    "baby-care": "BAB",
+    "pooja-essentials": "POO",
+    stationery: "STA",
+    "electrical-appliances": "ELE",
+    "body-care": "BOD",
+    "chocolates-confectionery": "CHO",
+  };
+  const prefix = clientPrefixes[category.slug] || (category.slug || category.name).replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase().padEnd(3, "X");
+  for (let attempt = 0; attempt < 5000; attempt += 1) {
     const sequence = await nextSequence(tx, `sku:${prefix}`);
     const sku = `${prefix}-${String(sequence).padStart(6, "0")}`;
     const existing = await tx.product.findUnique({ where: { sku } });
@@ -890,14 +908,14 @@ export async function bulkSyncProductImages(input: { dryRun?: boolean; limit?: n
 }
 
 const bulkColumns = [
-  "sku", "clientProductCode", "name", "category", "subcategory", "brand", "description", "shortDescription", "barcode", "unit", "packSize", "weight", "weightUnit", "gst", "mrp", "sellingPrice", "costPrice", "discountPercentage", "stock", "lowStockThreshold", "supplier", "countryOfOrigin", "shelfLifeDays", "storageType", "organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable", "imageUrl1", "imageUrl2", "imageUrl3", "tags", "status",
+  "sku", "clientProductCode", "name", "category", "subcategory", "brand", "description", "shortDescription", "barcode", "unit", "packSize", "weight", "weightUnit", "gst", "mrp", "sellingPrice", "costPrice", "discountPercentage", "stock", "lowStockThreshold", "supplier", "countryOfOrigin", "shelfLifeDays", "storageType", "organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable", "primaryImageUrl", "Image Preview", "imageUrl1", "imageUrl2", "imageUrl3", "tags", "status",
 ];
 const bulkRequired = ["name", "category", "brand", "unit", "mrp", "sellingPrice", "stock", "lowStockThreshold", "gst", "status"];
 const booleanColumns = ["organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable"];
 const allowedImportModes = ["create_update", "create_only", "update_only"] as const;
 type BulkImportMode = typeof allowedImportModes[number];
 type BulkIssue = { field: string; value: string; message: string };
-type BulkPreviewRow = { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; data: Record<string, string>; errors: BulkIssue[]; warnings: BulkIssue[]; normalized?: any; existingProductId?: string };
+type BulkPreviewRow = { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; data: Record<string, string>; errors: BulkIssue[]; warnings: BulkIssue[]; normalized?: any; existingProductId?: string; image?: { url: string; status: "none" | "valid" | "invalid"; message: string } };
 
 function parseCsvLine(line: string) {
   const cells: string[] = [];
@@ -946,6 +964,11 @@ function normalizeHeader(header: string) {
     "product code": "clientProductCode",
     "buying price": "costPrice",
     "our price": "sellingPrice",
+    "primary image url": "primaryImageUrl",
+    "image url": "primaryImageUrl",
+    imageurl: "primaryImageUrl",
+    primaryimageurl: "primaryImageUrl",
+    "image preview": "Image Preview",
     price: "sellingPrice",
     lowstockthreshold: "lowStockThreshold",
   };
@@ -1009,6 +1032,8 @@ function templateSample() {
     codAvailable: "true",
     pickupAvailable: "true",
     deliveryAvailable: "true",
+    primaryImageUrl: "/assets/products/fresh-apple-1kg.png",
+    "Image Preview": "",
     imageUrl1: "/assets/products/fresh-apple-1kg.png",
     imageUrl2: "",
     imageUrl3: "",
@@ -1027,6 +1052,13 @@ export function productBulkTemplate() {
 
 export function productBulkTemplateXlsx() {
   const worksheet = XLSX.utils.json_to_sheet([templateSample()], { header: bulkColumns });
+  const previewColumnIndex = bulkColumns.indexOf("Image Preview");
+  const imageColumnIndex = bulkColumns.indexOf("primaryImageUrl");
+  if (previewColumnIndex >= 0) {
+    const cell = XLSX.utils.encode_cell({ r: 1, c: previewColumnIndex });
+    const imageCell = XLSX.utils.encode_cell({ r: 1, c: imageColumnIndex >= 0 ? imageColumnIndex : previewColumnIndex - 1 });
+    worksheet[cell] = { t: "s", f: `=IF(${imageCell}="","",IMAGE(${imageCell},"Product image",0))`, v: "" };
+  }
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
   return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
@@ -1089,6 +1121,40 @@ function isValidImageUrl(value: string) {
     return url.protocol === "https:";
   } catch {
     return false;
+  }
+}
+
+function eagleMartImageHosts() {
+  const configured = (process.env.FRONTEND_ORIGIN || "").split(",").map((origin) => {
+    try { return new URL(origin.trim()).hostname.toLowerCase(); } catch { return ""; }
+  }).filter(Boolean);
+  return new Set(["eaglesclub.in", "www.eaglesclub.in", "api.eaglesclub.in", ...configured]);
+}
+
+function isBlockedImageHost(hostname: string) {
+  const host = hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "169.254.169.254") return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
+  if (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) return true;
+  return false;
+}
+
+function validateImportedPrimaryImageUrl(value: string): { url: string; valid: boolean; message: string } {
+  const raw = value.trim();
+  if (!raw) return { url: "", valid: true, message: "No image URL supplied." };
+  if (/^[a-zA-Z]:[\\/]/.test(raw) || raw.startsWith("file:") || raw.startsWith("\\\\")) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+  if (raw.startsWith("/assets/") || raw.startsWith("/uploads/")) return { url: raw, valid: true, message: "Valid Eagle Mart asset path." };
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+    if (isBlockedImageHost(url.hostname)) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+    if (!eagleMartImageHosts().has(url.hostname.toLowerCase())) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+    if (!/\.(jpe?g|png|webp)(?:$|\?)/i.test(url.pathname + url.search)) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+    return { url: raw, valid: true, message: "Valid Eagle Mart image URL." };
+  } catch {
+    return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
   }
 }
 
@@ -1171,7 +1237,9 @@ export async function previewBulkImportProducts(input: string | { filename?: str
     }
     booleanColumns.forEach((field) => parseBoolean(String(data[field] || ""), field, errors));
     const status = parseStatus(String(data.status || ""), errors);
-    ["imageUrl1", "imageUrl2", "imageUrl3"].forEach((field) => {
+    const primaryImage = validateImportedPrimaryImageUrl(String(data.primaryImageUrl || data.imageUrl1 || ""));
+    if (primaryImage.url && !primaryImage.valid) warnings.push({ field: "primaryImageUrl", value: primaryImage.url, message: primaryImage.message });
+    ["imageUrl2", "imageUrl3"].forEach((field) => {
       if (!isValidImageUrl(String(data[field] || ""))) warnings.push({ field, value: String(data[field]), message: `${field} must be HTTPS or an internal asset path` });
     });
     previewRows.push({
@@ -1182,6 +1250,7 @@ export async function previewBulkImportProducts(input: string | { filename?: str
       errors,
       warnings,
       existingProductId: existing?.id,
+      image: { url: primaryImage.url, status: primaryImage.url ? primaryImage.valid ? "valid" : "invalid" : "none", message: primaryImage.message },
       normalized: errors.length ? undefined : {
         sku,
         categoryId: category?.id,
@@ -1199,7 +1268,7 @@ export async function previewBulkImportProducts(input: string | { filename?: str
         organic: parseBoolean(String(data.organic || ""), "organic", warnings),
         local: parseBoolean(String(data.local || ""), "local", warnings),
         status,
-        imageUrls: ["imageUrl1", "imageUrl2", "imageUrl3"].map((field) => String(data[field] || "").trim()).filter(isValidImageUrl).filter(Boolean),
+        primaryImageUrl: primaryImage.valid ? primaryImage.url : "",
       },
     });
   }
@@ -1215,7 +1284,7 @@ export async function previewBulkImportProducts(input: string | { filename?: str
   return { rows: previewRows, summary, failedRowsCsv: failedRowsCsv(previewRows.filter((row) => row.status === "error")) };
 }
 
-export async function bulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }, mode: BulkImportMode = "create_update", dryRun = false) {
+export async function bulkImportProducts(input: string | { filename?: string; contentBase64?: string; csv?: string }, mode: BulkImportMode = "create_update", dryRun = false, options: { overwriteExistingPrimaryImage?: boolean } = {}) {
   if (!allowedImportModes.includes(mode)) throw new Error("Invalid import mode.");
   const preview = await previewBulkImportProducts(input, mode);
   if (dryRun) return { ...preview.summary, created: 0, updated: 0, skipped: preview.summary.conflicts, failed: preview.summary.invalid, errors: preview.rows.filter((row) => row.status === "error").map((row) => ({ row: row.row, errors: row.errors.map((issue) => issue.message) })), warnings: preview.rows.filter((row) => row.warnings.length).map((row) => ({ row: row.row, warnings: row.warnings.map((issue) => issue.message) })), rows: preview.rows, failedRowsCsv: preview.failedRowsCsv };
@@ -1232,6 +1301,8 @@ export async function bulkImportProducts(input: string | { filename?: string; co
       const existing = await tx.product.findUnique({ where: { sku }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } });
       if (existing && mode === "create_only") { skipped += 1; continue; }
       if (!existing && mode === "update_only") { skipped += 1; continue; }
+      const existingPrimary = existing?.images?.find((image) => image.isPrimary);
+      const shouldApplyPrimaryImage = Boolean(data.primaryImageUrl && (!existingPrimary || options.overwriteExistingPrimaryImage));
       const productData = {
         name: data.name,
         slug: existing?.slug || slugify(data.name),
@@ -1244,9 +1315,9 @@ export async function bulkImportProducts(input: string | { filename?: string; co
         featured: data.featured,
         organic: data.organic,
         local: data.local,
-        imageStatus: data.imageUrls.length ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
-        imageSource: data.imageUrls[0] || null,
-        imageCheckedAt: data.imageUrls.length ? new Date() : null,
+        imageStatus: shouldApplyPrimaryImage ? ImageStatus.VERIFIED : existing?.imageStatus || ImageStatus.PLACEHOLDER,
+        imageSource: shouldApplyPrimaryImage ? data.primaryImageUrl : existing?.imageSource || null,
+        imageCheckedAt: shouldApplyPrimaryImage ? new Date() : existing?.imageCheckedAt || null,
         status: data.status,
       };
       const product = existing
@@ -1267,12 +1338,14 @@ export async function bulkImportProducts(input: string | { filename?: string; co
         update: { stock: data.stock, lowStockThreshold: data.lowStockThreshold },
         create: { productId: product.id, variantId: variant.id, stock: data.stock, lowStockThreshold: data.lowStockThreshold },
       });
-      if (data.imageUrls.length) {
-        const existingUrls = new Set((existing?.images || []).map((image) => image.url));
-        const hasPrimary = Boolean(existing?.images?.some((image) => image.isPrimary));
-        for (const [index, url] of data.imageUrls.entries()) {
-          if (existingUrls.has(url)) continue;
-          await tx.productImage.create({ data: { productId: product.id, url, alt: data.name, isPrimary: !hasPrimary && index === 0, sortOrder: index } });
+      if (shouldApplyPrimaryImage) {
+        const currentImages = await tx.productImage.findMany({ where: { productId: product.id } });
+        const matching = currentImages.find((image) => image.url === data.primaryImageUrl);
+        await tx.productImage.updateMany({ where: { productId: product.id, isPrimary: true }, data: { isPrimary: false } });
+        if (matching) {
+          await tx.productImage.update({ where: { id: matching.id }, data: { alt: data.name, isPrimary: true, sortOrder: 0 } });
+        } else {
+          await tx.productImage.create({ data: { productId: product.id, url: data.primaryImageUrl, alt: data.name, isPrimary: true, sortOrder: 0 } });
         }
       }
       if (existing) updated += 1;
@@ -1306,7 +1379,7 @@ const clientCategoryNames: Record<string, string> = {
   cleaning: "Cleaning",
   detergent: "Detergents",
   disposal: "Disposables",
-  toothpaste: "Toothpaste & Oral Care",
+  toothpaste: "Oral Care",
   dishwash: "Dishwashing",
   "baby care": "Baby Care",
   pooja: "Pooja Essentials",
@@ -1317,23 +1390,72 @@ const clientCategoryNames: Record<string, string> = {
 };
 
 const clientBrandPrefixes: [RegExp, string][] = [
-  [/^aashirv(?:aa|a)d\b/i, "Aashirvaad"],
-  [/^aashirbaad\b/i, "Aashirvaad"],
-  [/^amul\b/i, "Amul"],
-  [/^garnier\b/i, "Garnier"],
-  [/^maggi\b/i, "Maggi"],
-  [/^dettol\b/i, "Dettol"],
-  [/^colgate\b/i, "Colgate"],
-  [/^dove\b/i, "Dove"],
-  [/^himalaya\b/i, "Himalaya"],
-  [/^parle\b/i, "Parle"],
-  [/^fortune\b/i, "Fortune"],
-  [/^everest\b/i, "Everest"],
-  [/^haldiram'?s?\b/i, "Haldiram"],
+  [/^head\s*&?\s*shoulders\b|^h\s*&\s*s\b/i, "Head & Shoulders"],
+  [/^fair\s*&?\s*lovely\b|^f\s*&\s*l\b/i, "Fair & Lovely"],
+  [/^surf\s+excel\b/i, "Surf Excel"],
+  [/^center\s+fresh\b/i, "Center Fresh"],
+  [/^clinic\s+plus\b/i, "Clinic Plus"],
+  [/^lacto\s+calamine\b/i, "Lacto Calamine"],
+  [/^laxman\s+rekha\b/i, "Laxman Rekha"],
+  [/^rooh\s+afza\b/i, "Rooh Afza"],
+  [/^taj\s+mahal\b/i, "Taj Mahal"],
+  [/^b\s*natural\b|^b\s+netural\b/i, "B Natural"],
+  [/^act\s*ii\b/i, "Act II"],
+  [/^all\s*out\b/i, "All Out"],
+  [/^ambi\s*pur\b/i, "Ambi Pur"],
+  [/^oral[-\s]*b\b/i, "Oral-B"],
+  [/^m\s*caffeine\b/i, "M Caffeine"],
+  [/^mc\s*vities\b|^mcvitie'?s\b/i, "McVitie's"],
+  [/^good\s+day\b/i, "Good Day"],
+  [/^johnson'?s\b/i, "Johnson's"],
+  [/^lay'?s\b/i, "Lay's"],
+  [/^aashirv(?:aa|a)d\b|^aashirbaad\b/i, "Aashirvaad"],
+  [/^7m\b/i, "7M"], [/^americana\b/i, "Americana"], [/^acnofight\b/i, "Acnofight"], [/^ajs\b/i, "AJS"],
+  [/^amul\b/i, "Amul"], [/^ananda\b/i, "Ananda"], [/^aplus\b/i, "Aplus"], [/^apsara\b/i, "Apsara"],
+  [/^ariel\b/i, "Ariel"], [/^babyhug\b/i, "Babyhug"], [/^britannia\b/i, "Britannia"], [/^bujialalji\b/i, "Bujialalji"],
+  [/^badshah\b/i, "Badshah"], [/^bakeri\b/i, "Bakeri"], [/^bambino\b/i, "Bambino"], [/^beardo\b/i, "Beardo"],
+  [/^bella\s+vita\b/i, "Bella Vita"], [/^bikaji\b/i, "Bikaji"], [/^bisleri\b/i, "Bisleri"], [/^bonn\b/i, "Bonn"],
+  [/^boroplus\b/i, "Boroplus"], [/^bournvita\b/i, "Bournvita"], [/^camay\b/i, "Camay"], [/^cadbury\b/i, "Cadbury"],
+  [/^candid\b/i, "Candid"], [/^catch\b/i, "Catch"], [/^cello\b/i, "Cello"], [/^cinthol\b/i, "Cinthol"],
+  [/^closeup\b/i, "Closeup"], [/^coca[-\s]*cola\b/i, "Coca-Cola"], [/^colgate\b/i, "Colgate"], [/^colin\b/i, "Colin"],
+  [/^continental\b/i, "Continental"], [/^cremica\b/i, "Cremica"], [/^cuddles\b/i, "Cuddles"], [/^dabur\b/i, "Dabur"],
+  [/^daawat\b|^dawat\b/i, "Daawat"], [/^dalda\b/i, "Dalda"], [/^dant\s+kanti\b/i, "Dant Kanti"], [/^del\s+monte\b/i, "Del Monte"],
+  [/^denver\b/i, "Denver"], [/^dettol\b/i, "Dettol"], [/^dove\b/i, "Dove"], [/^dukes\b/i, "Dukes"],
+  [/^elmore\b/i, "Elmore"], [/^everest\b/i, "Everest"], [/^eveready\b/i, "Eveready"], [/^exo\b/i, "Exo"],
+  [/^ezee\b/i, "Ezee"], [/^fem\b/i, "Fem"], [/^fiama\b/i, "Fiama"], [/^fine\s+life\b/i, "Fine Life"],
+  [/^fogg\b/i, "Fogg"], [/^fortune\b/i, "Fortune"], [/^gainda\b/i, "Gainda"], [/^gala\b/i, "Gala"],
+  [/^garnier\b/i, "Garnier"], [/^goldiee\b/i, "Goldiee"], [/^godrej\b/i, "Godrej"], [/^gillette\b/i, "Gillette"],
+  [/^hajmola\b/i, "Hajmola"], [/^haldiram'?s?\b/i, "Haldiram"], [/^hamam\b/i, "Hamam"], [/^hamdard\b/i, "Hamdard"],
+  [/^harpic\b/i, "Harpic"], [/^hershey\b/i, "Hershey"], [/^himalaya\b/i, "Himalaya"], [/^hit\b/i, "Hit"],
+  [/^homelite\b/i, "Homelite"], [/^horlicks\b/i, "Horlicks"], [/^huggies\b/i, "Huggies"], [/^indulekha\b/i, "Indulekha"],
+  [/^invasol\b/i, "Invasol"], [/^jabsons\b/i, "Jabsons"], [/^jaguar\b/i, "Jaguar"], [/^jivo\b/i, "Jivo"],
+  [/^joy\b/i, "Joy"], [/^jovees\b/i, "Jovees"], [/^just\s+herbs\b/i, "Just Herbs"], [/^kangaro\b/i, "Kangaro"],
+  [/^keo\s+karpin\b/i, "Keo Karpin"], [/^kesh\s+king\b/i, "Kesh King"], [/^khadi\b/i, "Khadi"], [/^kissan\b/i, "Kissan"],
+  [/^knorr\b/i, "Knorr"], [/^kurkure\b/i, "Kurkure"], [/^lakme\b/i, "Lakme"], [/^lifebuoy\b/i, "Lifebuoy"],
+  [/^lijjat\b/i, "Lijjat"], [/^limca\b/i, "Limca"], [/^lipton\b/i, "Lipton"], [/^lizol\b/i, "Lizol"],
+  [/^lotte\b/i, "Lotte"], [/^lotus\b/i, "Lotus"], [/^lux\b/i, "Lux"], [/^mdh\b/i, "MDH"],
+  [/^maggi\b/i, "Maggi"], [/^maxo\b/i, "Maxo"], [/^mbd\b/i, "MBD"], [/^milkfood\b/i, "Milkfood"],
+  [/^milton\b/i, "Milton"], [/^munch\b/i, "Munch"], [/^nescafe\b/i, "Nescafe"], [/^nestle\b/i, "Nestle"],
+  [/^nihar\b/i, "Nihar"], [/^nivea\b/i, "Nivea"], [/^odonil\b/i, "Odonil"], [/^odomos\b/i, "Odomos"],
+  [/^oleev\b/i, "Oleev"], [/^oreo\b/i, "Oreo"], [/^palmolive\b/i, "Palmolive"], [/^parachute\b/i, "Parachute"],
+  [/^parle\b/i, "Parle"], [/^patanjali\b/i, "Patanjali"], [/^pears\b/i, "Pears"], [/^pepsodent\b/i, "Pepsodent"],
+  [/^pond'?s\b/i, "Ponds"], [/^quaker\b/i, "Quaker"], [/^real\b/i, "Real"], [/^revlon\b/i, "Revlon"],
+  [/^rin\b/i, "Rin"], [/^saffola\b/i, "Saffola"], [/^santoor\b/i, "Santoor"], [/^savlon\b/i, "Savlon"],
+  [/^sensodyne\b/i, "Sensodyne"], [/^set\s+wet\b/i, "Set Wet"], [/^sofy\b/i, "Sofy"], [/^snickers\b/i, "Snickers"],
+  [/^spinz\b/i, "Spinz"], [/^stayfree\b/i, "Stayfree"], [/^streax\b/i, "Streax"], [/^sunsilk\b/i, "Sunsilk"],
+  [/^tata\b/i, "Tata"], [/^tide\b/i, "Tide"], [/^tops\b/i, "Tops"], [/^trese?mme\b/i, "Tresemme"],
+  [/^ujala\b/i, "Ujala"], [/^unibic\b/i, "Unibic"], [/^v[ae]seline\b/i, "Vaseline"], [/^veeba\b/i, "Veeba"],
+  [/^veet\b/i, "Veet"], [/^verka\b/i, "Verka"], [/^vim\b/i, "Vim"], [/^vivel\b/i, "Vivel"],
+  [/^whisper\b/i, "Whisper"], [/^wipro\b/i, "Wipro"], [/^woosh\b/i, "Woosh"], [/^yardley\b/i, "Yardley"],
+  [/^yippee\b/i, "YiPPee"], [/^yutika\b/i, "Yutika"], [/^zandu\b/i, "Zandu"],
 ];
 
-function normalizedIdentity(name: string, category: string, unit: string) {
-  return [name, category, unit].map((value) => normalizeSearch(value)).join("|");
+function normalizedIdentity(name: string, category: string, unit: string, rowNumber?: number) {
+  return [name, category, unit, rowNumber ? `row-${rowNumber}` : ""].map((value) => normalizeSearch(value)).join("|");
+}
+
+function isNonSaleableClientProduct(name: string) {
+  return /\b(test product|demo|ad|donation|mrp sticker|damage)\b/i.test(name);
 }
 
 function cleanName(value: string) {
@@ -1372,7 +1494,7 @@ async function uniqueSlug(tx: Prisma.TransactionClient, base: string, exceptProd
   throw new Error(`Could not create a unique slug for ${base}`);
 }
 
-export async function replaceClientCatalogFromWorkbook(input: string | { filename?: string; contentBase64?: string; csv?: string }, dryRun = false) {
+export async function replaceClientCatalogFromWorkbook(input: string | { filename?: string; contentBase64?: string; csv?: string }, dryRun = false, options: { deleteUnreferencedOldProducts?: boolean } = {}) {
   const rows = await parseBulkRows(input);
   const duplicateCounts = new Map<string, number>();
   const prepared = rows.map((row) => {
@@ -1382,7 +1504,7 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
     const category = normalizeClientCategory(sourceCategory);
     const sourceUnit = cleanName(String(source.unit || ""));
     const unit = normalizeClientUnit(sourceUnit);
-    const identity = normalizedIdentity(name, category, unit);
+    const identity = normalizedIdentity(name, category, unit, row.rowNumber);
     duplicateCounts.set(identity, (duplicateCounts.get(identity) || 0) + 1);
     return { row, source, name, sourceCategory, category, sourceUnit, unit, identity };
   });
@@ -1391,20 +1513,20 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
   const validRows: typeof prepared = [];
   for (const item of prepared) {
     const errors: BulkIssue[] = [];
+    const inactiveByRule = isNonSaleableClientProduct(item.name);
     if (!item.name) errors.push({ field: "name", value: "", message: "Product Name is required" });
     if (!item.category) errors.push({ field: "category", value: item.sourceCategory, message: "Category Name is required" });
     if (!item.unit) errors.push({ field: "unit", value: item.sourceUnit, message: "Unit Name is required" });
-    const mrp = parseNumber(String(item.source.mrp || ""), "mrp", errors, { required: true, positive: true });
-    const sellingPrice = parseNumber(String(item.source.sellingPrice || ""), "sellingPrice", errors, { required: true, min: 0 });
+    const mrp = parseNumber(String(item.source.mrp || ""), "mrp", errors, { required: !inactiveByRule, positive: !inactiveByRule, min: inactiveByRule ? 0 : undefined });
+    const sellingPrice = parseNumber(String(item.source.sellingPrice || ""), "sellingPrice", errors, { required: !inactiveByRule, min: 0 });
     const costPrice = parseNumber(String(item.source.costPrice || ""), "costPrice", errors, { min: 0 });
-    const stock = parseNumber(String(item.source.stock || ""), "stock", errors, { required: true, min: 0, integer: true });
+    const stock = parseNumber(String(item.source.stock || ""), "stock", errors, { required: !inactiveByRule, min: inactiveByRule ? undefined : 0, integer: true });
     if (mrp != null && sellingPrice != null && sellingPrice > mrp) errors.push({ field: "sellingPrice", value: String(item.source.sellingPrice), message: "Our Price must not be greater than MRP" });
-    if ((duplicateCounts.get(item.identity) || 0) > 1) errors.push({ field: "identity", value: item.identity, message: "Duplicate Product Name + Category + Unit in workbook" });
     if (errors.length) {
       failedRows.push({ row: item.row.rowNumber, status: "error", action: "skip", data: item.source, errors, warnings: [], normalized: { normalizedCategory: item.category, normalizedUnit: item.unit } });
       continue;
     }
-    (item as any).numbers = { mrp, sellingPrice, costPrice, stock };
+    (item as any).numbers = { mrp: mrp ?? 0, sellingPrice: sellingPrice ?? 0, costPrice: costPrice ?? 0, stock: stock ?? 0 };
     validRows.push(item);
   }
 
@@ -1453,6 +1575,7 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
 
     for (const item of validRows) {
       const numbers = (item as any).numbers as { mrp: number; sellingPrice: number; costPrice?: number; stock: number };
+      const inactiveByRule = isNonSaleableClientProduct(item.name);
       const brandName = extractClientBrand(item.name);
       if (brandName === "Unbranded") summary.unbrandedProducts += 1;
       const existing = await tx.product.findUnique({ where: { importIdentity: item.identity }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } });
@@ -1480,7 +1603,7 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
         imageStatus: existing?.imageStatus === ImageStatus.VERIFIED ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
         imageSource: existing?.imageSource || null,
         imageCheckedAt: existing?.imageCheckedAt || null,
-        status: ProductStatus.ACTIVE,
+        status: inactiveByRule ? ProductStatus.INACTIVE : ProductStatus.ACTIVE,
         deletedAt: null,
       };
       const product = existing
@@ -1494,14 +1617,15 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
       }
       await tx.inventory.upsert({
         where: { productId_variantId: { productId: product.id, variantId: variant.id } },
-        update: { stock: numbers.stock, lowStockThreshold: 5 },
-        create: { productId: product.id, variantId: variant.id, stock: numbers.stock, lowStockThreshold: 5 },
+        update: { stock: inactiveByRule ? 0 : numbers.stock, lowStockThreshold: 5 },
+        create: { productId: product.id, variantId: variant.id, stock: inactiveByRule ? 0 : numbers.stock, lowStockThreshold: 5 },
       });
       if (!existing?.images.length) {
         await tx.productImage.create({ data: { productId: product.id, url: productImageFallback, alt: item.name, isPrimary: true, sortOrder: 1 } });
       }
       activeIdentities.add(item.identity);
-      if (existing) summary.updatedProducts += 1;
+      if (inactiveByRule) summary.draftInactiveProducts += 1;
+      else if (existing) summary.updatedProducts += 1;
       else summary.importedProducts += 1;
     }
 
@@ -1517,7 +1641,7 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
         tx.review.count({ where: { productId: product.id } }),
         tx.stockMovement.count({ where: { productId: product.id } }),
       ]);
-      if (orders || moves) {
+      if (orders || moves || !options.deleteUnreferencedOldProducts) {
         await tx.product.update({ where: { id: product.id }, data: { status: ProductStatus.INACTIVE, deletedAt: new Date() } });
         await tx.productVariant.updateMany({ where: { productId: product.id }, data: { status: ProductStatus.INACTIVE } });
         await tx.inventory.updateMany({ where: { productId: product.id }, data: { stock: 0 } });

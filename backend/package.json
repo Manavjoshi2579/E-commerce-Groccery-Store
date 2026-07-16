@@ -12,6 +12,7 @@
     "db:real-catalog-reset": "tsx scripts/real-catalog-reset.ts",
     "db:ensure-gujarat-delivery": "tsx scripts/ensure-gujarat-delivery.ts",
     "db:prod-catalog": "tsx scripts/prod-catalog.ts",
+    "catalog:replace-client": "tsx scripts/catalog-replace-client.ts",
     "db:catalog-images": "tsx scripts/enrich-product-images.ts",
     "db:prod-bootstrap": "tsx scripts/prod-bootstrap.ts",
     "db:seed": "prisma db seed",
