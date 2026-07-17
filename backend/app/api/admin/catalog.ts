@@ -7,12 +7,11 @@ import {
   createCategory,
   createProduct,
   bulkImportProducts,
-  bulkSyncProductImages,
   getAdminProduct,
-  imageSyncReport,
   listBrands,
   listCategories,
   listProducts,
+  replaceProductImage,
   softDeleteBrand,
   softDeleteCategory,
   softDeleteProduct,
@@ -21,9 +20,8 @@ import {
   updateProduct,
   productBulkTemplate,
   productBulkTemplateXlsx,
-  refreshProductImage,
 } from "../../../services/catalog.service.js";
-import { brandSchema, categorySchema, productListQuerySchema, productSchema, productUpdateSchema } from "../../../validators/catalog.js";
+import { brandSchema, categorySchema, productImageReplaceSchema, productListQuerySchema, productSchema, productUpdateSchema } from "../../../validators/catalog.js";
 
 export const adminCatalogRouter = Router();
 
@@ -49,7 +47,7 @@ adminCatalogRouter.get("/products/bulk-template", requireAdminRole(catalogViewRo
 adminCatalogRouter.get("/products/bulk-template.xlsx", requireAdminRole(catalogViewRoles), async (_req, res) => {
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", "attachment; filename=\"eagle-mart-product-template.xlsx\"");
-  return res.send(productBulkTemplateXlsx());
+  return res.send(await productBulkTemplateXlsx());
 });
 
 adminCatalogRouter.post("/products/bulk-import", requireAdminRole(catalogManageRoles), async (req, res) => {
@@ -58,25 +56,12 @@ adminCatalogRouter.post("/products/bulk-import", requireAdminRole(catalogManageR
   const filename = typeof req.body?.filename === "string" ? req.body.filename : "products.csv";
   const mode = typeof req.body?.mode === "string" ? req.body.mode : "create_update";
   const dryRun = Boolean(req.body?.dryRun);
+  const overwriteExistingPrimaryImage = Boolean(req.body?.overwriteExistingPrimaryImage);
   if (!csv.trim() && !contentBase64.trim()) return sendError(res, 400, "CSV or XLSX file content is required.");
   try {
-    return sendOk(res, { summary: await bulkImportProducts(csv.trim() ? csv : { filename, contentBase64 }, mode as any, dryRun) }, dryRun ? 200 : 201);
+    return sendOk(res, { summary: await bulkImportProducts(csv.trim() ? csv : { filename, contentBase64 }, mode as any, dryRun, { overwriteExistingPrimaryImage }) }, dryRun ? 200 : 201);
   } catch (error) {
     return sendError(res, 400, error instanceof Error ? error.message : "Could not import products.");
-  }
-});
-
-adminCatalogRouter.get("/products/image-report", requireAdminRole(catalogViewRoles), async (_req, res) => {
-  return sendOk(res, { report: await imageSyncReport() });
-});
-
-adminCatalogRouter.post("/products/bulk-image-sync", requireAdminRole(catalogManageRoles), async (req, res) => {
-  const dryRun = Boolean(req.body?.dryRun);
-  const limit = Number(req.body?.limit || 50);
-  try {
-    return sendOk(res, { report: await bulkSyncProductImages({ dryRun, limit }) });
-  } catch (error) {
-    return sendError(res, 400, error instanceof Error ? error.message : "Could not sync product images.");
   }
 });
 
@@ -96,12 +81,13 @@ adminCatalogRouter.get("/products/:id", requireAdminRole(catalogViewRoles), asyn
   return sendOk(res, { product });
 });
 
-adminCatalogRouter.post("/products/:id/refresh-image", requireAdminRole(catalogManageRoles), async (req, res) => {
-  const dryRun = Boolean(req.body?.dryRun);
+adminCatalogRouter.patch("/products/:id/image", requireAdminRole(catalogManageRoles), async (req, res) => {
+  const parsed = productImageReplaceSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid image payload.");
   try {
-    return sendOk(res, await refreshProductImage(param(req.params.id), dryRun ? "scan" : "update"));
+    return sendOk(res, { product: await replaceProductImage(param(req.params.id), parsed.data.imageUrl || null) });
   } catch (error) {
-    return sendError(res, 400, error instanceof Error ? error.message : "Could not refresh product image.");
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not replace product image.");
   }
 });
 

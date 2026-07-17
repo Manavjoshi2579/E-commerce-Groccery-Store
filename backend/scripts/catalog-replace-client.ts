@@ -301,7 +301,9 @@ async function linkMatchedImages(manifest: any[], overwrite: boolean) {
 
 async function main() {
   const workbookPath = resolve(root, argValue("--workbook", "products.xlsx"));
-  const zipPath = resolve(argValue("--zip", "C:/Users/manav/Downloads/stitch_eagle_mart_product_catalogue_images.zip"));
+  const zipArg = argValue("--zip", "");
+  if (!zipArg) throw new Error("Pass --zip with an explicit local product image ZIP. Automatic image generation/search is not supported.");
+  const zipPath = resolve(zipArg);
   const apply = process.argv.includes("--apply");
   const overwriteImages = process.argv.includes("--overwrite-manual-images");
   const deleteUnreferencedOldProducts = process.argv.includes("--delete-unreferenced-old-products");

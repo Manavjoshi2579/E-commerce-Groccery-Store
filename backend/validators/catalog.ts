@@ -93,3 +93,7 @@ export const productUpdateSchema = productBaseSchema.partial().extend({
   variants: z.array(variantSchema).min(1).optional(),
   inventory: inventorySchema.partial().optional(),
 });
+
+export const productImageReplaceSchema = z.object({
+  imageUrl: z.string().trim().max(1000).optional().nullable(),
+});

@@ -26,15 +26,11 @@ import {
   fetchAdminProduct,
   fetchAdminProducts,
   fetchBrands,
-  fetchProductImageReport,
   bulkImportAdminProducts,
   bulkImportAdminProductFile,
-  bulkSyncAdminProductImages,
   downloadProductBulkTemplateXlsx,
-  downloadProductBulkTemplate,
-  refreshAdminProductImage,
+  replaceAdminProductImage,
   type BulkImportMode,
-  type ProductImageReport,
   updateAdminBrand,
   updateAdminCategory,
   updateAdminProduct,
@@ -45,6 +41,7 @@ import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
 import { fetchAdminSupportTickets, updateAdminSupportTicket } from "@/services/support";
+import { beginAdminMfaEnrollment, confirmAdminMfaEnrollment, disableAdminMfa, regenerateAdminRecoveryCodes, type AdminMfaEnrollment } from "@/services/auth";
 import { money, uid } from "@/lib/money";
 import type { AdminCustomer, Category, Coupon, FAQ, Order, OrderStatus, Product, ProductVariant, SupportTicket } from "@/types";
 
@@ -457,6 +454,7 @@ type ProductForm = {
   gst: string;
   stock: string;
   lowStock: string;
+  image: string;
   featured: boolean;
   active: boolean;
 };
@@ -526,6 +524,7 @@ function formFromProduct(product: Product, mode?: "new" | "edit", sku?: string):
     gst: String(product.gst),
     stock: String(product.stock),
     lowStock: String(product.lowStock),
+    image: product.image || "",
     featured: Boolean(product.featured),
     active: product.active !== false,
   };
@@ -543,15 +542,16 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   const [adminBrands, setAdminBrands] = useState<BrandRow[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [imageStatusFilter, setImageStatusFilter] = useState("");
-  const [imageReport, setImageReport] = useState<ProductImageReport | null>(null);
-  const [imageSyncLoading, setImageSyncLoading] = useState(false);
-  const [refreshingImageId, setRefreshingImageId] = useState("");
+  const [imageEditor, setImageEditor] = useState<Product | null>(null);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
+  const [savingImageId, setSavingImageId] = useState("");
   const [productPage, setProductPage] = useState(1);
   const [productPagination, setProductPagination] = useState({ page: 1, totalPages: 1, total: 0, hasNextPage: false, hasPreviousPage: false });
   const [bulkSummary, setBulkSummary] = useState<Awaited<ReturnType<typeof bulkImportAdminProducts>> | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkMode, setBulkMode] = useState<BulkImportMode>("create_update");
+  const [overwriteExistingPrimaryImage, setOverwriteExistingPrimaryImage] = useState(false);
   const [bulkPreviewSearch, setBulkPreviewSearch] = useState("");
   const pageSize = 25;
   useEffect(() => {
@@ -634,29 +634,15 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   });
   const downloadTemplate = async () => {
     try {
-      const csv = await downloadProductBulkTemplate();
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "eagle-mart-product-template.csv";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not download template.", "error");
-    }
-  };
-  const downloadXlsxTemplate = async () => {
-    try {
       const blob = await downloadProductBulkTemplateXlsx();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "eagle-mart-product-template.xlsx";
+      link.download = "eagle-mart-all-products-template.xlsx";
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not download XLSX template.", "error");
+      toast(error instanceof Error ? error.message : "Could not download product template.", "error");
     }
   };
   const previewBulkFile = async (file?: File | null) => {
@@ -673,7 +659,7 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     setBulkLoading(true);
     setBulkSummary(null);
     try {
-      const summary = /\.csv$/i.test(file.name) ? await bulkImportAdminProducts(await file.text(), bulkMode, true) : await bulkImportAdminProductFile(file, bulkMode, true);
+      const summary = /\.csv$/i.test(file.name) ? await bulkImportAdminProducts(await file.text(), bulkMode, true, overwriteExistingPrimaryImage) : await bulkImportAdminProductFile(file, bulkMode, true, overwriteExistingPrimaryImage);
       setBulkSummary(summary);
       toast(`Preview ready: ${summary.validRows} usable rows, ${summary.invalidRows} invalid rows.`, summary.invalidRows ? "error" : "success");
     } catch (error) {
@@ -686,7 +672,7 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     if (!bulkFile || bulkLoading) return;
     setBulkLoading(true);
     try {
-      const summary = /\.csv$/i.test(bulkFile.name) ? await bulkImportAdminProducts(await bulkFile.text(), bulkMode, false) : await bulkImportAdminProductFile(bulkFile, bulkMode, false);
+      const summary = /\.csv$/i.test(bulkFile.name) ? await bulkImportAdminProducts(await bulkFile.text(), bulkMode, false, overwriteExistingPrimaryImage) : await bulkImportAdminProductFile(bulkFile, bulkMode, false, overwriteExistingPrimaryImage);
       setBulkSummary(summary);
       await refreshProducts();
       toast(`Imported ${summary.created} new and updated ${summary.updated} products.`, "success");
@@ -699,6 +685,7 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   const resetBulkImport = () => {
     setBulkFile(null);
     setBulkSummary(null);
+    setOverwriteExistingPrimaryImage(false);
     setBulkPreviewSearch("");
   };
   const downloadFailedRows = () => {
@@ -711,40 +698,23 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     link.click();
     URL.revokeObjectURL(url);
   };
-  const loadImageReport = async () => {
-    try {
-      setImageReport(await fetchProductImageReport());
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not load image report.", "error");
-    }
+  const openImageEditor = (product: Product) => {
+    setImageEditor(product);
+    setImageUrlDraft(product.image || "");
   };
-  useEffect(() => {
-    if (!mode) void loadImageReport();
-  }, [mode]);
-  const bulkImageSync = async (dryRun = true) => {
-    setImageSyncLoading(true);
+  const saveProductImage = async () => {
+    if (!imageEditor || savingImageId) return;
+    setSavingImageId(imageEditor.id);
     try {
-      const report = await bulkSyncAdminProductImages({ dryRun, limit: 50 });
-      setImageReport(report);
-      if (!dryRun) await refreshProducts();
-      toast(dryRun ? `Scan complete: ${report.imagesFound} image matches found.` : `Image sync updated ${report.imagesUpdated} products.`, "success");
+      const updated = await replaceAdminProductImage(imageEditor.id, imageUrlDraft.trim());
+      updateProduct(updated);
+      setImageEditor(null);
+      setImageUrlDraft("");
+      toast(imageUrlDraft.trim() ? "Product image URL saved." : "Product image reset to placeholder.", "success");
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Bulk image sync failed.", "error");
+      toast(error instanceof Error ? error.message : "Could not replace product image.", "error");
     } finally {
-      setImageSyncLoading(false);
-    }
-  };
-  const refreshOneImage = async (product: Product) => {
-    setRefreshingImageId(product.id);
-    try {
-      const result = await refreshAdminProductImage(product.id);
-      updateProduct(result.product);
-      await loadImageReport();
-      toast(result.report.message || "Product image refreshed.", result.report.imagesUpdated ? "success" : "error");
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not refresh product image.", "error");
-    } finally {
-      setRefreshingImageId("");
+      setSavingImageId("");
     }
   };
   const save = async () => {
@@ -810,7 +780,7 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
       featured: draft.featured,
       active: draft.active,
       description: existing.description || draft.name.trim(),
-      image: existing.image,
+      image: draft.image.trim() || existing.image,
       tags: existing.tags?.length ? existing.tags : ["Admin"],
     };
     try {
@@ -870,28 +840,38 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
     if (!needle) return true;
     return [row.row, row.status, row.action, row.data?.name, row.data?.sku, row.data?.category, row.data?.brand].some((value) => String(value || "").toLowerCase().includes(needle));
   }).slice(0, 25);
-  const imageReportCards = imageReport ? [["Products", imageReport.products], ["Images Found", imageReport.imagesFound], ["Images Updated", imageReport.imagesUpdated], ["Already Verified", imageReport.alreadyVerified], ["Placeholder Remaining", imageReport.placeholderRemaining], ["Needs Manual Review", imageReport.needsManualReview]] : [];
   if (mode === "edit" && !fetchedEditProduct && !storedEditProduct) return <AdminShell section="products"><Panel title="Edit Product"><p className="rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 text-sm font-bold text-black/60">Loading selected product...</p></Panel></AdminShell>;
-  if (mode) return <AdminShell section="products"><Panel title={mode === "new" ? "Add Product" : "Edit Product"}><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold">Name<input aria-label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Sku<input aria-label="Sku" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Brand<select aria-label="Brand" value={draft.brandId} onChange={(e) => setDraft({ ...draft, brandId: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose brand</option>{adminBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><label className="text-sm font-bold">Category<select aria-label="Category" value={draft.categoryId} onChange={(e) => changeCategory(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose category</option>{adminCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="text-sm font-bold">GST %<input aria-label="GST" inputMode="decimal" value={draft.gst} onChange={(e) => setDraft({ ...draft, gst: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.featured} onChange={(e) => setDraft({ ...draft, featured: e.target.checked })} /> Featured</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> Active</label></div><div className="mt-6 rounded-md border border-[#eadfca] bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfca] p-4"><div><h3 className="display-font font-bold">Variants</h3><p className="mt-1 text-xs font-bold text-black/50">Unit labels follow the selected category.</p></div><Button variant="outline" onClick={addVariantDraft}><Plus size={16} /> Add variant</Button></div><div className="grid gap-3 p-4">{variantDrafts.map((variant, index) => <div key={variant.id || index} className="grid gap-3 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 md:grid-cols-8"><label className="text-xs font-bold md:col-span-2">Unit label<select aria-label={`Variant ${index + 1} unit`} value={variant.unit} onChange={(e) => updateVariantDraft(index, { unit: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2">{mergeUnitOptions(categoryUnitOptions, variant.unit).map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label><label className="text-xs font-bold md:col-span-2">SKU<input aria-label={`Variant ${index + 1} SKU`} value={variant.sku} onChange={(e) => updateVariantDraft(index, { sku: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">MRP<input aria-label={`Variant ${index + 1} MRP`} inputMode="decimal" value={variant.mrp} onChange={(e) => updateVariantDraft(index, { mrp: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Price<input aria-label={`Variant ${index + 1} price`} inputMode="decimal" value={variant.price} onChange={(e) => updateVariantDraft(index, { price: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Stock<input aria-label={`Variant ${index + 1} stock`} inputMode="numeric" value={variant.stock} onChange={(e) => updateVariantDraft(index, { stock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Low<input aria-label={`Variant ${index + 1} low stock`} inputMode="numeric" value={variant.lowStock} onChange={(e) => updateVariantDraft(index, { lowStock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><div className="flex flex-wrap items-center gap-3 md:col-span-8"><label className="flex items-center gap-2 text-sm font-bold"><input type="radio" checked={variant.isDefault} onChange={() => updateVariantDraft(index, { isDefault: true })} /> Default</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.active} onChange={(e) => updateVariantDraft(index, { active: e.target.checked })} /> Active</label><Button variant="ghost" onClick={() => removeVariantDraft(index)}>Remove</Button></div></div>)}</div></div><div className="mt-5 flex gap-2"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Product"}</Button><Link href="/admin/products"><Button variant="outline">Back</Button></Link></div></Panel></AdminShell>;
-  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-3 xl:grid-cols-[1fr_220px_auto]"><input className="min-w-[220px] rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><select aria-label="Image status" value={imageStatusFilter} onChange={(e) => { setImageStatusFilter(e.target.value); setProductPage(1); }} className="rounded-md border px-3 py-2"><option value="">All image statuses</option><option value="VERIFIED">Verified</option><option value="PLACEHOLDER">Placeholder</option><option value="NEEDS_REVIEW">Needs Review</option></select><div className="flex flex-wrap gap-2">{canEditCatalog && <Button variant="outline" onClick={downloadTemplate}>CSV template</Button>}{canEditCatalog && <Button variant="outline" onClick={downloadXlsxTemplate}>XLSX template</Button>}{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{canEditCatalog && <section className="mb-4 rounded-md border border-[#eadfca] bg-[#faf7ef] p-4"><div className="grid gap-3 lg:grid-cols-[1fr_220px_auto_auto] lg:items-end"><label className="grid cursor-pointer gap-2 rounded-md border-2 border-dashed border-[#d4af37] bg-white p-4 text-sm font-bold"><span>{bulkFile ? bulkFile.name : "Drop or choose CSV/XLSX product file"}</span><span className="text-xs font-normal text-black/55">Accepted: CSV, XLSX, XLS up to 5 MB and 1000 rows.</span><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => previewBulkFile(event.target.files?.[0])} /></label><label className="text-sm font-bold">Import mode<select value={bulkMode} onChange={(event) => setBulkMode(event.target.value as BulkImportMode)} className="mt-1 w-full rounded-md border px-3 py-3"><option value="create_update">Create and update existing</option><option value="create_only">Create new products only</option><option value="update_only">Update existing products only</option></select></label><Button variant="gold" disabled={!bulkFile || bulkLoading || Boolean(bulkSummary?.invalidRows)} onClick={confirmBulkImport}>{bulkLoading ? "Working..." : "Confirm import"}</Button><Button variant="outline" onClick={resetBulkImport}>Cancel/reset</Button></div>{bulkSummary && <div className="mt-4 grid gap-3"><div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">{[["Total rows", bulkSummary.totalRows], ["Valid rows", bulkSummary.validRows], ["Invalid rows", bulkSummary.invalidRows], ["New products", bulkSummary.newProducts ?? 0], ["To update", bulkSummary.productsToUpdate ?? 0], ["Created", bulkSummary.created], ["Updated", bulkSummary.updated]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/50">{String(label)}</p><b className="text-lg">{String(value)}</b></div>)}</div><div className="flex flex-wrap items-center gap-2"><input className="rounded-md border px-3 py-2 text-sm" placeholder="Search preview rows" value={bulkPreviewSearch} onChange={(event) => setBulkPreviewSearch(event.target.value)} />{bulkSummary.failedRowsCsv && <Button variant="outline" onClick={downloadFailedRows}>Download failed rows</Button>}</div>{filteredBulkRows.length > 0 && <DataTable headers={["Row", "Status", "Action", "SKU", "Product", "Messages"]} minWidth="min-w-[760px]">{filteredBulkRows.map((row) => <tr key={row.row} className="border-b bg-white"><td className="p-3 font-bold">{row.row}</td><td><StatusBadge value={row.status} /></td><td className="capitalize">{row.action}</td><td>{row.data?.sku || "Auto"}</td><td>{row.data?.name}</td><td className="max-w-md text-sm text-black/65">{[...(row.errors || []).map((item) => item.message), ...(row.warnings || []).map((item) => item.message)].join("; ") || "Ready"}</td></tr>)}</DataTable>}{bulkSummary.errors.length > 0 && <div className="grid gap-1 text-sm text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}</section>}{canEditCatalog && <section className="mb-4 rounded-md border border-[#eadfca] bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="display-font text-xl font-black">Bulk Image Sync</h3><p className="text-sm text-black/55">Verified images are skipped. Products without high-confidence official images stay on the placeholder.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={imageSyncLoading} onClick={() => loadImageReport()}>Refresh report</Button><Button variant="outline" disabled={imageSyncLoading} onClick={() => bulkImageSync(true)}>Scan images</Button><Button variant="gold" disabled={imageSyncLoading} onClick={() => bulkImageSync(false)}>{imageSyncLoading ? "Syncing..." : "Update images"}</Button></div></div>{imageReportCards.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">{imageReportCards.map(([label, value]) => <div key={String(label)} className="rounded-md border border-[#eadfca] bg-[#faf7ef] p-3"><p className="text-xs font-black uppercase text-black/50">{String(label)}</p><b className="text-lg">{String(value)}</b></div>)}</div>}{imageReport?.rows?.length ? <div className="mt-4 max-h-56 overflow-auto rounded-md border border-[#eadfca]"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-black text-white"><tr><th className="p-3">Product</th><th>Status</th><th>Message</th></tr></thead><tbody>{imageReport.rows.slice(0, 12).map((row) => <tr key={row.id} className="border-b"><td className="p-3 font-bold">{row.name}</td><td><StatusBadge value={row.imageStatus} /></td><td>{row.message}</td></tr>)}</tbody></table></div> : null}</section>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "Image Status", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-contain" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle"><StatusBadge value={p.imageStatus || "Placeholder"} /></td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" disabled={refreshingImageId === p.id} onClick={() => refreshOneImage(p)}>{refreshingImageId === p.id ? "Refreshing" : "Refresh Image"}</button>}{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel></AdminShell>;
+  if (mode) return <AdminShell section="products"><Panel title={mode === "new" ? "Add Product" : "Edit Product"}><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold">Name<input aria-label="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Sku<input aria-label="Sku" value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Brand<select aria-label="Brand" value={draft.brandId} onChange={(e) => setDraft({ ...draft, brandId: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose brand</option>{adminBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><label className="text-sm font-bold">Category<select aria-label="Category" value={draft.categoryId} onChange={(e) => changeCategory(e.target.value)} className="mt-1 w-full rounded-md border px-3 py-2"><option value="">Choose category</option>{adminCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="text-sm font-bold md:col-span-2">Primary image URL<input aria-label="Primary image URL" value={draft.image} onChange={(e) => setDraft({ ...draft, image: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" placeholder="/assets/products/example.png or https://..." /></label><label className="text-sm font-bold">GST %<input aria-label="GST" inputMode="decimal" value={draft.gst} onChange={(e) => setDraft({ ...draft, gst: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.featured} onChange={(e) => setDraft({ ...draft, featured: e.target.checked })} /> Featured</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> Active</label></div><div className="mt-6 rounded-md border border-[#eadfca] bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfca] p-4"><div><h3 className="display-font font-bold">Variants</h3><p className="mt-1 text-xs font-bold text-black/50">Unit labels follow the selected category.</p></div><Button variant="outline" onClick={addVariantDraft}><Plus size={16} /> Add variant</Button></div><div className="grid gap-3 p-4">{variantDrafts.map((variant, index) => <div key={variant.id || index} className="grid gap-3 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 md:grid-cols-8"><label className="text-xs font-bold md:col-span-2">Unit label<select aria-label={`Variant ${index + 1} unit`} value={variant.unit} onChange={(e) => updateVariantDraft(index, { unit: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2">{mergeUnitOptions(categoryUnitOptions, variant.unit).map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label><label className="text-xs font-bold md:col-span-2">SKU<input aria-label={`Variant ${index + 1} SKU`} value={variant.sku} onChange={(e) => updateVariantDraft(index, { sku: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">MRP<input aria-label={`Variant ${index + 1} MRP`} inputMode="decimal" value={variant.mrp} onChange={(e) => updateVariantDraft(index, { mrp: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Price<input aria-label={`Variant ${index + 1} price`} inputMode="decimal" value={variant.price} onChange={(e) => updateVariantDraft(index, { price: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Stock<input aria-label={`Variant ${index + 1} stock`} inputMode="numeric" value={variant.stock} onChange={(e) => updateVariantDraft(index, { stock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><label className="text-xs font-bold">Low<input aria-label={`Variant ${index + 1} low stock`} inputMode="numeric" value={variant.lowStock} onChange={(e) => updateVariantDraft(index, { lowStock: e.target.value })} className="mt-1 w-full rounded-md border px-2 py-2" /></label><div className="flex flex-wrap items-center gap-3 md:col-span-8"><label className="flex items-center gap-2 text-sm font-bold"><input type="radio" checked={variant.isDefault} onChange={() => updateVariantDraft(index, { isDefault: true })} /> Default</label><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={variant.active} onChange={(e) => updateVariantDraft(index, { active: e.target.checked })} /> Active</label><Button variant="ghost" onClick={() => removeVariantDraft(index)}>Remove</Button></div></div>)}</div></div><div className="mt-5 flex gap-2"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Product"}</Button><Link href="/admin/products"><Button variant="outline">Back</Button></Link></div></Panel></AdminShell>;
+  return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-3 xl:grid-cols-[1fr_220px_auto]"><input className="min-w-[220px] rounded-md border px-3 py-2" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><select aria-label="Image status" value={imageStatusFilter} onChange={(e) => { setImageStatusFilter(e.target.value); setProductPage(1); }} className="rounded-md border px-3 py-2"><option value="">All image statuses</option><option value="VERIFIED">Existing / URL imported</option><option value="PLACEHOLDER">Placeholder</option><option value="NEEDS_REVIEW">Needs Review</option></select><div className="flex flex-wrap gap-2">{canEditCatalog && <Button variant="outline" onClick={downloadTemplate}>Download product template</Button>}{canEditCatalog && <Link href="/admin/products/new"><Button variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{canEditCatalog && <section className="mb-4 rounded-md border border-[#eadfca] bg-[#faf7ef] p-4"><div className="grid gap-3 lg:grid-cols-[1fr_220px_auto_auto] lg:items-end"><label className="grid cursor-pointer gap-2 rounded-md border-2 border-dashed border-[#d4af37] bg-white p-4 text-sm font-bold"><span>{bulkFile ? bulkFile.name : "Drop or choose CSV/XLSX product file"}</span><span className="text-xs font-normal text-black/55">Accepted: CSV, XLSX, XLS up to 5 MB and 1000 rows.</span><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => previewBulkFile(event.target.files?.[0])} /></label><label className="text-sm font-bold">Import mode<select value={bulkMode} onChange={(event) => setBulkMode(event.target.value as BulkImportMode)} className="mt-1 w-full rounded-md border px-3 py-3"><option value="create_update">Create and update existing</option><option value="create_only">Create new products only</option><option value="update_only">Update existing products only</option></select></label><label className="flex items-center gap-2 rounded-md border border-[#eadfca] bg-white px-3 py-3 text-sm font-bold"><input type="checkbox" checked={overwriteExistingPrimaryImage} onChange={(event) => setOverwriteExistingPrimaryImage(event.target.checked)} />Update images from Primary Image URL</label><Button variant="gold" disabled={!bulkFile || bulkLoading || Boolean(bulkSummary?.invalidRows)} onClick={confirmBulkImport}>{bulkLoading ? "Working..." : "Confirm import"}</Button><Button variant="outline" onClick={resetBulkImport}>Cancel/reset</Button></div>{bulkSummary && <div className="mt-4 grid gap-3"><div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">{[["Total rows", bulkSummary.totalRows], ["Valid rows", bulkSummary.validRows], ["Invalid rows", bulkSummary.invalidRows], ["New products", bulkSummary.newProducts ?? 0], ["To update", bulkSummary.productsToUpdate ?? 0], ["Created", bulkSummary.created], ["Updated", bulkSummary.updated]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/50">{String(label)}</p><b className="text-lg">{String(value)}</b></div>)}</div><div className="flex flex-wrap items-center gap-2"><input className="rounded-md border px-3 py-2 text-sm" placeholder="Search preview rows" value={bulkPreviewSearch} onChange={(event) => setBulkPreviewSearch(event.target.value)} />{bulkSummary.failedRowsCsv && <Button variant="outline" onClick={downloadFailedRows}>Download failed rows</Button>}</div>{filteredBulkRows.length > 0 && <DataTable headers={["Row", "Status", "Action", "SKU", "Product", "Image URL", "Preview", "Image Status", "Messages"]} minWidth="min-w-[1080px]">{filteredBulkRows.map((row) => <tr key={row.row} className="border-b bg-white"><td className="p-3 font-bold">{row.row}</td><td><StatusBadge value={row.status} /></td><td className="capitalize">{row.action}</td><td>{row.data?.sku || "Auto"}</td><td>{row.data?.name}</td><td className="max-w-[220px] truncate text-xs">{row.image?.url || "-"}</td><td>{row.image?.status === "valid" && row.image.url.startsWith("/") ? <img src={row.image.url} alt="" className="h-12 w-12 rounded-md border object-contain" /> : "-"}</td><td><StatusBadge value={row.image?.status || "none"} /></td><td className="max-w-md text-sm text-black/65">{[...(row.errors || []).map((item) => item.message), ...(row.warnings || []).map((item) => item.message)].join("; ") || "Ready"}</td></tr>)}</DataTable>}{bulkSummary.errors.length > 0 && <div className="grid gap-1 text-sm text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}</section>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "Image Status", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-contain" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle"><StatusBadge value={p.imageStatus || "Placeholder"} /></td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => openImageEditor(p)}>Replace Image</button>}{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel>{imageEditor && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div className="w-full max-w-lg rounded-md bg-white p-5 shadow-xl"><div className="mb-4 flex items-start justify-between gap-4"><div><h3 className="display-font text-xl font-black">Replace Image</h3><p className="text-sm text-black/60">{imageEditor.name}</p></div><button className="rounded-md border p-2" aria-label="Close image editor" onClick={() => setImageEditor(null)}><X size={18} /></button></div><label className="text-sm font-bold">Image URL<input autoFocus aria-label="Replacement image URL" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} placeholder="/assets/products/example.png or https://..." className="mt-1 w-full rounded-md border px-3 py-2" /></label>{imageUrlDraft.trim() && <img src={imageUrlDraft.trim()} alt="" className="mt-4 h-32 w-32 rounded-md border border-[#eadfca] object-contain" />}<div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => setImageUrlDraft("")}>Use placeholder</Button><Button variant="outline" onClick={() => setImageEditor(null)}>Cancel</Button><Button variant="gold" disabled={savingImageId === imageEditor.id} onClick={saveProductImage}>{savingImageId === imageEditor.id ? "Saving..." : "Update image"}</Button></div></div></div>}</AdminShell>;
 }
 
 function Inventory({ productId }: { productId?: string }) {
   const { products, adjustStock } = useStore();
   const [remoteInventory, setRemoteInventory] = useState<{ id: string; productId: string; variantId?: string; stock: number; lowStockThreshold?: number; product: Product; status?: string }[]>([]);
+  const [adjustments, setAdjustments] = useState<Record<string, string>>({});
   const { toast } = useStore();
   useEffect(() => { fetchAdminInventory().then(setRemoteInventory).catch((error) => toast(error instanceof Error ? error.message : "Unable to load inventory. Database connection is unavailable.", "error")); }, [toast]);
   const rows = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => ({ ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock: item.stock, lowStock: item.lowStockThreshold ?? item.product.lowStock, statusText: item.status }));
   const pagedRows = usePagedItems(rows);
   const adjust = (row: Product & { inventoryId: string }, quantity: number) => {
+    if (!Number.isInteger(quantity) || quantity === 0) {
+      toast("Enter a non-zero whole number adjustment.", "error");
+      return;
+    }
     adjustAdminInventory(row.inventoryId, quantity).then((updated) => {
       adjustStock(row.id, updated.stock);
       setRemoteInventory((items) => items.map((item) => item.id === updated.id ? { ...item, stock: updated.stock, product: updated.product } : item));
+      setAdjustments((items) => ({ ...items, [row.inventoryId]: "" }));
       toast("Inventory updated", "success");
     }).catch((error) => toast(error instanceof Error ? error.message : "Could not adjust inventory.", "error"));
   };
+  const submitAdjustment = (event: FormEvent<HTMLFormElement>, row: Product & { inventoryId: string }) => {
+    event.preventDefault();
+    const value = adjustments[row.inventoryId]?.trim() ?? "";
+    adjust(row, Number(value));
+  };
   const selectedProduct = rows[0];
-  return <AdminShell section="inventory"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label={productId ? "Product SKUs" : "Total SKUs"} value={String(rows.length)} sub={productId ? selectedProduct?.name || "Selected product" : "Tracked"} /><Stat label="Low Stock" value={String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length)} sub="Needs restock" /><Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub="Critical" /><Stat label="Recently Restocked" value={String(rows.filter((p) => p.stock > p.lowStock * 2).length)} sub="Healthy" /></div><div className="mt-6"><Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>{productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}<DataTable headers={["Product", "Current stock", "Low threshold", "Status", "Adjust"]}>{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}{p.variantId && <div className="text-xs font-normal text-black/50">Variant {p.variantId.slice(-8).toUpperCase()}</div>}</td><td>{p.stock}</td><td>{p.lowStock}</td><td><StatusBadge value={p.statusText || (p.stock <= 0 ? "Out of stock" : p.stock <= p.lowStock ? "Low stock" : "In stock")} /></td><td><div className="flex gap-2"><Button variant="outline" onClick={() => adjust(p, -5)}>-5</Button><Button variant="gold" onClick={() => adjust(p, 10)}>+10</Button></div></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></div></AdminShell>;
+  return <AdminShell section="inventory"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label={productId ? "Product SKUs" : "Total SKUs"} value={String(rows.length)} sub={productId ? selectedProduct?.name || "Selected product" : "Tracked"} /><Stat label="Low Stock" value={String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length)} sub="Needs restock" /><Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub="Critical" /><Stat label="Recently Restocked" value={String(rows.filter((p) => p.stock > p.lowStock * 2).length)} sub="Healthy" /></div><div className="mt-6"><Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>{productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}<DataTable headers={["Product", "Current stock", "Low threshold", "Status", "Adjust"]}>{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}{p.variantId && <div className="text-xs font-normal text-black/50">Variant {p.variantId.slice(-8).toUpperCase()}</div>}</td><td>{p.stock}</td><td>{p.lowStock}</td><td><StatusBadge value={p.statusText || (p.stock <= 0 ? "Out of stock" : p.stock <= p.lowStock ? "Low stock" : "In stock")} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-11 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></div></AdminShell>;
 }
 
 function OrderTable({ compact = false, ordersOverride }: { compact?: boolean; ordersOverride?: Order[] }) {
@@ -1951,7 +1931,69 @@ function SettingsAdmin() {
   };
   const initials = (admin?.name || "AD").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const joined = admin?.createdAt ? new Date(admin.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : "Recently";
-  return <AdminShell section="settings"><div className="grid gap-5 xl:grid-cols-[330px_1fr]"><aside className="rounded-md border border-[#d8d1c2] bg-white p-6 text-center shadow-sm"><div className="mx-auto flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#ece7ff] bg-black text-5xl font-black text-[#d4af37] shadow-xl">{initials}</div><h2 className="display-font mt-5 text-2xl font-black">{resettingProfile ? profile.name || admin?.name || "Admin" : admin?.name || "Admin"}</h2><p className="text-sm text-black/55">{admin?.email}</p><div className="mt-6 rounded-md border border-[#d8d1c2] bg-[#faf7ef] p-4 text-left"><p className="text-xs font-black uppercase tracking-wide text-black/55">Admin ID</p><b>{admin?.id || "-"}</b><p className="mt-3 text-xs font-black uppercase tracking-wide text-black/55">Role</p><b>{admin?.role?.name || "-"}</b><p className="mt-3 text-xs font-black uppercase tracking-wide text-black/55">Status</p><b>{admin?.status || "ACTIVE"}</b></div></aside><section className="overflow-hidden rounded-md border border-[#d8d1c2] bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d8d1c2] p-5"><div><h2 className="display-font text-2xl font-black">Admin Profile</h2><p className="text-sm text-black/55">{resettingProfile ? "Resetting admin profile in database..." : "Update the logged-in admin profile from database."}</p></div><span className="rounded-full bg-[#efeaff] px-4 py-2 text-xs font-black text-[#4638d5]">ADMIN ID: {admin?.id?.slice(-8).toUpperCase()}</span></div><div className="grid gap-5 p-5 md:grid-cols-2"><label className="text-xs font-black uppercase tracking-wide text-black/65">Full name<input value={profile.name} onChange={(e) => setProfile({ name: e.target.value })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Role<input value={admin?.role?.name || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Email address<input value={admin?.email || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-black/55">Security clearance</p><b>{admin?.status || "ACTIVE"}</b><p className="mt-1 text-sm text-black/50">Created {joined}</p></div></div><div className="flex flex-wrap justify-end gap-3 border-t border-[#d8d1c2] bg-[#f5f3ff] p-5"><Button variant="outline" disabled={savingProfile || resettingProfile} onClick={resetProfile}>{resettingProfile ? "Resetting..." : "Reset profile"}</Button><Button variant="gold" disabled={savingProfile || resettingProfile || profile.name === savedProfile.name} onClick={saveProfile}>{savingProfile ? "Saving..." : "Save changes"}</Button></div></section><div className="rounded-md border-l-4 border-l-[#4638d5] bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-black/55">Active since</p><h3 className="display-font mt-2 text-2xl font-black">{joined}</h3><p className="mt-2 text-sm text-[#4638d5]">{admin?.updatedAt ? `Updated ${new Date(admin.updatedAt).toLocaleDateString("en-IN")}` : "Database profile"}</p></div><div className="rounded-md border-l-4 border-l-[#4638d5] bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-black/55">Access scope</p><h3 className="display-font mt-2 text-2xl font-black">{admin?.role?.name || "ADMIN"}</h3><p className="mt-2 text-sm text-black/55">Role ID {admin?.role?.id || "-"}</p></div></div><Panel title="Store Settings"><div className="grid gap-4 md:grid-cols-3">{Object.entries(settings).map(([key, value]) => <label key={key} className="text-sm font-bold">{title(key)}<input value={value} onChange={(e) => setSettings((current) => ({ ...current, [key]: e.target.value }))} className="mt-1 w-full rounded-md border px-3 py-2" /></label>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save settings"}</Button><Button variant="outline" onClick={resetSettings} disabled={saving}>{saving ? "Resetting..." : "Reset settings"}</Button></div></Panel></AdminShell>;
+  return <AdminShell section="settings"><div className="grid gap-5 xl:grid-cols-[330px_1fr]"><aside className="rounded-md border border-[#d8d1c2] bg-white p-6 text-center shadow-sm"><div className="mx-auto flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#ece7ff] bg-black text-5xl font-black text-[#d4af37] shadow-xl">{initials}</div><h2 className="display-font mt-5 text-2xl font-black">{resettingProfile ? profile.name || admin?.name || "Admin" : admin?.name || "Admin"}</h2><p className="text-sm text-black/55">{admin?.email}</p><div className="mt-6 rounded-md border border-[#d8d1c2] bg-[#faf7ef] p-4 text-left"><p className="text-xs font-black uppercase tracking-wide text-black/55">Admin ID</p><b>{admin?.id || "-"}</b><p className="mt-3 text-xs font-black uppercase tracking-wide text-black/55">Role</p><b>{admin?.role?.name || "-"}</b><p className="mt-3 text-xs font-black uppercase tracking-wide text-black/55">Status</p><b>{admin?.status || "ACTIVE"}</b></div></aside><section className="overflow-hidden rounded-md border border-[#d8d1c2] bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d8d1c2] p-5"><div><h2 className="display-font text-2xl font-black">Admin Profile</h2><p className="text-sm text-black/55">{resettingProfile ? "Resetting admin profile in database..." : "Update the logged-in admin profile from database."}</p></div><span className="rounded-full bg-[#efeaff] px-4 py-2 text-xs font-black text-[#4638d5]">ADMIN ID: {admin?.id?.slice(-8).toUpperCase()}</span></div><div className="grid gap-5 p-5 md:grid-cols-2"><label className="text-xs font-black uppercase tracking-wide text-black/65">Full name<input value={profile.name} onChange={(e) => setProfile({ name: e.target.value })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Role<input value={admin?.role?.name || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Email address<input value={admin?.email || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-black/55">Security clearance</p><b>{admin?.status || "ACTIVE"}</b><p className="mt-1 text-sm text-black/50">Created {joined}</p></div></div><div className="flex flex-wrap justify-end gap-3 border-t border-[#d8d1c2] bg-[#f5f3ff] p-5"><Button variant="outline" disabled={savingProfile || resettingProfile} onClick={resetProfile}>{resettingProfile ? "Resetting..." : "Reset profile"}</Button><Button variant="gold" disabled={savingProfile || resettingProfile || profile.name === savedProfile.name} onClick={saveProfile}>{savingProfile ? "Saving..." : "Save changes"}</Button></div></section><div className="rounded-md border-l-4 border-l-[#4638d5] bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-black/55">Active since</p><h3 className="display-font mt-2 text-2xl font-black">{joined}</h3><p className="mt-2 text-sm text-[#4638d5]">{admin?.updatedAt ? `Updated ${new Date(admin.updatedAt).toLocaleDateString("en-IN")}` : "Database profile"}</p></div><div className="rounded-md border-l-4 border-l-[#4638d5] bg-white p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-black/55">Access scope</p><h3 className="display-font mt-2 text-2xl font-black">{admin?.role?.name || "ADMIN"}</h3><p className="mt-2 text-sm text-black/55">Role ID {admin?.role?.id || "-"}</p></div></div><AdminSecurityPanel /><Panel title="Store Settings"><div className="grid gap-4 md:grid-cols-3">{Object.entries(settings).map(([key, value]) => <label key={key} className="text-sm font-bold">{title(key)}<input value={value} onChange={(e) => setSettings((current) => ({ ...current, [key]: e.target.value }))} className="mt-1 w-full rounded-md border px-3 py-2" /></label>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button variant="gold" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save settings"}</Button><Button variant="outline" onClick={resetSettings} disabled={saving}>{saving ? "Resetting..." : "Reset settings"}</Button></div></Panel></AdminShell>;
+}
+
+function AdminSecurityPanel() {
+  const { admin, toast } = useStore();
+  const [enrollment, setEnrollment] = useState<AdminMfaEnrollment | null>(null);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const begin = async () => {
+    setBusy(true);
+    try {
+      setEnrollment(await beginAdminMfaEnrollment());
+      setRecoveryCodes([]);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not start MFA enrollment.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      const result = await confirmAdminMfaEnrollment({ code });
+      setRecoveryCodes(result.recoveryCodes);
+      setEnrollment(null);
+      setCode("");
+      toast("MFA enabled", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not confirm MFA.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const disable = async () => {
+    setBusy(true);
+    try {
+      await disableAdminMfa({ password, code });
+      setPassword("");
+      setCode("");
+      setRecoveryCodes([]);
+      toast("MFA disabled", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not disable MFA.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const regenerate = async () => {
+    setBusy(true);
+    try {
+      const result = await regenerateAdminRecoveryCodes({ code });
+      setRecoveryCodes(result.recoveryCodes);
+      setCode("");
+      toast("Recovery codes regenerated", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not regenerate recovery codes.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Panel title="Admin Security"><div className="grid gap-4 lg:grid-cols-2"><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-black/55">TOTP multi-factor authentication</p><h3 className="display-font mt-2 text-2xl font-black">{admin?.totpEnabled ? "Enabled" : "Not enabled"}</h3><p className="mt-2 text-sm text-black/55">Use an authenticator app with the setup URI or manual secret shown during enrollment.</p><div className="mt-4 flex flex-wrap gap-3">{!admin?.totpEnabled && <Button variant="gold" disabled={busy} onClick={begin}>{busy ? "Working..." : "Begin enrollment"}</Button>}{admin?.totpEnabled && <Button variant="outline" disabled={busy || !code} onClick={regenerate}>Regenerate recovery codes</Button>}</div></div><div className="rounded-md border border-[#eadfca] bg-[#faf7ef] p-4"><label className="text-xs font-black uppercase tracking-wide text-black/65">Verification code<input value={code} onChange={(e) => setCode(e.target.value.replace(/\s/g, "").slice(0, 16))} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" placeholder="000000 or recovery code" /></label>{admin?.totpEnabled && <label className="mt-3 block text-xs font-black uppercase tracking-wide text-black/65">Current password<input value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" type="password" /></label>}<div className="mt-4 flex flex-wrap gap-3">{enrollment && <Button variant="gold" disabled={busy || code.length !== 6} onClick={confirm}>Confirm MFA</Button>}{admin?.totpEnabled && <Button variant="outline" disabled={busy || !password || !code} onClick={disable}>Disable MFA</Button>}</div></div></div>{enrollment && <div className="mt-4 rounded-md border border-[#d4af37] bg-[#fff8df] p-4"><p className="text-xs font-black uppercase tracking-wide text-[#8a6500]">Authenticator setup</p><p className="mt-2 break-all font-mono text-sm">{enrollment.otpauthUrl}</p><p className="mt-3 text-xs font-black uppercase tracking-wide text-[#8a6500]">Manual secret</p><p className="break-all font-mono text-sm">{enrollment.secret}</p></div>}{recoveryCodes.length > 0 && <div className="mt-4 rounded-md border border-[#d8d1c2] bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-black/55">Recovery codes</p><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{recoveryCodes.map((item) => <code key={item} className="rounded bg-black px-3 py-2 text-center text-xs font-bold text-[#e7c766]">{item}</code>)}</div></div>}</Panel>;
 }
 
 function Reports() {

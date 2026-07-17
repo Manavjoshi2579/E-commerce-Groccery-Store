@@ -1,23 +1,18 @@
 "use client";
 
-import { products as seedProducts } from "@/data/products";
 import type { Category, Product } from "@/types";
 import { API_BASE, requestApi } from "./api";
 
 const productFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryFallback = "/assets/placeholders/category-placeholder.svg";
-const generatedProductImages: Record<string, string> = Object.fromEntries(seedProducts.map((product) => [product.slug, product.image]));
 
 function asset(value: string | undefined, fallback: string) {
   return value && value.trim() ? value : fallback;
 }
 
 function productAsset(input: any) {
-  const value = asset(input.image, productFallback);
-  if (value === productFallback || value.includes("/assets/placeholders/")) {
-    return generatedProductImages[input.slug] || productFallback;
-  }
-  return value;
+  const primary = input.primaryImageUrl || input.images?.find?.((image: any) => image?.isPrimary)?.url || input.images?.[0]?.url || input.image;
+  return asset(primary, productFallback);
 }
 
 export function mapApiProduct(input: any): Product {
@@ -109,39 +104,16 @@ export async function fetchAdminProducts(params: Record<string, string | number 
   return { products: data.products.map(mapApiProduct), pagination: data.pagination };
 }
 
-export type ProductImageReport = {
-  products: number;
-  imagesFound: number;
-  imagesUpdated: number;
-  alreadyVerified: number;
-  placeholderRemaining: number;
-  needsManualReview: number;
-  rows?: { id: string; name: string; imageStatus: string; message: string; imageUrl?: string }[];
-};
-
-export async function fetchProductImageReport() {
-  const data = await requestApi<{ report: ProductImageReport }>("/api/admin/products/image-report");
-  return data.report;
-}
-
-export async function refreshAdminProductImage(id: string, dryRun = false) {
-  const data = await requestApi<{ product: any; report: ProductImageReport & { message?: string; imageUrl?: string } }>(`/api/admin/products/${encodeURIComponent(id)}/refresh-image`, {
-    method: "POST",
-    body: JSON.stringify({ dryRun }),
-  });
-  return { product: mapApiProduct(data.product), report: data.report };
-}
-
-export async function bulkSyncAdminProductImages(input: { dryRun?: boolean; limit?: number } = {}) {
-  const data = await requestApi<{ report: ProductImageReport }>("/api/admin/products/bulk-image-sync", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  return data.report;
-}
-
 export async function fetchAdminProduct(id: string) {
   const data = await requestApi<{ product: any }>(`/api/admin/products/${encodeURIComponent(id)}`);
+  return mapApiProduct(data.product);
+}
+
+export async function replaceAdminProductImage(id: string, imageUrl: string) {
+  const data = await requestApi<{ product: any }>(`/api/admin/products/${encodeURIComponent(id)}/image`, {
+    method: "PATCH",
+    body: JSON.stringify({ imageUrl }),
+  });
   return mapApiProduct(data.product);
 }
 
@@ -242,20 +214,20 @@ export type BulkImportSummary = {
   newProducts?: number;
   productsToUpdate?: number;
   conflicts?: number;
-  rows?: { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; errors: { message: string }[]; warnings: { message: string }[]; data?: Record<string, string> }[];
+  rows?: { row: number; status: "valid" | "warning" | "error"; action: "create" | "update" | "skip"; errors: { message: string }[]; warnings: { message: string }[]; data?: Record<string, string>; image?: { url: string; status: "none" | "valid" | "invalid"; message: string } }[];
   failedRowsCsv?: string;
   errors: { row: number; errors: string[] }[];
 };
 
-export async function bulkImportAdminProducts(csv: string, mode: BulkImportMode = "create_update", dryRun = false) {
+export async function bulkImportAdminProducts(csv: string, mode: BulkImportMode = "create_update", dryRun = false, overwriteExistingPrimaryImage = false) {
   const data = await requestApi<{ summary: BulkImportSummary }>("/api/admin/products/bulk-import", {
     method: "POST",
-    body: JSON.stringify({ csv, mode, dryRun }),
+    body: JSON.stringify({ csv, mode, dryRun, overwriteExistingPrimaryImage }),
   });
   return data.summary;
 }
 
-export async function bulkImportAdminProductFile(file: File, mode: BulkImportMode = "create_update", dryRun = false) {
+export async function bulkImportAdminProductFile(file: File, mode: BulkImportMode = "create_update", dryRun = false, overwriteExistingPrimaryImage = false) {
   const contentBase64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read import file."));
@@ -264,7 +236,7 @@ export async function bulkImportAdminProductFile(file: File, mode: BulkImportMod
   });
   const data = await requestApi<{ summary: BulkImportSummary }>("/api/admin/products/bulk-import", {
     method: "POST",
-    body: JSON.stringify({ filename: file.name, contentBase64, mode, dryRun }),
+    body: JSON.stringify({ filename: file.name, contentBase64, mode, dryRun, overwriteExistingPrimaryImage }),
   });
   return data.summary;
 }

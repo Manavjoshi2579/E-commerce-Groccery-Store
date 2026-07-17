@@ -21,34 +21,9 @@ const productInclude = {
 };
 
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
-type ImageSyncMode = "scan" | "update";
 
 const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryImageFallback = "/assets/placeholders/category-placeholder.svg";
-const googleImageApiKey = () => process.env.GOOGLE_CUSTOM_SEARCH_API_KEY || process.env.GOOGLE_CSE_API_KEY || "";
-const googleImageEngineId = () => process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID || process.env.GOOGLE_CSE_ID || "";
-const blockedImageHosts = [
-  "amazon.", "flipkart.", "bigbasket.", "blinkit.", "swiggy.", "instamart.", "jiomart.", "dmart.", "meesho.",
-];
-const officialBrandHosts: Record<string, string[]> = {
-  amul: ["amul.com"],
-  nestle: ["nestle.in", "nestle.com"],
-  britannia: ["britannia.co.in"],
-  colgate: ["colgate.com", "colgatepalmolive.co.in"],
-  dove: ["dove.com"],
-  himalaya: ["himalayawellness.in", "himalayawellness.com"],
-  parle: ["parleproducts.com"],
-  fortune: ["adaniwilmar.com", "fortunebrand.com"],
-  tata: ["tataconsumer.com"],
-  aashirvaad: ["aashirvaad.com", "itcstore.in"],
-  maggi: ["maggi.in", "nestle.in"],
-  dettol: ["dettol.co.in", "dettol.com"],
-  haldiram: ["haldirams.com"],
-  nivea: ["nivea.in"],
-  ponds: ["ponds.in"],
-  garnier: ["garnier.in", "garnierusa.com"],
-  "clinic plus": ["clinicplus.in", "unilever.com"],
-};
 
 export function slugify(value: string) {
   return value
@@ -126,88 +101,17 @@ function normalizePack(value: string) {
   return normalized.replace(/\s+/g, " ").trim();
 }
 
-function officialHostsForBrand(brand: string) {
-  const key = normalizeSearch(brand);
-  return officialBrandHosts[key] || [];
-}
-
-function hostAllowedForImage(urlValue: string, brand: string) {
-  try {
-    const host = new URL(urlValue).hostname.toLowerCase().replace(/^www\./, "");
-    if (blockedImageHosts.some((blocked) => host.includes(blocked))) return false;
-    const officialHosts = officialHostsForBrand(brand);
-    if (!officialHosts.length) return false;
-    return officialHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-  } catch {
-    return false;
-  }
-}
-
-type ImageSearchItem = {
-  title?: string;
-  link?: string;
-  displayLink?: string;
-  snippet?: string;
-  mime?: string;
-  image?: { contextLink?: string; width?: number; height?: number; byteSize?: number };
-};
-
-function scoreImageCandidate(item: ImageSearchItem, product: ProductWithCatalog) {
-  const variant = mainVariant(product);
-  const unit = normalizePack(variant?.unit || "");
-  const haystack = normalizePack([item.title, item.snippet, item.displayLink, item.image?.contextLink].filter(Boolean).join(" "));
-  const nameTokens = searchTerms(product.name).filter((term) => !["product", "pack", "image"].includes(term));
-  const matchedName = nameTokens.filter((token) => haystack.includes(token)).length;
-  const exactName = haystack.includes(normalizeSearch(product.name)) ? 6 : 0;
-  const brand = normalizeSearch(product.brand.name);
-  const brandScore = brand && brand !== "unbranded" && haystack.includes(brand) ? 5 : -5;
-  const categoryScore = searchTerms(product.category.name).some((token) => haystack.includes(token)) ? 1 : 0;
-  const unitScore = unit && haystack.includes(unit) ? 4 : unit ? -3 : 0;
-  const image = item.image;
-  const qualityScore = image?.width && image?.height && image.width >= 400 && image.height >= 400 ? 2 : 0;
-  const mimeScore = item.mime?.startsWith("image/") ? 1 : 0;
-  return exactName + matchedName + brandScore + categoryScore + unitScore + qualityScore + mimeScore;
-}
-
-async function searchOfficialProductImage(product: ProductWithCatalog) {
-  const key = googleImageApiKey();
-  const cx = googleImageEngineId();
-  if (!key || !cx) return { skipped: true, reason: "Google image search is not configured." };
-  if (!officialHostsForBrand(product.brand.name).length) return { skipped: true, reason: "No official image source configured for this brand." };
-  const variant = mainVariant(product);
-  const siteQuery = officialHostsForBrand(product.brand.name).map((host) => `site:${host}`).join(" OR ");
-  const query = `${product.brand.name} ${product.name} ${variant?.unit || ""} product packshot (${siteQuery})`;
-  const params = new URLSearchParams({
-    key,
-    cx,
-    q: query,
-    searchType: "image",
-    imgType: "photo",
-    safe: "active",
-    num: "5",
-  });
-  const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
-  if (!response.ok) return { skipped: true, reason: `Google image search returned ${response.status}.` };
-  const data = await response.json() as { items?: ImageSearchItem[] };
-  const candidates = (data.items || [])
-    .map((item) => ({ item, url: item.link || "", score: scoreImageCandidate(item, product) }))
-    .filter((candidate) => candidate.url && hostAllowedForImage(candidate.url, product.brand.name))
-    .sort((a, b) => b.score - a.score);
-  const best = candidates[0];
-  if (!best || best.score < 13) return { skipped: true, reason: "No high-confidence official image match found." };
-  return { skipped: false, url: best.url, score: best.score, source: new URL(best.url).hostname };
-}
-
-function hasVerifiedExistingImage(product: ProductWithCatalog) {
-  return product.imageStatus === ImageStatus.VERIFIED && product.images.some((image) => image.isPrimary && image.url !== productImageFallback);
-}
-
 function mainVariant(product: ProductWithCatalog) {
   return product.variants.find((variant) => variant.status === ProductStatus.ACTIVE) ?? product.variants[0];
 }
 
 function primaryImageStatus(product: ProductWithCatalog) {
-  if (product.imageStatus === ImageStatus.VERIFIED) return "Verified";
+  const primary = product.images.find((image) => image.isPrimary) || product.images[0];
+  if (!primary?.url || primary.url === productImageFallback) return "Placeholder";
+  if (product.imageStatus === ImageStatus.VERIFIED) {
+    if (primary.url.startsWith("/assets/") || primary.url.startsWith("/uploads/")) return "Existing";
+    return "URL Imported";
+  }
   if (product.imageStatus === ImageStatus.NEEDS_REVIEW) return "Needs Review";
   return "Placeholder";
 }
@@ -817,101 +721,33 @@ export async function softDeleteBrand(id: string) {
   await db.brand.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.INACTIVE } });
 }
 
-export async function imageSyncReport() {
-  const [products, verified, placeholder, needsReview] = await Promise.all([
-    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE } }),
-    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.VERIFIED } }),
-    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.PLACEHOLDER } }),
-    db.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: ImageStatus.NEEDS_REVIEW } }),
-  ]);
-  return {
-    products,
-    imagesFound: verified,
-    imagesUpdated: 0,
-    alreadyVerified: verified,
-    placeholderRemaining: placeholder,
-    needsManualReview: needsReview,
-  };
-}
-
-export async function refreshProductImage(productId: string, mode: ImageSyncMode = "update") {
+export async function replaceProductImage(productId: string, imageUrl: string | null) {
   const product = await db.product.findFirst({ where: { id: productId, deletedAt: null }, include: productInclude });
   if (!product) throw new Error("Product not found.");
-  if (hasVerifiedExistingImage(product)) {
-    return { product: mapAdminProduct(product), report: { imagesFound: 1, imagesUpdated: 0, alreadyVerified: 1, placeholderRemaining: 0, needsManualReview: 0, message: "Existing verified image preserved." } };
-  }
-  const result = await searchOfficialProductImage(product);
-  if (result.skipped || !result.url) {
-    const updated = mode === "update"
-      ? await db.product.update({ where: { id: product.id }, data: { imageStatus: ImageStatus.NEEDS_REVIEW, imageSource: result.reason, imageCheckedAt: new Date() }, include: productInclude })
-      : product;
-    return { product: mapAdminProduct(updated), report: { imagesFound: 0, imagesUpdated: 0, alreadyVerified: 0, placeholderRemaining: 1, needsManualReview: 1, message: result.reason } };
-  }
-  if (mode === "scan") {
-    return { product: mapAdminProduct(product), report: { imagesFound: 1, imagesUpdated: 0, alreadyVerified: 0, placeholderRemaining: 0, needsManualReview: 0, imageUrl: result.url, message: "High-confidence image found." } };
-  }
+  const nextUrl = imageUrl?.trim() || "";
+  if (nextUrl && !validateImportedPrimaryImageUrl(nextUrl).valid) throw new Error("Enter a valid HTTPS or Eagle Mart image URL.");
   const updated = await db.$transaction(async (tx) => {
-    await tx.productImage.updateMany({ where: { productId: product.id }, data: { isPrimary: false } });
-    const primary = product.images.find((image) => image.isPrimary) || product.images[0];
-    if (primary) {
-      await tx.productImage.update({ where: { id: primary.id }, data: { url: result.url, alt: product.name, isPrimary: true, sortOrder: 0 } });
+    if (!nextUrl) {
+      await tx.productImage.updateMany({ where: { productId }, data: { isPrimary: false } });
+      return tx.product.update({ where: { id: productId }, data: { imageStatus: ImageStatus.PLACEHOLDER, imageSource: null, imageCheckedAt: new Date() }, include: productInclude });
+    }
+    await tx.productImage.updateMany({ where: { productId }, data: { isPrimary: false } });
+    const existing = await tx.productImage.findFirst({ where: { productId, url: nextUrl } });
+    if (existing) {
+      await tx.productImage.update({ where: { id: existing.id }, data: { alt: product.name, isPrimary: true, sortOrder: 0 } });
     } else {
-      await tx.productImage.create({ data: { productId: product.id, url: result.url, alt: product.name, isPrimary: true, sortOrder: 0 } });
+      await tx.productImage.create({ data: { productId, url: nextUrl, alt: product.name, isPrimary: true, sortOrder: 0 } });
     }
-    return tx.product.update({
-      where: { id: product.id },
-      data: { imageStatus: ImageStatus.VERIFIED, imageSource: result.source || result.url, imageCheckedAt: new Date() },
-      include: productInclude,
-    });
+    return tx.product.update({ where: { id: productId }, data: { imageStatus: ImageStatus.VERIFIED, imageSource: nextUrl, imageCheckedAt: new Date() }, include: productInclude });
   });
-  return { product: mapAdminProduct(updated), report: { imagesFound: 1, imagesUpdated: 1, alreadyVerified: 0, placeholderRemaining: 0, needsManualReview: 0, imageUrl: result.url, message: "Product image updated." } };
-}
-
-export async function bulkSyncProductImages(input: { dryRun?: boolean; limit?: number } = {}) {
-  const limit = Math.max(1, Math.min(input.limit || 50, 200));
-  const products = await db.product.findMany({
-    where: { deletedAt: null, status: ProductStatus.ACTIVE, imageStatus: { not: ImageStatus.VERIFIED } },
-    include: productInclude,
-    orderBy: [{ imageStatus: "asc" }, { name: "asc" }],
-    take: limit,
-  });
-  const report = {
-    products: products.length,
-    imagesFound: 0,
-    imagesUpdated: 0,
-    alreadyVerified: 0,
-    placeholderRemaining: 0,
-    needsManualReview: 0,
-    rows: [] as { id: string; name: string; imageStatus: string; message: string; imageUrl?: string }[],
-  };
-  for (const product of products) {
-    if (hasVerifiedExistingImage(product)) {
-      report.alreadyVerified += 1;
-      report.rows.push({ id: product.id, name: product.name, imageStatus: "Verified", message: "Already verified." });
-      continue;
-    }
-    const result = await refreshProductImage(product.id, input.dryRun ? "scan" : "update");
-    report.imagesFound += result.report.imagesFound;
-    report.imagesUpdated += result.report.imagesUpdated;
-    report.alreadyVerified += result.report.alreadyVerified;
-    report.placeholderRemaining += result.report.placeholderRemaining;
-    report.needsManualReview += result.report.needsManualReview;
-    report.rows.push({
-      id: product.id,
-      name: product.name,
-      imageStatus: result.product.imageStatus,
-      message: result.report.message || "No image update.",
-      imageUrl: result.report.imageUrl,
-    });
-  }
-  return report;
+  return mapAdminProduct(updated);
 }
 
 const bulkColumns = [
-  "sku", "clientProductCode", "name", "category", "subcategory", "brand", "description", "shortDescription", "barcode", "unit", "packSize", "weight", "weightUnit", "gst", "mrp", "sellingPrice", "costPrice", "discountPercentage", "stock", "lowStockThreshold", "supplier", "countryOfOrigin", "shelfLifeDays", "storageType", "organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable", "primaryImageUrl", "Image Preview", "imageUrl1", "imageUrl2", "imageUrl3", "tags", "status",
+  "clientProductCode", "name", "category", "brand", "unit", "costPrice", "sellingPrice", "mrp", "stock", "primaryImageUrl", "description", "gst", "hsn", "barcode", "status", "featured", "tags", "Image Preview",
 ];
-const bulkRequired = ["name", "category", "brand", "unit", "mrp", "sellingPrice", "stock", "lowStockThreshold", "gst", "status"];
-const booleanColumns = ["organic", "local", "eagleMartSelect", "featured", "newArrival", "bestseller", "returnable", "codAvailable", "pickupAvailable", "deliveryAvailable"];
+const bulkRequired = ["name", "category", "brand", "unit", "mrp", "sellingPrice", "stock", "gst", "status"];
+const booleanColumns = ["featured"];
 const allowedImportModes = ["create_update", "create_only", "update_only"] as const;
 type BulkImportMode = typeof allowedImportModes[number];
 type BulkIssue = { field: string; value: string; message: string };
@@ -962,10 +798,15 @@ function normalizeHeader(header: string) {
     "category name": "category",
     "unit name": "unit",
     "product code": "clientProductCode",
+    productcode: "clientProductCode",
+    code: "clientProductCode",
     "buying price": "costPrice",
     "our price": "sellingPrice",
     "primary image url": "primaryImageUrl",
     "image url": "primaryImageUrl",
+    "product image url": "primaryImageUrl",
+    "product image": "primaryImageUrl",
+    image: "primaryImageUrl",
     imageurl: "primaryImageUrl",
     primaryimageurl: "primaryImageUrl",
     "image preview": "Image Preview",
@@ -999,46 +840,24 @@ function buildCsv(headers: string[], rows: Record<string, unknown>[]) {
 
 function templateSample() {
   return {
-    sku: "",
+    clientProductCode: "FRU-APPLE-001",
     name: "Fresh Apple 1kg",
     category: "Fruits & Vegetables",
-    subcategory: "Fresh Fruits",
     brand: "Eagle Mart Farms",
-    description: "Fresh, crisp apples selected for everyday household use.",
-    shortDescription: "Fresh and crisp apples.",
-    barcode: "",
     unit: "1 kg",
-    packSize: "1",
-    weight: "1",
-    weightUnit: "kg",
-    gst: "0",
-    mrp: "180",
-    sellingPrice: "149",
     costPrice: "110",
-    discountPercentage: "",
+    sellingPrice: "149",
+    mrp: "180",
     stock: "25",
-    lowStockThreshold: "5",
-    supplier: "",
-    countryOfOrigin: "India",
-    shelfLifeDays: "7",
-    storageType: "Refrigerated",
-    organic: "false",
-    local: "true",
-    eagleMartSelect: "false",
-    featured: "true",
-    newArrival: "false",
-    bestseller: "false",
-    returnable: "true",
-    codAvailable: "true",
-    pickupAvailable: "true",
-    deliveryAvailable: "true",
     primaryImageUrl: "/assets/products/fresh-apple-1kg.png",
-    "Image Preview": "",
-    imageUrl1: "/assets/products/fresh-apple-1kg.png",
-    imageUrl2: "",
-    imageUrl3: "",
-    tags: "fresh,fruit,local",
+    description: "Fresh, crisp apples selected for everyday household use.",
+    gst: "0",
+    hsn: "",
+    barcode: "",
     status: "ACTIVE",
+    featured: "true",
+    tags: "fresh,fruit,local",
+    "Image Preview": "",
   };
 }
 
@@ -1050,14 +869,48 @@ export function productBulkTemplate() {
   return csvTemplate();
 }
 
-export function productBulkTemplateXlsx() {
-  const worksheet = XLSX.utils.json_to_sheet([templateSample()], { header: bulkColumns });
+function productBulkTemplateRow(product: ProductWithCatalog) {
+  const variant = mainVariant(product);
+  const inventory = variant ? variantInventory(product, variant.id) : stockSummary(product);
+  const primaryImage = product.images.find((image) => image.isPrimary) || product.images[0];
+  return {
+    clientProductCode: product.clientProductCode || "",
+    name: product.name,
+    category: product.category.name,
+    brand: product.brand.name,
+    unit: variant?.unit || "",
+    costPrice: decimal(variant?.costPrice),
+    sellingPrice: decimal(variant?.price),
+    mrp: decimal(variant?.mrp),
+    stock: inventory.stock,
+    primaryImageUrl: primaryImage?.url || "",
+    description: product.description,
+    gst: decimal(product.gst),
+    hsn: "",
+    barcode: "",
+    status: product.status,
+    featured: String(product.featured),
+    tags: tags(product.tags).join(","),
+    "Image Preview": "",
+  };
+}
+
+export async function productBulkTemplateXlsx() {
+  const products = await db.product.findMany({
+    where: { deletedAt: null },
+    include: productInclude,
+    orderBy: [{ name: "asc" }, { sku: "asc" }],
+  });
+  const rows = products.length ? products.map(productBulkTemplateRow) : [templateSample()];
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: bulkColumns });
   const previewColumnIndex = bulkColumns.indexOf("Image Preview");
   const imageColumnIndex = bulkColumns.indexOf("primaryImageUrl");
   if (previewColumnIndex >= 0) {
-    const cell = XLSX.utils.encode_cell({ r: 1, c: previewColumnIndex });
-    const imageCell = XLSX.utils.encode_cell({ r: 1, c: imageColumnIndex >= 0 ? imageColumnIndex : previewColumnIndex - 1 });
-    worksheet[cell] = { t: "s", f: `=IF(${imageCell}="","",IMAGE(${imageCell},"Product image",0))`, v: "" };
+    for (let rowIndex = 1; rowIndex <= rows.length; rowIndex += 1) {
+      const cell = XLSX.utils.encode_cell({ r: rowIndex, c: previewColumnIndex });
+      const imageCell = XLSX.utils.encode_cell({ r: rowIndex, c: imageColumnIndex >= 0 ? imageColumnIndex : previewColumnIndex - 1 });
+      worksheet[cell] = { t: "s", f: `=IF(${imageCell}="","",IMAGE(${imageCell},"Product image",0))`, v: "" };
+    }
   }
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
@@ -1192,9 +1045,10 @@ export async function previewBulkImportProducts(input: string | { filename?: str
   const [categories, brands, existingProducts] = await Promise.all([
     db.category.findMany({ where: { deletedAt: null } }),
     db.brand.findMany({ where: { deletedAt: null } }),
-    db.product.findMany({ where: { deletedAt: null }, select: { id: true, sku: true } }),
+    db.product.findMany({ where: { deletedAt: null }, select: { id: true, sku: true, clientProductCode: true } }),
   ]);
   const existingBySku = new Map(existingProducts.map((product) => [product.sku.toUpperCase(), product]));
+  const existingByProductCode = new Map(existingProducts.filter((product) => product.clientProductCode).map((product) => [product.clientProductCode!.toUpperCase(), product]));
   const previewRows: BulkPreviewRow[] = [];
 
   for (const row of rows) {
@@ -1211,9 +1065,10 @@ export async function previewBulkImportProducts(input: string | { filename?: str
     if (data.subcategory && !subcategory) errors.push({ field: "subcategory", value: String(data.subcategory), message: "Unknown subcategory" });
     if (subcategory && category && subcategory.parentId !== category.id) errors.push({ field: "subcategory", value: String(data.subcategory), message: "Subcategory does not belong to selected category" });
     if (!brand) errors.push({ field: "brand", value: String(data.brand || ""), message: "Unknown brand" });
+    const productCode = String(data.clientProductCode || "").trim();
     const sku = normalizeSku(String(data.sku || ""));
     if (sku && !validSku(sku)) errors.push({ field: "sku", value: String(data.sku), message: "SKU must look like FRU-000001" });
-    const existing = sku ? existingBySku.get(sku) : undefined;
+    const existing = productCode ? existingByProductCode.get(productCode.toUpperCase()) : sku ? existingBySku.get(sku) : undefined;
     let action: BulkPreviewRow["action"] = existing ? "update" : "create";
     if (existing && mode === "create_only") {
       action = "skip";
@@ -1221,14 +1076,14 @@ export async function previewBulkImportProducts(input: string | { filename?: str
     }
     if (!existing && mode === "update_only") {
       action = "skip";
-      errors.push({ field: "sku", value: sku || "(blank)", message: "No existing SKU found in update-only mode" });
+      errors.push({ field: "clientProductCode", value: productCode || sku || "(blank)", message: "No existing Product Code found in update-only mode" });
     }
     const mrp = parseNumber(String(data.mrp || ""), "mrp", errors, { required: true, positive: true });
     const price = parseNumber(String(data.sellingPrice || ""), "sellingPrice", errors, { required: true, min: 0 });
     const costPrice = parseNumber(String(data.costPrice || ""), "costPrice", errors, { min: 0 });
     const gst = parseNumber(String(data.gst || ""), "gst", errors, { required: true, min: 0, max: 100 });
     const stock = parseNumber(String(data.stock || ""), "stock", errors, { required: true, min: 0, integer: true });
-    const lowStockThreshold = parseNumber(String(data.lowStockThreshold || ""), "lowStockThreshold", errors, { required: true, min: 0, integer: true });
+    const lowStockThreshold = parseNumber(String(data.lowStockThreshold || ""), "lowStockThreshold", errors, { min: 0, integer: true }) ?? 5;
     const discountPercentage = parseNumber(String(data.discountPercentage || ""), "discountPercentage", errors, { min: 0, max: 100 });
     if (mrp != null && price != null && price > mrp) errors.push({ field: "sellingPrice", value: String(data.sellingPrice), message: "sellingPrice must not be greater than MRP" });
     if (discountPercentage != null && mrp != null && price != null) {
@@ -1237,11 +1092,8 @@ export async function previewBulkImportProducts(input: string | { filename?: str
     }
     booleanColumns.forEach((field) => parseBoolean(String(data[field] || ""), field, errors));
     const status = parseStatus(String(data.status || ""), errors);
-    const primaryImage = validateImportedPrimaryImageUrl(String(data.primaryImageUrl || data.imageUrl1 || ""));
+    const primaryImage = validateImportedPrimaryImageUrl(String(data.primaryImageUrl || ""));
     if (primaryImage.url && !primaryImage.valid) warnings.push({ field: "primaryImageUrl", value: primaryImage.url, message: primaryImage.message });
-    ["imageUrl2", "imageUrl3"].forEach((field) => {
-      if (!isValidImageUrl(String(data[field] || ""))) warnings.push({ field, value: String(data[field]), message: `${field} must be HTTPS or an internal asset path` });
-    });
     previewRows.push({
       row: row.rowNumber,
       status: errors.length ? "error" : warnings.length ? "warning" : "valid",
@@ -1253,6 +1105,7 @@ export async function previewBulkImportProducts(input: string | { filename?: str
       image: { url: primaryImage.url, status: primaryImage.url ? primaryImage.valid ? "valid" : "invalid" : "none", message: primaryImage.message },
       normalized: errors.length ? undefined : {
         sku,
+        clientProductCode: productCode || null,
         categoryId: category?.id,
         brandId: brand?.id,
         name: String(data.name).trim(),
@@ -1297,8 +1150,8 @@ export async function bulkImportProducts(input: string | { filename?: string; co
   await db.$transaction(async (tx) => {
     for (const row of importableRows) {
       const data = row.normalized;
-      const sku = data.sku || await generateSku(tx, data.categoryId);
-      const existing = await tx.product.findUnique({ where: { sku }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } });
+      const existing = row.existingProductId ? await tx.product.findUnique({ where: { id: row.existingProductId }, include: { variants: { orderBy: { createdAt: "asc" } }, images: true } }) : null;
+      const sku = existing?.sku || data.sku || await generateSku(tx, data.categoryId);
       if (existing && mode === "create_only") { skipped += 1; continue; }
       if (!existing && mode === "update_only") { skipped += 1; continue; }
       const existingPrimary = existing?.images?.find((image) => image.isPrimary);
@@ -1307,6 +1160,7 @@ export async function bulkImportProducts(input: string | { filename?: string; co
         name: data.name,
         slug: existing?.slug || slugify(data.name),
         sku,
+        clientProductCode: data.clientProductCode,
         categoryId: data.categoryId,
         brandId: data.brandId,
         description: data.description || data.name,
