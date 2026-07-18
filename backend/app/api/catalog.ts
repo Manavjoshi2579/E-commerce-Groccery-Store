@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { sendError, sendOk } from "../../lib/http.js";
-import { getCategoryBySlug, getProductBySlug, listBrands, listCategories, listProducts } from "../../services/catalog.service.js";
+import { getCategoryBySlug, getHomepageCatalogSections, getProductBySlug, listBrands, listCategories, listProducts } from "../../services/catalog.service.js";
 import { productListQuerySchema } from "../../validators/catalog.js";
 
 export const catalogRouter = Router();
@@ -21,6 +21,10 @@ catalogRouter.get("/categories/:slug", async (req, res) => {
 
 catalogRouter.get("/brands", async (_req, res) => {
   return sendOk(res, { brands: await listBrands() });
+});
+
+catalogRouter.get("/catalog/home", async (_req, res) => {
+  return sendOk(res, await getHomepageCatalogSections());
 });
 
 catalogRouter.get("/products", async (req, res) => {

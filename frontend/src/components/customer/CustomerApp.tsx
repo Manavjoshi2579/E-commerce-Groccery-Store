@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BadgePercent, ChevronRight, CreditCard, Eye, EyeOff, Heart, Home, LogOut, MapPin, Menu, Minus, Package, PackageCheck,
-  Plus, Search, ShieldCheck, ShoppingBag, Star, Truck, User, X, FileText, RotateCcw, MessageCircle,
+  ArrowLeft, BadgePercent, BookOpen, ChevronRight, Clapperboard, CreditCard, Eye, EyeOff, GraduationCap, Headphones, Heart, Home, Lightbulb, LogOut, MapPin, Menu, Minus, Music, Package, PackageCheck,
+  PlayCircle, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Star, Truck, User, X, FileText, RotateCcw, MessageCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/common/Button";
@@ -13,8 +14,8 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { StoreProvider, useStore } from "@/store/AppStore";
 import { categories } from "@/data/categories";
 import { deliverySlots } from "@/data/delivery";
-import { fetchCategories, fetchProduct, fetchProducts } from "@/services/catalog";
-import { checkPincode, checkoutSummary, fetchAdminOrder, fetchOrder, fetchOrders, fetchTracking, fetchDeliverySlots, requestReturnBackend, reverseGeocodeLocation } from "@/services/checkout";
+import { fetchCategories, fetchHomepageCatalog, fetchProduct, fetchProducts, type HomepageCatalogSection } from "@/services/catalog";
+import { checkoutSummary, fetchAdminOrder, fetchOrder, fetchOrders, fetchTracking, fetchDeliverySlots, requestReturnBackend } from "@/services/checkout";
 import { faqCategories, fetchFaqs } from "@/services/faqs";
 import { createRazorpayOrder, fetchPaymentConfig, loadRazorpayScript, markRazorpayFailed, verifyRazorpayPayment, type RazorpayCreateOrderResponse } from "@/services/payments";
 import { createSupportTicket, fetchSupportTickets } from "@/services/support";
@@ -26,6 +27,8 @@ import type { Address, CartItem, Category, FAQ, Order, Product, SupportTicket } 
 const imageFallback = "/assets/placeholders/product-placeholder-generated.png";
 
 type StoreCoupons = ReturnType<typeof useStore>["coupons"];
+type ComingSoonVariant = "education" | "entertainment";
+type ComingSoonFeature = { title: string; description: string; icon: LucideIcon };
 
 function totals(items: CartItem[], products: Product[], coupons: StoreCoupons, couponCode = "") {
   const subtotal = items.reduce((sum, item) => sum + itemPrice(item, products) * item.qty, 0);
@@ -44,7 +47,21 @@ function activeVariants(product: Product) {
 
 function defaultVariant(product: Product) {
   const variants = activeVariants(product);
-  return variants.find((variant) => variant.isDefault) || variants[0];
+  return variants.find((variant) => variant.isDefault && (variant.stock ?? 0) > 0) || variants.find((variant) => (variant.stock ?? 0) > 0) || variants[0];
+}
+
+function customerVisibleVariants(product: Product) {
+  return activeVariants(product).filter((variant) => (variant.stock ?? 0) > 0);
+}
+
+function availableQuantity(product: Product) {
+  const variants = activeVariants(product);
+  if (product.variants?.length) return variants.reduce((sum, variant) => sum + Math.max(0, variant.stock ?? 0), 0);
+  return Math.max(0, product.stock);
+}
+
+function isCustomerVisibleProduct(product: Product) {
+  return product.active !== false && product.price > 0 && Boolean(product.categorySlug || product.categoryId || product.category);
 }
 
 function itemVariant(item: CartItem, product?: Product) {
@@ -97,22 +114,6 @@ function canShowInvoice(order: Order) {
   return order.paymentStatus !== "Failed";
 }
 
-const relatedSearchTerms: Record<string, string[]> = {
-  atta: ["flour", "wheat", "aashirvaad"],
-  banana: ["bananna", "bannana", "fruit", "fruits"],
-  bread: ["bakery", "toast"],
-  butter: ["dairy", "amul"],
-  dal: ["lentil", "lentils", "tur"],
-  detergent: ["laundry", "surf"],
-  milk: ["dairy", "amul"],
-  oil: ["sunflower", "fortune"],
-  paneer: ["dairy"],
-  rice: ["basmati", "grain"],
-  salt: ["tata"],
-  shampoo: ["baby", "himalaya"],
-  tomato: ["vegetable", "vegetables"],
-};
-
 const categoryDescriptions: Record<string, string> = {
   "Fruits & Vegetables": "Daily farm produce, greens, roots, and premium fruit picks.",
   "Dairy, Bread & Eggs": "Fresh milk, butter, paneer, bread, and breakfast staples.",
@@ -149,20 +150,11 @@ function productMatchesSearch(product: Product, query: string) {
   const normalized = normalizeSearch(query);
   if (!normalized) return true;
   const queryParts = normalized.split(" ").filter(Boolean);
-  const expanded = new Set(queryParts);
-  queryParts.forEach((part) => {
-    Object.entries(relatedSearchTerms).forEach(([term, aliases]) => {
-      if (term === part || aliases.includes(part) || searchDistance(term, part) <= 2) {
-        expanded.add(term);
-        aliases.forEach((alias) => expanded.add(alias));
-      }
-    });
-  });
-  const haystack = normalizeSearch(`${product.name} ${product.slug} ${product.sku} ${product.brand} ${product.category} ${product.unit} ${product.tags.join(" ")} ${product.description}`);
-  const words = haystack.split(" ").filter(Boolean);
-  return Array.from(expanded).some((term) =>
-    haystack.includes(term) ||
-    words.some((word) => word.includes(term) || term.includes(word) || (Math.max(word.length, term.length) >= 5 && searchDistance(word, term) <= 2)),
+  const name = normalizeSearch(product.name);
+  const words = name.split(" ").filter(Boolean);
+  return queryParts.every((term) =>
+    name.includes(term) ||
+    words.some((word) => word.includes(term) || (term.length >= 4 && word.length >= 4 && searchDistance(word, term) <= 1)),
   );
 }
 
@@ -202,7 +194,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [menuCategories, setMenuCategories] = useState<Category[]>(categories);
   const amount = totals(cart, products, coupons).total;
-  const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
+  const cartCount = cart.length;
   const wishlistCount = wishlist.length;
   useEffect(() => {
     fetchCategories()
@@ -215,9 +207,14 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
     router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
   };
   const closeMobileNav = () => setMobileNavOpen(false);
+  const serviceLinks = [
+    ["/education", GraduationCap, "Education"],
+    ["/entertainment", PlayCircle, "Entertainment"],
+  ] as const;
   const shopLinks = [
     ["/", Home, "Home"],
     ["/products", PackageCheck, "Products"],
+    ...serviceLinks,
     ["/wishlist", Heart, `Wishlist (${wishlistCount})`],
     ["/cart", ShoppingBag, `Cart (${cartCount})`],
     ["/orders", PackageCheck, "Orders"],
@@ -233,11 +230,27 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
             <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white hover:bg-white/10 md:hidden" aria-expanded={mobileNavOpen} aria-label="Open navigation"><Menu size={22} /></button>
             <Link href="/" onClick={closeMobileNav}><Logo invert /></Link>
           </div>
-          <div className="hidden md:block"><PincodeChecker /></div>
-          <form onSubmit={(event) => { event.preventDefault(); submitSearch(); }} className="hidden min-w-[260px] flex-1 items-center rounded-md bg-white px-3 py-2 text-black md:flex">
+          <form onSubmit={(event) => { event.preventDefault(); submitSearch(); }} className="mx-4 hidden min-w-[260px] flex-1 items-center rounded-md bg-white px-3 py-2 text-black md:flex lg:mx-8">
             <Search size={18} className="text-black/50" />
             <input value={term} onChange={(event) => setTerm(event.target.value)} className="w-full border-0 bg-transparent px-3 text-sm outline-none" placeholder="Search atta, milk, fruits, vegetables..." />
           </form>
+          <div className="group relative hidden xl:block">
+            <button type="button" className="flex h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm font-black text-white/86 transition hover:border-[#d4af37]/45 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#d4af37]" aria-haspopup="true">
+              <Sparkles size={17} className="text-[#e7c766]" aria-hidden="true" />
+              <span>Eagle Plus</span>
+              <span className="rounded-full bg-[#d4af37] px-2 py-0.5 text-[10px] font-black uppercase text-black">Soon</span>
+            </button>
+            <div className="invisible absolute right-0 top-full z-50 mt-3 w-72 translate-y-1 rounded-md border border-[#d4af37]/25 bg-[#111] p-2 text-white opacity-0 shadow-2xl transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+              <p className="px-3 py-2 text-[11px] font-black uppercase text-[#e7c766]">Coming soon services</p>
+              {serviceLinks.map(([href, Icon, label]) => (
+                <Link key={href} href={href} className="flex items-center gap-3 rounded-md px-3 py-3 text-sm font-bold text-white/82 hover:bg-white/10 hover:text-white">
+                  <span className="grid h-9 w-9 place-items-center rounded-md bg-[#d4af37]/15 text-[#e7c766]"><Icon size={18} aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1">{label}<span className="mt-0.5 block text-xs font-semibold text-white/45">Preview what is planned</span></span>
+                  <ChevronRight size={16} className="text-white/35" aria-hidden="true" />
+                </Link>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-1">
             <Link href="/wishlist" className="relative hidden rounded-md p-2 hover:bg-white/10 sm:block" aria-label="Wishlist"><Heart size={21} /><span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#d4af37] px-1.5 text-center text-[10px] font-bold text-black">{wishlistCount}</span></Link>
             <Link href="/cart" className="relative rounded-md p-2 hover:bg-white/10" aria-label="Cart"><ShoppingBag size={21} /><span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#d4af37] px-1.5 text-center text-[10px] font-bold text-black">{cartCount}</span></Link>
@@ -250,7 +263,6 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
               <Search size={18} className="text-[#d4af37]" />
               <input value={term} onChange={(event) => setTerm(event.target.value)} className="w-full bg-transparent text-sm outline-none placeholder:text-white/55" placeholder="Search Eagle Mart" />
             </form>
-            <PincodeChecker />
           </div>
         </div>
         {mobileNavOpen && (
@@ -275,7 +287,6 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="flex-1 bg-[#f7f4ec]">{children}</div>
       <Footer />
-      <a href="https://wa.me/919876543210" className="fixed bottom-32 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-2xl md:bottom-6 no-print" aria-label="WhatsApp support"><MessageCircle /></a>
       {cartCount > 0 && <Link href="/cart" className="fixed bottom-20 left-4 right-4 z-40 flex items-center justify-between rounded-md bg-black px-4 py-3 text-white shadow-2xl md:hidden no-print"><span className="text-sm font-bold">{cartCount} items - {money(amount)}</span><span className="rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">Checkout</span></Link>}
     </div>
   );
@@ -312,117 +323,15 @@ function AccountMenu() {
   );
 }
 
-const deliveryPincodeKey = "eagle-delivery-pincode";
-const deliveryPincodeEvent = "eagle-delivery-pincode-updated";
-
-function readSavedDeliveryPincode() {
-  if (typeof window === "undefined") return "380015";
-  return window.localStorage.getItem(deliveryPincodeKey) || "380015";
-}
-
-function saveDeliveryPincode(pincode: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(deliveryPincodeKey, pincode);
-  window.dispatchEvent(new CustomEvent(deliveryPincodeEvent, { detail: pincode }));
-}
-
-function PincodeChecker() {
-  const [pincode, setPincode] = useState(() => readSavedDeliveryPincode());
-  const [status, setStatus] = useState<"idle" | "loading" | "locating" | "ok" | "no" | "error">("ok");
-  const [message, setMessage] = useState("Delivery available. Pincode is serviceable.");
-  const [place, setPlace] = useState("");
-  useEffect(() => {
-    const sync = (event: Event) => {
-      const next = event instanceof CustomEvent && typeof event.detail === "string" ? event.detail : readSavedDeliveryPincode();
-      setPincode(next);
-      setStatus("ok");
-      setPlace("");
-      setMessage("Delivery available. Pincode is serviceable.");
-    };
-    window.addEventListener(deliveryPincodeEvent, sync);
-    return () => window.removeEventListener(deliveryPincodeEvent, sync);
-  }, []);
-  const run = async (value = pincode) => {
-    const clean = value.replace(/\D/g, "").slice(0, 6);
-    setPincode(clean);
-    if (!/^\d{6}$/.test(clean)) {
-      setStatus("error");
-      setMessage("Enter a valid 6-digit pincode.");
-      return;
-    }
-    setStatus("loading");
-    try {
-      const result = await Promise.race([
-        checkPincode(clean),
-        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Pincode check timed out.")), 4000)),
-      ]);
-      setStatus(result.serviceable ? "ok" : "no");
-      setPlace(result.zone?.city ? result.zone.city : "");
-      setMessage(result.serviceable ? `Delivery available. ${result.message}` : result.message);
-      if (result.serviceable) saveDeliveryPincode(clean);
-    } catch (error) {
-      setStatus("no");
-      setMessage(error instanceof Error ? error.message : "Unable to check pincode. Database connection is unavailable.");
-    }
-  };
-  const detectLocation = () => {
-    if (typeof window !== "undefined" && !window.isSecureContext) {
-      setStatus("error");
-      setMessage("Location needs HTTPS. Open the secure website, or enter your pincode manually.");
-      return;
-    }
-    if (!("geolocation" in navigator)) {
-      setStatus("error");
-      setMessage("Location detection is not supported by this browser.");
-      return;
-    }
-    setStatus("locating");
-    setMessage("Allow location access to detect your delivery pincode.");
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      try {
-        setMessage("Finding pincode for your current location...");
-        const result = await reverseGeocodeLocation(position.coords.latitude, position.coords.longitude);
-        setPincode(result.pincode);
-        setStatus(result.serviceable ? "ok" : "no");
-        setPlace(result.place || result.zone?.city || "");
-        setMessage(result.place ? `Detected ${result.place}. ${result.serviceable ? "Delivery available. " : ""}${result.message}` : result.serviceable ? `Delivery available. ${result.message}` : result.message);
-        if (result.serviceable) saveDeliveryPincode(result.pincode);
-      } catch (error) {
-        if (/^\d{6}$/.test(pincode)) {
-          setMessage("Location detected, but pincode was not available. Checking entered pincode instead.");
-          await run(pincode);
-          return;
-        }
-        setStatus("error");
-        setMessage(error instanceof Error ? error.message : "Could not detect your pincode.");
-      }
-    }, (error) => {
-      setStatus("error");
-      setMessage(error.code === error.PERMISSION_DENIED ? "Allow location access in your browser, or enter pincode manually." : error.code === error.TIMEOUT ? "Location request timed out. Try again or enter pincode manually." : "Could not read your location. Please try again.");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-  };
-  return (
-    <div className="flex h-11 min-w-0 items-center gap-2 rounded-md border border-white/10 bg-white/[0.07] px-3 text-xs text-white">
-      <MapPin size={16} className="shrink-0 text-[#d4af37]" />
-      <span className="hidden text-white/55 xl:inline">Deliver to</span>
-      <input aria-label="Delivery pincode" inputMode="numeric" value={pincode} onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setStatus("idle"); setPlace(""); }} className="w-16 bg-transparent text-sm font-bold text-white outline-none" />
-      <button type="button" onClick={() => run()} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-[#e7c766] hover:bg-white/10">{status === "loading" ? "Checking" : "Check"}</button>
-      <button type="button" onClick={detectLocation} className="shrink-0 rounded-md border border-white/10 px-2 py-1 font-bold text-white/80 hover:bg-white/10">{status === "locating" ? "Locating" : "Locate"}</button>
-      {place && <span className="hidden max-w-[160px] truncate text-white/60 2xl:inline" title={place}>{place}</span>}
-      {message && <span className={`hidden lg:inline ${status === "ok" ? "text-green-600" : "text-white/60"}`}>{message}</span>}
-    </div>
-  );
-}
-
 function Footer() {
   const storeAddress = "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama, Vadodara, Gujarat - 390024";
   const footerGroups = [
     ["Shop", [["Products", "/products"], ["Categories", "/products"], ["Offers", "/products?sort=discount"], ["Organic", "/category/organic-store"]]],
+    ["Coming Soon", [["Education", "/education"], ["Entertainment", "/entertainment"]]],
     ["Customer Service", [["My Account", "/account"], ["Orders", "/orders"], ["Wishlist", "/wishlist"], ["Track Order", "/track-order"]]],
     ["Policies", [["Privacy", "/privacy"], ["Terms", "/terms"], ["Returns", "/return-policy"], ["Refunds", "/refunds"]]],
     ["Company", [["About Us", "/about"], ["Contact", "/contact"], ["FAQ", "/faq"]]],
   ] as const;
-  const trustBadges = ["Secure Payments", "Fresh Products", "Fast Delivery", "Quality Assured"];
   const socials = ["Facebook", "Instagram", "X", "YouTube", "LinkedIn"] as const;
   return (
     <footer className="no-print bg-black text-white">
@@ -436,7 +345,7 @@ function Footer() {
               <p><b className="block text-white">Eagle Mart</b>{storeAddress}</p>
             </div>
           </div>
-          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-5">
             {footerGroups.map(([title, links]) => (
               <div key={title}>
                 <h3 className="display-font mb-3 font-bold text-[#e7c766]">{title}</h3>
@@ -447,12 +356,7 @@ function Footer() {
             ))}
           </div>
         </div>
-        <div className="mt-10 border-y border-white/10 py-5">
-          <div className="flex flex-wrap gap-2 text-sm font-bold text-white/75">
-            {trustBadges.map((badge) => <span key={badge} className="rounded-md border border-white/10 bg-white/5 px-3 py-2">{badge}</span>)}
-          </div>
-        </div>
-        <div className="flex flex-col gap-5 py-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-5 border-t border-white/10 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-3">
             {socials.map((label) => <Link key={label} href="#" aria-label={label} className="flex h-10 w-10 items-center justify-center rounded-md border border-white/10 text-white/75 hover:border-[#d4af37] hover:text-[#e7c766]"><SocialLogo name={label} /></Link>)}
           </div>
@@ -473,7 +377,7 @@ function SocialLogo({ name }: { name: "Facebook" | "Instagram" | "X" | "YouTube"
 
 function ProductCard({ product, footer }: { product: Product; footer?: ReactNode }) {
   const { addToCart, toggleWishlist, wishlist, authReady } = useStore();
-  const variants = activeVariants(product);
+  const variants = customerVisibleVariants(product);
   const fallbackVariant = defaultVariant(product);
   const [variantId, setVariantId] = useState(fallbackVariant?.id || "");
   const selectedVariant = variants.find((variant) => variant.id === variantId) || fallbackVariant;
@@ -482,22 +386,28 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
   const price = selectedVariant?.price ?? product.price;
   const mrp = selectedVariant?.mrp ?? product.mrp;
   return (
-    <article className="premium-card group flex h-full flex-col overflow-hidden">
-      <Link href={`/product/${product.slug}`} className="block border-b border-[#eadfca] bg-white p-3">
-        <img src={product.image} alt={product.name} onError={(event) => { event.currentTarget.src = imageFallback; }} className="aspect-square w-full rounded-md border border-[#f0e8d8] bg-white object-contain p-2 transition duration-300 group-hover:scale-[1.02]" />
+    <article className="group flex h-full flex-col overflow-hidden rounded-md border border-[#e8dfcd] bg-white shadow-sm transition hover:border-[#d4af37] hover:shadow-md">
+      <Link href={`/product/${product.slug}`} className="block bg-[#fbfaf6] p-2">
+        <img src={product.image} alt={product.name} onError={(event) => { event.currentTarget.src = imageFallback; }} className="aspect-square w-full rounded-md bg-white object-contain p-2 transition duration-300 group-hover:scale-[1.02]" />
       </Link>
-      <div className="flex flex-1 flex-col p-3 sm:p-4">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <Link href={`/product/${product.slug}`} className="line-clamp-2 min-h-10 text-sm font-bold">{product.name}</Link>
-          <button onClick={() => toggleWishlist(product.id)} disabled={!authReady} className="rounded-md p-1 hover:bg-black/5 disabled:opacity-50" aria-label="Wishlist"><Heart size={18} fill={wishlist.includes(product.id) ? "#d4af37" : "none"} /></button>
+      <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
+        <div className="flex items-start gap-2">
+          <Link href={`/product/${product.slug}`} className="line-clamp-2 min-h-10 flex-1 text-[15px] font-bold leading-tight text-black">{product.name}</Link>
+          <button onClick={() => toggleWishlist(product.id)} disabled={!authReady} className="shrink-0 rounded-md p-1 text-black/55 hover:bg-black/5 hover:text-black disabled:opacity-50" aria-label="Wishlist"><Heart size={17} fill={wishlist.includes(product.id) ? "#d4af37" : "none"} /></button>
         </div>
-        <div className="grid gap-2">
-          <p className="text-xs text-black/55">{unit} | {product.brand}</p>
-          {variants.length > 1 && <select aria-label={`${product.name} unit`} value={variantId} onChange={(event) => setVariantId(event.target.value)} className="h-9 rounded-md border border-[#eadfca] bg-white px-2 text-xs font-bold outline-none focus:border-[#d4af37]">{variants.map((variant) => <option key={variant.id || variant.unit} value={variant.id || ""}>{variant.unit} - {money(variant.price)}</option>)}</select>}
+        <div className="mt-2 grid gap-2">
+          <p className="text-sm text-black/55">{unit}</p>
+          {variants.length > 1 && <select aria-label={`${product.name} unit`} value={variantId} onChange={(event) => setVariantId(event.target.value)} className="h-9 rounded-md border border-[#d8d1c2] bg-white px-2 text-xs font-bold outline-none focus:border-[#0c8f28]">{variants.map((variant) => <option key={variant.id || variant.unit} value={variant.id || ""}>{variant.unit} - {money(variant.price)}</option>)}</select>}
         </div>
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          <div><p className="display-font text-lg font-extrabold">{money(price)}</p><p className="text-xs text-black/45 line-through">{money(mrp)}</p>{!available && <p className="mt-1 text-xs font-bold text-red-600">Out of stock</p>}</div>
-          <Button variant="gold" className={available ? "h-14 w-14 px-0 text-xl font-black shadow-md" : "h-11 min-w-[4.5rem] px-3 text-xs"} disabled={!authReady || !available} onClick={() => addToCart(product.id, 1, selectedVariant?.id)} aria-label={`Add ${product.name}`}>{available ? <Plus size={28} strokeWidth={3.25} /> : "Out"}</Button>
+        <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+          <div className="min-w-0">
+            <p className="text-[15px] font-black leading-none text-black">{money(price)}</p>
+            {mrp > price && <p className="mt-1 text-xs text-black/45 line-through">{money(mrp)}</p>}
+            {!available && <p className="mt-1 text-xs font-bold text-red-600">Out of stock</p>}
+          </div>
+          <button type="button" disabled={!authReady || !available} onClick={() => addToCart(product.id, 1, selectedVariant?.id)} aria-label={`Add ${product.name}`} className="h-9 min-w-[72px] rounded-md border border-[#0c8f28] bg-white px-4 text-sm font-black text-[#0c8f28] transition hover:bg-[#f0fff4] disabled:border-black/15 disabled:text-black/35">
+            {available ? "ADD" : "OUT"}
+          </button>
         </div>
       </div>
       {footer && <div className="grid grid-cols-2 gap-2 border-t border-[#eadfca] bg-white p-3">{footer}</div>}
@@ -505,12 +415,150 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
   );
 }
 
+function ComingSoonExperience({
+  variant,
+  eyebrow,
+  title,
+  description,
+  supportingText,
+  features,
+  primaryCta,
+  primaryHref,
+  notificationMessage,
+}: {
+  variant: ComingSoonVariant;
+  eyebrow: string;
+  title: string;
+  description: string;
+  supportingText: string;
+  features: ComingSoonFeature[];
+  primaryCta: string;
+  primaryHref: string;
+  notificationMessage: string;
+}) {
+  const isEducation = variant === "education";
+  const notifyId = `${variant}-updates`;
+  const palette = isEducation
+    ? {
+        shell: "from-[#fff8df] via-[#eef6ff] to-[#f7f4ec]",
+        accent: "text-[#1f5b8f]",
+        panel: "border-[#d6e7ff] bg-white/82",
+        glowA: "bg-[#d4af37]/28",
+        glowB: "bg-[#7bb7e8]/24",
+      }
+    : {
+        shell: "from-[#15131f] via-[#24142b] to-[#f7f4ec]",
+        accent: "text-[#f6b6d6]",
+        panel: "border-white/12 bg-white/[0.08] text-white",
+        glowA: "bg-[#d4af37]/24",
+        glowB: "bg-[#d94e9f]/24",
+      };
+  const heroIcon = isEducation ? GraduationCap : PlayCircle;
+  const HeroIcon = heroIcon;
+  return (
+    <CustomerShell>
+      <main className={`overflow-hidden bg-gradient-to-br ${palette.shell}`}>
+        <section className="container-premium relative grid min-h-[70vh] items-center gap-10 py-12 md:py-16 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
+          <div aria-hidden="true" className={`absolute -left-16 top-12 h-40 w-40 rounded-full blur-3xl ${palette.glowA} motion-safe:animate-pulse`} />
+          <div aria-hidden="true" className={`absolute -right-20 top-40 h-56 w-56 rounded-full blur-3xl ${palette.glowB}`} />
+          <div className={isEducation ? "relative text-black" : "relative text-white"}>
+            <span className={`inline-flex rounded-full border px-4 py-2 text-xs font-black uppercase ${isEducation ? "border-[#d4af37]/40 bg-white/70 text-[#8a6500]" : "border-white/15 bg-white/10 text-[#e7c766]"}`}>Coming Soon</span>
+            <p className={`mt-6 text-xs font-black uppercase ${isEducation ? "text-[#8a6500]" : "text-[#e7c766]"}`}>{eyebrow}</p>
+            <h1 className="display-font mt-3 max-w-3xl text-4xl font-black leading-tight md:text-6xl">{title}</h1>
+            <p className={`mt-5 max-w-2xl text-lg leading-8 ${isEducation ? "text-black/68" : "text-white/72"}`}>{description}</p>
+            <p className={`mt-4 max-w-xl text-sm font-semibold leading-7 ${isEducation ? "text-black/55" : "text-white/60"}`}>{supportingText}</p>
+            <div className="mt-8 grid gap-3 sm:flex">
+              <Link href={primaryHref} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#d4af37] px-5 py-3 text-sm font-black text-black transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:ring-offset-2 focus:ring-offset-black">{primaryCta}<ChevronRight size={18} /></Link>
+              <a href={`#${notifyId}`} className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-md border px-5 py-3 text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:ring-offset-2 ${isEducation ? "border-black bg-white text-black hover:bg-black hover:text-white focus:ring-offset-white" : "border-white/25 bg-white/10 text-white hover:bg-white hover:text-black focus:ring-offset-[#15131f]"}`}>Notify Me<Sparkles size={17} /></a>
+            </div>
+          </div>
+          <div className={`relative overflow-hidden rounded-md border p-5 shadow-2xl backdrop-blur ${palette.panel}`}>
+            <div aria-hidden="true" className="absolute inset-x-8 top-8 h-px bg-gradient-to-r from-transparent via-[#d4af37] to-transparent" />
+            <div className="relative grid min-h-[360px] content-between gap-6 rounded-md border border-current/10 p-5">
+              <div className="flex items-center justify-between">
+                <div className={`grid h-16 w-16 place-items-center rounded-md ${isEducation ? "bg-[#eef6ff] text-[#1f5b8f]" : "bg-white/10 text-[#f6b6d6]"}`}><HeroIcon size={34} aria-hidden="true" /></div>
+                <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${isEducation ? "bg-[#fff8df] text-[#8a6500]" : "bg-[#d4af37] text-black"}`}>Preview</span>
+              </div>
+              <div className="grid gap-3">
+                {features.slice(0, 3).map((feature) => {
+                  const Icon = feature.icon;
+                  return <div key={feature.title} className={`flex items-center gap-3 rounded-md border p-3 ${isEducation ? "border-[#eadfca] bg-white" : "border-white/10 bg-black/18"}`}><Icon size={20} className={palette.accent} aria-hidden="true" /><span className="text-sm font-bold">{feature.title}</span></div>;
+                })}
+              </div>
+              <div className={`rounded-md p-4 text-sm leading-6 ${isEducation ? "bg-black text-white" : "bg-white text-black"}`}>Designed to sit naturally beside Eagle Mart shopping while these planned services are prepared.</div>
+            </div>
+          </div>
+        </section>
+        <section className="container-premium pb-12 md:pb-16">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <article key={feature.title} className="rounded-md border border-[#eadfca] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+                  <Icon className={isEducation ? "text-[#1f5b8f]" : "text-[#9b2c7a]"} size={28} aria-hidden="true" />
+                  <h2 className="display-font mt-4 text-lg font-black">{feature.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-black/62">{feature.description}</p>
+                </article>
+              );
+            })}
+          </div>
+          <div className="mt-8 grid items-center gap-4 rounded-md border border-[#eadfca] bg-white p-5 shadow-sm md:grid-cols-[1fr_auto]">
+            <p className="text-sm font-semibold leading-7 text-black/65">These are customer-facing coming-soon previews only. Grocery shopping, cart, wishlist and account features remain unchanged.</p>
+            <Link href="/products" className="inline-flex min-h-11 items-center justify-center rounded-md border border-black px-4 py-2 text-sm font-black text-black transition hover:bg-black hover:text-white focus:outline-none focus:ring-2 focus:ring-[#d4af37]">Back to shopping</Link>
+          </div>
+        </section>
+      </main>
+      <div id={notifyId} className="pointer-events-none fixed inset-0 z-[80] hidden place-items-center bg-black/70 p-4 opacity-0 target:pointer-events-auto target:grid target:opacity-100" role="dialog" aria-modal="true" aria-labelledby={`${variant}-notify-title`}>
+          <div className="w-full max-w-sm rounded-md bg-white p-6 text-black shadow-2xl">
+            <h2 id={`${variant}-notify-title`} className="display-font text-2xl font-black">Coming soon</h2>
+            <p className="mt-3 text-sm leading-6 text-black/65">{notificationMessage}</p>
+            <a href="#" className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-[#d4af37]">Close</a>
+          </div>
+        </div>
+    </CustomerShell>
+  );
+}
+
+function ComingSoonPage({ variant }: { variant: ComingSoonVariant }) {
+  if (variant === "education") {
+    return <ComingSoonExperience variant="education" eyebrow="Eagle Mart Education" title="Learning experiences are coming soon" description="Discover a new way to access useful learning resources, skill-building content and educational experiences through Eagle Mart." supportingText="We are preparing a simple and engaging education space for learners, families and curious minds." primaryCta="Explore Eagle Mart" primaryHref="/" notificationMessage="Education updates will be available soon." features={[{ title: "Skill Learning", description: "Practical learning resources designed for everyday growth.", icon: Lightbulb }, { title: "Student Resources", description: "Helpful educational material for students and families.", icon: BookOpen }, { title: "Guided Content", description: "Structured content that is easy to explore and understand.", icon: GraduationCap }, { title: "Learning for Everyone", description: "Accessible experiences for different ages and learning needs.", icon: Sparkles }]} />;
+  }
+  return <ComingSoonExperience variant="entertainment" eyebrow="Eagle Mart Entertainment" title="More ways to enjoy your time are on the way" description="Eagle Mart is preparing a new entertainment destination with engaging content, family-friendly experiences and enjoyable digital activities." supportingText="Something exciting is being prepared for moments of fun, relaxation and discovery." primaryCta="Continue Shopping" primaryHref="/products" notificationMessage="Coming soon - stay tuned." features={[{ title: "Family Entertainment", description: "Enjoyable experiences designed for the whole family.", icon: Headphones }, { title: "Digital Experiences", description: "New interactive formats built for easy access.", icon: PlayCircle }, { title: "Trending Content", description: "Fresh and engaging content worth discovering.", icon: Clapperboard }, { title: "Fun for Every Mood", description: "Entertainment options for relaxation, energy and inspiration.", icon: Music }]} />;
+}
+
 function HomePage() {
-  const { products, addToCart } = useStore();
+  const { products, addToCart, customer } = useStore();
   const [homeCategories, setHomeCategories] = useState<Category[]>(categories);
-  const starter = products.find((product) => product.stock > 0 && /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || products.find((product) => product.stock > 0);
+  const [catalogSections, setCatalogSections] = useState<HomepageCatalogSection[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
+  const visibleProducts = products.filter(isCustomerVisibleProduct);
+  const dealProducts = visibleProducts.filter((p) => p.mrp > p.price).slice(0, 8);
+  const featuredProducts = visibleProducts.filter((p) => p.featured);
+  const bestSellerProducts = (featuredProducts.length ? featuredProducts : visibleProducts.filter((p) => p.stock > 0)).slice(0, 8);
+  const starter = visibleProducts.find((product) => /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || visibleProducts[0];
   useEffect(() => {
     fetchCategories().then((items) => setHomeCategories([...categories, ...items.filter((item) => !categories.some((cat) => cat.slug === item.slug))]));
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    fetchHomepageCatalog()
+      .then((sections) => {
+        if (cancelled) return;
+        setCatalogSections(sections);
+        setCatalogError("");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setCatalogError(error instanceof Error ? error.message : "Unable to load homepage catalogue.");
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   return (
     <CustomerShell>
@@ -541,26 +589,52 @@ function HomePage() {
           <p className="text-center text-xs font-bold uppercase text-[#d4af37]">Premium aisles</p>
           <h2 className="display-font mt-2 text-center text-3xl font-black">Explore Every Category</h2>
           <div className="mt-8 grid gap-6">
-            {homeCategories.slice(0, 10).map((cat) => <CategoryShowcase key={cat.id} category={cat} products={products.filter((p) => p.category === cat.name || p.categorySlug === cat.slug).slice(0, 8)} />)}
+            {(catalogSections.length ? catalogSections : homeCategories.slice(0, 8).map((cat) => ({ id: cat.id, key: cat.slug, title: cat.name, slug: cat.slug, description: categoryDescriptions[cat.name] || "Premium Eagle Mart grocery essentials.", imageUrl: cat.image, productCount: 0, products: [] }))).map((section) => <CategoryShowcase key={section.id} section={section} loading={catalogLoading} error={catalogError} />)}
           </div>
         </div>
       </section>
-      <ProductSection title="Today's Deals" products={products.filter((p) => p.mrp > p.price).slice(0, 8)} />
+      <ProductSection title="Today's Deals" products={dealProducts.length ? dealProducts : visibleProducts.slice(0, 8)} />
       <section className="bg-black py-14 text-white">
         <div className="container-premium grid gap-6 md:grid-cols-4">
           {[[ShieldCheck, "Curated Selection"], [Truck, "Fast Delivery"], [BadgePercent, "Better Savings"], [MessageCircle, "Elite Support"]].map(([Icon, label]) => <div key={String(label)} className="rounded-md border border-white/10 p-5"><Icon className="mb-4 text-[#e7c766]" /><h3 className="display-font font-bold">{String(label)}</h3><p className="mt-2 text-sm text-white/65">A premium grocery experience tuned for everyday Indian households.</p></div>)}
         </div>
       </section>
-      <ProductSection title="Best Sellers" products={products.filter((p) => p.featured).slice(0, 8)} />
+      <ProductSection title="Best Sellers" products={bestSellerProducts} />
+      <section className="container-premium py-10">
+        <div className="mb-5">
+          <p className="text-xs font-black uppercase text-[#8a6500]">Coming soon</p>
+          <h2 className="display-font text-2xl font-black md:text-3xl">More from Eagle Mart</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {[
+            ["/education", GraduationCap, "Education", "Useful learning experiences are coming soon."],
+            ["/entertainment", PlayCircle, "Entertainment", "New ways to enjoy and discover are on the way."],
+          ].map(([href, Icon, title, text]) => {
+            const CardIcon = Icon as LucideIcon;
+            return (
+              <Link key={String(href)} href={String(href)} className="group rounded-md border border-[#eadfca] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37] hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="grid h-12 w-12 place-items-center rounded-md bg-[#fff8df] text-[#8a6500]"><CardIcon size={24} aria-hidden="true" /></div>
+                  <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase text-[#e7c766]">Coming Soon</span>
+                </div>
+                <h3 className="display-font mt-4 text-xl font-black group-hover:text-[#8a6500]">{String(title)}</h3>
+                <p className="mt-2 text-sm leading-6 text-black/62">{String(text)}</p>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
       <section className="bg-black py-12 text-white">
         <div className="container-premium">
-          <div className="grid items-center gap-6 rounded-md bg-[#d4af37] p-6 text-black md:grid-cols-[1fr_auto] md:p-8">
-            <div>
-              <h2 className="display-font text-3xl font-black italic">Eagle Privilege</h2>
-              <p className="mt-2 max-w-xl text-sm font-semibold text-black/70">Free delivery, priority support, and member-only grocery deals for everyday shopping.</p>
+          {!customer && (
+            <div className="grid items-center gap-6 rounded-md bg-[#d4af37] p-6 text-black md:grid-cols-[1fr_auto] md:p-8">
+              <div>
+                <h2 className="display-font text-3xl font-black italic">Eagle Privilege</h2>
+                <p className="mt-2 max-w-xl text-sm font-semibold text-black/70">Free delivery, priority support, and member-only grocery deals for everyday shopping.</p>
+              </div>
+              <Link href="/signup"><Button className="bg-black text-[#e7c766] hover:bg-[#151515]">Join Eagle Mart <ChevronRight size={18} /></Button></Link>
             </div>
-            <Link href="/signup"><Button className="bg-black text-[#e7c766] hover:bg-[#151515]">Join Eagle Mart <ChevronRight size={18} /></Button></Link>
-          </div>
+          )}
           <img src="/assets/banners/fresh-produce-banner.png" alt="Fresh produce at Eagle Mart" className="mt-10 h-52 w-full rounded-md object-cover md:h-72" />
         </div>
       </section>
@@ -572,21 +646,22 @@ function HomePage() {
   );
 }
 
-function CategoryShowcase({ category, products }: { category: Category; products: Product[] }) {
+function CategoryShowcase({ section, loading, error }: { section: HomepageCatalogSection; loading: boolean; error: string }) {
+  const visibleProducts = section.products.filter(isCustomerVisibleProduct);
   return (
     <section className="overflow-hidden rounded-md border border-white/10 bg-white/5">
       <div className="grid gap-0 lg:grid-cols-[260px_1fr]">
-        <Link href={`/category/${category.slug}`} className="relative min-h-48 overflow-hidden bg-black lg:min-h-full">
-          <img src={category.image} alt={category.name} onError={(event) => { event.currentTarget.src = "/assets/placeholders/category-placeholder.svg"; }} className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-105" />
+        <Link href={`/category/${section.slug}`} className="relative min-h-48 overflow-hidden bg-black lg:min-h-full">
+          <img src={section.imageUrl} alt={section.title} onError={(event) => { event.currentTarget.src = "/assets/placeholders/category-placeholder.svg"; }} className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-5">
-            <h3 className="display-font text-2xl font-black">{category.name}</h3>
-            <p className="mt-2 text-sm text-white/70">{categoryDescriptions[category.name] || "Premium Eagle Mart grocery essentials."}</p>
+            <h3 className="display-font text-2xl font-black">{section.title}</h3>
+            <p className="mt-2 text-sm text-white/70">{section.description}</p>
             <span className="mt-4 inline-flex rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">View All</span>
           </div>
         </Link>
         <div className="min-w-0 bg-[#f7f2e8] p-4">
-          {products.length ? <div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible lg:grid-cols-4">{products.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div> : <div className="flex min-h-36 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">Products for this category will be added soon.</div>}
+          {loading ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible lg:grid-cols-4">{visibleProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
         </div>
       </div>
     </section>
@@ -594,11 +669,14 @@ function CategoryShowcase({ category, products }: { category: Category; products
 }
 
 function ProductSection({ title, products }: { title: string; products: Product[] }) {
-  return <section className="container-premium py-10"><div className="mb-6 flex items-end justify-between gap-3"><h2 className="display-font text-2xl font-black md:text-3xl">{title}</h2><Link href="/products" className="shrink-0 text-sm font-bold text-[#8a6500]">View all</Link></div><div className="responsive-scroll flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{products.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 lg:min-w-0 lg:max-w-none"><ProductCard product={p} /></div>)}</div></section>;
+  const visibleProducts = products.filter(isCustomerVisibleProduct);
+  if (!visibleProducts.length) return null;
+  return <section className="container-premium py-10"><div className="mb-6 flex items-end justify-between gap-3"><h2 className="display-font text-2xl font-black md:text-3xl">{title}</h2><Link href="/products" className="shrink-0 text-sm font-bold text-[#8a6500]">View all</Link></div><div className="responsive-scroll flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-visible">{visibleProducts.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 lg:min-w-0 lg:max-w-none"><ProductCard product={p} /></div>)}</div></section>;
 }
 
 function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
   const { products, toast } = useStore();
+  const router = useRouter();
   const params = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || "");
   const [sort, setSort] = useState("popular");
@@ -618,7 +696,10 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
   useEffect(() => {
     fetchCategories().then(setApiCategories).catch(() => setApiCategories(categories));
   }, []);
-  const activeCategory = mode === "category" && value ? value : category;
+  useEffect(() => {
+    setCategory(mode === "category" ? value || "" : "");
+  }, [mode, value]);
+  const activeCategory = category;
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setLoadingProducts(true);
@@ -635,20 +716,17 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
         sort,
         limit: 500,
       }).then((result) => {
-        setRemoteProducts(result.products);
+        setRemoteProducts(result.products.filter((product) => isCustomerVisibleProduct(product) && productMatchesSearch(product, query)));
         setRemoteFilters(result.filters);
       }).catch((error) => toast(error instanceof Error ? error.message : "Unable to load filtered products.", "error")).finally(() => setLoadingProducts(false));
     }, 180);
     return () => window.clearTimeout(timer);
   }, [activeCategory, availability, brand, local, maxPrice, minPrice, organic, query, rating, sort, toast]);
   const fallbackList = useMemo(() => {
-    let next = products.filter((p) => p.active !== false);
-    if (mode === "category" && value) next = next.filter((p) => p.categorySlug === value || apiCategories.find((c) => c.slug === value)?.name === p.category);
-    if (category && mode !== "category") next = next.filter((p) => p.categorySlug === category || p.category === category);
+    let next = products.filter(isCustomerVisibleProduct);
+    if (category) next = next.filter((p) => p.categorySlug === category || apiCategories.find((c) => c.slug === category)?.name === p.category || p.category === category);
     if (brand) next = next.filter((p) => p.brandSlug === brand || p.brand === brand);
-    if (availability === "in_stock") next = next.filter((p) => p.stock > 0);
-    if (availability === "out_of_stock") next = next.filter((p) => p.stock <= 0);
-    if (availability === "low_stock") next = next.filter((p) => p.stock > 0 && p.stock <= p.lowStock);
+    if (availability === "low_stock") next = next.filter((p) => availableQuantity(p) <= p.lowStock);
     if (rating) next = next.filter((p) => p.rating >= Number(rating));
     if (organic) next = next.filter((p) => p.organic);
     if (local) next = next.filter((p) => p.local);
@@ -665,7 +743,6 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
   const filterCategories = remoteFilters?.categories?.length ? remoteFilters.categories : apiCategories;
   const filterBrands = remoteFilters?.brands?.length ? remoteFilters.brands : Array.from(new Map(products.map((p) => [p.brandSlug || p.brand, { id: p.brandSlug || p.brand, slug: p.brandSlug || p.brand, name: p.brand }])).values()).sort((a, b) => a.name.localeCompare(b.name));
   const activeFilters = [
-    query && ["Search", query],
     activeCategory && ["Category", filterCategories.find((c) => c.slug === activeCategory || c.name === activeCategory)?.name || activeCategory],
     brand && ["Brand", filterBrands.find((item) => item.slug === brand || item.name === brand)?.name || brand],
     availability && ["Availability", availability.replaceAll("_", " ")],
@@ -677,7 +754,7 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
   ].filter(Boolean) as string[][];
   const clearFilters = () => {
     setQuery("");
-    if (mode !== "category") setCategory("");
+    setCategory("");
     setBrand("");
     setAvailability("");
     setRating("");
@@ -686,6 +763,11 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
     setMinPrice("");
     setMaxPrice("");
     setSort("popular");
+    if (mode === "category") router.push("/products");
+  };
+  const selectCategory = (slug: string) => {
+    setCategory(slug);
+    if (mode === "category") router.push(slug ? `/category/${slug}` : "/products");
   };
   const renderFilterPanel = (mobile = false) => (
     <aside className={`${mobile ? "block" : "hidden lg:block"} premium-card h-fit overflow-hidden`}>
@@ -700,8 +782,8 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
         <details open className="border-b border-[#eadfca] p-4">
           <summary className="cursor-pointer list-none font-black uppercase">Category</summary>
           <div className="mt-3 grid gap-2">
-            {mode !== "category" && <label className="flex items-center gap-2"><input type="radio" name={`category-${mobile}`} checked={!category} onChange={() => setCategory("")} /> All categories</label>}
-            {filterCategories.map((item) => <label key={item.slug} className="flex items-center gap-2"><input type="radio" name={`category-${mobile}`} checked={activeCategory === item.slug || activeCategory === item.name} disabled={mode === "category"} onChange={() => setCategory(item.slug)} /> {item.name}</label>)}
+            <label className="flex items-center gap-2"><input type="radio" name={`category-${mobile}`} checked={!activeCategory} onChange={() => selectCategory("")} /> All categories</label>
+            {filterCategories.map((item) => <label key={item.slug} className="flex items-center gap-2"><input type="radio" name={`category-${mobile}`} checked={activeCategory === item.slug || activeCategory === item.name} onChange={() => selectCategory(item.slug)} /> {item.name}</label>)}
           </div>
         </details>
         <details open className="border-b border-[#eadfca] p-4">
@@ -721,7 +803,7 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
         <details open className="border-b border-[#eadfca] p-4">
           <summary className="cursor-pointer list-none font-black uppercase">Availability</summary>
           <div className="mt-3 grid gap-2">
-            {[["", "All stock"], ["in_stock", "In stock"], ["low_stock", "Low stock"], ["out_of_stock", "Out of stock"]].map(([value, label]) => <label key={value || "all"} className="flex items-center gap-2"><input type="radio" name={`availability-${mobile}`} checked={availability === value} onChange={() => setAvailability(value)} /> {label}</label>)}
+            {[["", "All available"], ["low_stock", "Low stock"]].map(([value, label]) => <label key={value || "all"} className="flex items-center gap-2"><input type="radio" name={`availability-${mobile}`} checked={availability === value} onChange={() => setAvailability(value)} /> {label}</label>)}
           </div>
         </details>
         <details className="border-b border-[#eadfca] p-4">
@@ -744,8 +826,19 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
     <CustomerShell>
       <main className="container-premium py-8">
         <p className="text-sm text-black/55">Home / {mode === "category" ? "Category" : "Products"}</p>
-        <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><h1 className="display-font text-3xl font-black">Explore Premium Groceries</h1><p className="text-black/60">{loadingProducts ? "Refreshing products..." : `${list.length} products found`}</p></div><div className="grid grid-cols-2 gap-2 sm:flex"><select aria-label="Sort products" value={sort} onChange={(e) => setSort(e.target.value)} className="min-w-0 rounded-md border bg-white px-3 py-2 text-sm"><option value="popular">Popular</option><option value="newest">Newest</option><option value="price_asc">Price low to high</option><option value="price_desc">Price high to low</option><option value="discount">Discount</option></select><Button variant="outline" onClick={() => setMobileFiltersOpen(true)}><Menu size={17} /> Filters</Button></div></div>
-        {activeFilters.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{activeFilters.map(([label, value]) => <span key={`${label}-${value}`} className="rounded-full bg-black px-3 py-1 text-xs font-bold capitalize text-white">{label}: {value}</span>)}<button type="button" onClick={clearFilters} className="rounded-full border border-black/20 bg-white px-3 py-1 text-xs font-bold">Clear all</button></div>}
+        <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><h1 className="display-font text-3xl font-black">Explore Premium Groceries</h1><p className="text-black/60">{loadingProducts ? "Refreshing products..." : "Fresh picks ready to shop"}</p></div><div className="grid grid-cols-1 gap-2 sm:flex"><select aria-label="Sort products" value={sort} onChange={(e) => setSort(e.target.value)} className="min-w-0 rounded-md border bg-white px-3 py-2 text-sm"><option value="popular">Popular</option><option value="newest">Newest</option><option value="price_asc">Price low to high</option><option value="price_desc">Price high to low</option><option value="discount">Discount</option></select></div></div>
+        {activeFilters.length > 0 && (
+          <div className="mt-5 rounded-md border border-[#eadfca] bg-white p-3 shadow-sm">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              {activeFilters.map(([label, value]) => (
+                <span key={`${label}-${value}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#d8c891] bg-[#fff8df] px-4 py-2 text-sm text-black shadow-sm">
+                  <span className="shrink-0 text-[11px] font-black uppercase tracking-wide text-[#7a5900]">{label}</span>
+                  <span className="min-w-0 truncate font-semibold capitalize text-[#161616]">{value}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-6 grid gap-6 lg:grid-cols-[260px_1fr]">
           {renderFilterPanel()}
           <section>{list.length ? <div className={`responsive-scroll flex gap-4 overflow-x-auto pb-2 xl:grid xl:grid-cols-4 xl:overflow-visible ${loadingProducts ? "opacity-60" : ""}`}>{list.map((p) => <div key={p.id} className="min-w-[210px] max-w-[230px] flex-1 xl:min-w-0 xl:max-w-none"><ProductCard product={p} /></div>)}</div> : <section className="premium-card p-10 text-center"><h2 className="display-font text-2xl font-black">No products found</h2><p className="mt-2 text-sm text-black/55">Try removing a filter or changing your search.</p><Button variant="gold" className="mt-5" onClick={clearFilters}>Clear filters</Button></section>}</section>
@@ -767,7 +860,8 @@ function ProductDetail({ slug }: { slug?: string }) {
   useEffect(() => {
     if (slug) fetchProduct(slug).then(setApiProduct).catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load products. Database connection is unavailable."));
   }, [slug]);
-  const product = apiProduct || products.find((p) => p.slug === slug) || products[0];
+  const visibleProducts = products.filter(isCustomerVisibleProduct);
+  const product = apiProduct || visibleProducts.find((p) => p.slug === slug) || visibleProducts[0];
   useEffect(() => {
     if (!product) return;
     const initialUnit = defaultVariant(product)?.unit || product.unit;
@@ -778,7 +872,10 @@ function ProductDetail({ slug }: { slug?: string }) {
   if (!product) {
     return <CustomerShell><main className="container-premium py-12">{error ? <Empty title="Unable to load products. Database connection is unavailable." cta="Browse products" href="/products" /> : <div className="premium-card p-8 text-center font-bold">Loading product...</div>}</main></CustomerShell>;
   }
-  const variants = activeVariants(product);
+  if (!isCustomerVisibleProduct(product)) {
+    return <CustomerShell><main className="container-premium py-12"><Empty title="This product is currently unavailable" cta="Browse available products" href="/products" /></main></CustomerShell>;
+  }
+  const variants = customerVisibleVariants(product);
   const fallbackVariant = defaultVariant(product);
   const selectedVariant = variants.find((variant) => variant.id === variantId) || fallbackVariant;
   const selectedVariantId = selectedVariant?.id;
@@ -790,7 +887,7 @@ function ProductDetail({ slug }: { slug?: string }) {
   const unitInputError = unitInput.trim() && !typedUnitPrice ? `Enter an amount compatible with ${selectedUnit}, like 250 g, 500 g, 1 kg, 500 ml, or 1 L.` : "";
   const requestedQty = qtyInput === "" ? 0 : Number(qtyInput);
   const discount = selectedMrp > selectedPrice ? Math.round(((selectedMrp - selectedPrice) / selectedMrp) * 100) : 0;
-  const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const related = visibleProducts.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
   const available = selectedStock > 0;
   const validQty = Number.isInteger(requestedQty) && requestedQty >= 1 && requestedQty <= selectedStock;
   const canBuySelectedUnit = available && validQty && !unitInputError;
@@ -798,17 +895,8 @@ function ProductDetail({ slug }: { slug?: string }) {
   const unitMrp = typedUnitPrice?.mrp ?? selectedMrp;
   const lineTotal = unitPrice * (validQty ? requestedQty : 1);
   const mrpLineTotal = unitMrp * (validQty ? requestedQty : 1);
-  const qtyError = qtyInput === "" ? "Enter quantity to continue." : requestedQty < 1 ? "Minimum quantity is 1." : requestedQty > selectedStock ? `Only ${selectedStock} ${selectedUnit} packs available.` : "";
+  const qtyError = qtyInput === "" ? "Enter quantity to continue." : requestedQty < 1 ? "Minimum quantity is 1." : requestedQty > selectedStock ? "Selected quantity is not available." : "";
   const updateQty = (value: string) => setQtyInput(value.replace(/\D/g, "").slice(0, 4));
-  const updatePurchaseUnit = (value: string) => {
-    setUnitInput(value);
-    const normalized = normalizeUnit(value);
-    const match = variants.find((variant) => normalizeUnit(variant.unit) === normalized || normalizeUnit(variant.label || "") === normalized);
-    if (match) {
-      setVariantId(match.id || "");
-      setQtyInput("1");
-    }
-  };
   const stepQty = (delta: number) => setQtyInput((value) => {
     const current = value === "" ? 1 : Number(value);
     return String(Math.min(selectedStock, Math.max(1, current + delta)));
@@ -833,11 +921,11 @@ function ProductDetail({ slug }: { slug?: string }) {
             <h1 className="display-font mt-2 text-3xl font-black md:text-5xl">{product.name}</h1>
             <p className="mt-3 flex items-center gap-2 text-sm"><Star size={17} fill="#d4af37" className="text-[#d4af37]" /> {product.rating} ({product.reviews} reviews)</p>
             <div className="mt-5 flex items-end gap-3"><span className="display-font text-3xl font-black">{money(unitPrice)}</span><span className="text-black/45 line-through">{money(unitMrp)}</span>{unitMrp > unitPrice && <span className="rounded bg-red-50 px-2 py-1 text-xs font-bold text-red-700">{Math.round(((unitMrp - unitPrice) / unitMrp) * 100)}% OFF</span>}</div>
-            <p className="mt-1 text-sm text-black/55">Inclusive of taxes. Buying unit: {unitInput.trim() || selectedUnit}</p>
-            {variants.length > 0 && <div className="mt-5 grid gap-3"><label className="text-sm font-bold">Amount to buy<input aria-label="Amount to buy" value={unitInput} onChange={(event) => updatePurchaseUnit(event.target.value)} list={`units-${product.id}`} className="mt-1 w-full rounded-md border border-[#eadfca] bg-white px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Type 250 g, 500 g, 1 kg, 500 ml..." /></label><datalist id={`units-${product.id}`}>{["250 g", "500 g", "1 kg", "2 kg", "500 ml", "1 L", "1 pc"].map((unit) => <option key={unit} value={unit} />)}{variants.map((variant) => <option key={variant.id || variant.unit} value={variant.unit} />)}</datalist>{unitInputError && <p className="text-sm font-bold text-red-600">{unitInputError}</p>}<div><p className="text-sm font-bold">Base units</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{variants.map((variant) => { const checked = (variant.id || variant.unit) === (selectedVariantId || selectedUnit); return <button type="button" key={variant.id || variant.unit} onClick={() => { setVariantId(variant.id || ""); setUnitInput(variant.unit); setQtyInput("1"); }} className={`rounded-md border p-3 text-left text-sm ${checked ? "border-[#d4af37] bg-[#fff8df]" : "border-[#eadfca] bg-white hover:border-[#d4af37]"}`}><b>{variant.unit}</b><span className="mt-1 block">{money(variant.price)} <span className="text-black/45 line-through">{money(variant.mrp)}</span></span><span className="mt-1 block text-xs text-black/55">SKU {variant.sku || product.sku} | {variant.stock ?? 0} in stock</span></button>; })}</div></div></div>}
+            <p className="mt-1 text-sm text-black/55">Price includes all taxes.</p>
+            {variants.length > 0 && <div className="mt-5"><p className="text-sm font-bold">Pack size</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{variants.map((variant) => { const checked = (variant.id || variant.unit) === (selectedVariantId || selectedUnit); return <button type="button" key={variant.id || variant.unit} onClick={() => { setVariantId(variant.id || ""); setUnitInput(variant.unit); setQtyInput("1"); }} className={`rounded-md border p-3 text-left text-sm ${checked ? "border-[#d4af37] bg-[#fff8df]" : "border-[#eadfca] bg-white hover:border-[#d4af37]"}`}><b>{variant.unit}</b><span className="mt-1 block">{money(variant.price)} <span className="text-black/45 line-through">{money(variant.mrp)}</span></span></button>; })}</div></div>}
             <div className="mt-5 grid gap-3 rounded-md border border-[#eadfca] bg-white p-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
-                <label className="text-sm font-bold">Quantity
+                <label className="text-sm font-bold">How many packs?
                   <div className="mt-1 flex h-12 w-fit items-center overflow-hidden rounded-md border border-[#eadfca] bg-white">
                     <button type="button" disabled={!available || requestedQty <= 1} onClick={() => stepQty(-1)} className="grid h-12 w-12 place-items-center border-r disabled:opacity-40"><Minus size={16} /></button>
                     <input aria-label="Product quantity" value={qtyInput} onChange={(event) => updateQty(event.target.value)} onBlur={() => { if (qtyInput !== "") setQtyInput(String(Math.min(selectedStock, Math.max(1, Number(qtyInput))))); }} className="h-12 w-20 border-0 text-center text-lg font-black outline-none" inputMode="numeric" />
@@ -845,21 +933,20 @@ function ProductDetail({ slug }: { slug?: string }) {
                   </div>
                 </label>
                 <div className="text-right">
-                  <p className="text-xs font-bold uppercase text-black/45">Payable amount</p>
+                  <p className="text-xs font-bold uppercase text-black/45">Total</p>
                   <p className="display-font text-2xl font-black">{money(lineTotal)}</p>
                   {mrpLineTotal > lineTotal && <p className="text-xs text-black/45 line-through">{money(mrpLineTotal)}</p>}
                 </div>
               </div>
               {(qtyError || unitInputError) && <p className="text-sm font-bold text-red-600">{unitInputError || qtyError}</p>}
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2"><Button variant="gold" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}><ShoppingBag size={18} /> {available ? `Add ${requestedQty || ""} ${unitInput.trim() || selectedUnit}` : "Out of stock"}</Button>{available ? <Button className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={buyNow}>Buy Now - {money(lineTotal)}</Button> : <Button className="w-full" disabled>Buy Now</Button>}<Button variant="outline" disabled={!authReady} onClick={() => toggleWishlist(product.id)}><Heart size={18} /> Wishlist</Button></div>
-            <div className="mt-4"><PincodeChecker /></div>
-            <div className="mt-6 grid gap-3 rounded-md border bg-white p-4 text-sm"><p><b>Stock:</b> {selectedStock > 0 ? `${selectedStock} ${selectedUnit} packs available` : "Out of stock"}</p><p><b>Highlights:</b> Premium sourced, freshness checked, safely packed.</p><p><b>Storage:</b> Store in a cool, dry place. Refrigerate fresh products.</p><p><b>Return policy:</b> Same-day replacement for damaged or expired items.</p></div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2"><Button variant="gold" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}><ShoppingBag size={18} /> {available ? "Add to cart" : "Out of stock"}</Button>{available ? <Button className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={buyNow}>Buy now</Button> : <Button className="w-full" disabled>Buy now</Button>}<Button variant="outline" disabled={!authReady} onClick={() => toggleWishlist(product.id)}><Heart size={18} /> Wishlist</Button></div>
+            <div className="mt-6 grid gap-3 rounded-md border bg-white p-4 text-sm"><p><b>Availability:</b> {selectedStock > 0 ? "In stock" : "Out of stock"}</p><p><b>What you get:</b> Fresh, checked, and safely packed groceries.</p><p><b>How to store:</b> Keep in a cool, dry place. Refrigerate only if the product needs it.</p><p><b>Replacement:</b> Same-day replacement for damaged or expired items.</p></div>
           </section>
         </div>
-        <ProductSection title="Frequently Bought Together" products={related.length ? related : products.slice(0, 4)} />
+        <ProductSection title="Frequently Bought Together" products={related.length ? related : visibleProducts.slice(0, 4)} />
       </main>
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white p-3 shadow-2xl md:hidden"><Button variant="gold" className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}>{available ? `Add ${requestedQty || ""} ${unitInput.trim() || selectedUnit} - ${money(lineTotal)}` : "Out of stock"}</Button></div>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white p-3 shadow-2xl md:hidden"><Button variant="gold" className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}>{available ? `Add to cart - ${money(lineTotal)}` : "Out of stock"}</Button></div>
     </CustomerShell>
   );
 }
@@ -870,7 +957,56 @@ function CartPage() {
   const t = totals(cart, products, coupons, couponCode);
   return (
     <CustomerShell>
-      <main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Your Cart</h1>{cart.length ? <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"><section className="space-y-4">{cart.map((item) => { const p = products.find((x) => x.id === item.productId); if (!p) return null; const variant = itemVariant(item, p); const max = Math.max(1, variant?.stock ?? p.stock); const unit = itemUnit(item, p); const price = itemPrice(item, products); return <div key={item.id || `${item.productId}-${item.variantId || "default"}`} className="premium-card flex flex-col gap-4 p-4 sm:flex-row"><img src={p.image} alt={p.name} className="h-24 w-24 shrink-0 rounded-md object-cover" /><div className="min-w-0 flex-1"><h3 className="font-bold">{item.name || p.name}</h3><p className="break-words text-sm text-black/55">{unit} {item.sku ? `| SKU ${item.sku}` : ""}</p><p className="display-font mt-2 font-bold">{money(price)} <span className="text-xs font-normal text-black/45">x {item.qty} = {money(itemLineTotal(item, products))}</span></p><div className="mt-3 flex flex-wrap items-center gap-2"><Qty value={item.qty} max={max} unit={unit} onChange={(qty) => setQty(item.id || p.id, qty)} onInvalid={(message) => toast(message, "error")} /><Button variant="ghost" onClick={() => removeFromCart(item.id || p.id)}>Remove</Button></div></div></div>; })}<ProductSection title="Recommended Products" products={products.slice(0, 4)} /></section><Summary t={t} code={code} coupons={coupons} setCode={setCode} applyCoupon={() => applyCoupon(code)} /></div> : <Empty title="Your cart is empty" cta="Continue shopping" href="/products" />}</main>
+      <main className="bg-[#f4f6fb] pb-28 pt-5 lg:pb-10">
+        <div className="container-premium">
+          <div className="flex items-center gap-3">
+            <BackNav fallback="/products" label="Back" />
+            <h1 className="display-font mb-4 text-3xl font-black">My Cart</h1>
+          </div>
+          {cart.length ? (
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+              <section className="space-y-4">
+                <div className="rounded-md bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="grid h-14 w-14 place-items-center rounded-md bg-[#f5f5f5]"><Truck className="text-[#2b8f12]" size={28} /></div>
+                    <div>
+                      <h2 className="text-lg font-black">Delivery items</h2>
+                      <p className="text-sm text-black/55">Shipment of {cart.length} {cart.length === 1 ? "item" : "items"}</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-3">
+                    {cart.map((item) => {
+                      const p = products.find((x) => x.id === item.productId);
+                      if (!p) return null;
+                      const variant = itemVariant(item, p);
+                      const max = Math.max(1, variant?.stock ?? p.stock);
+                      const unit = itemUnit(item, p);
+                      const price = itemPrice(item, products);
+                      return (
+                        <div key={item.id || `${item.productId}-${item.variantId || "default"}`} className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-md border border-[#eef0f5] bg-white p-3 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-center">
+                          <img src={p.image} alt={p.name} className="h-20 w-20 rounded-md border border-[#f0e8d8] bg-white object-contain p-1" />
+                          <div className="min-w-0">
+                            <h3 className="line-clamp-2 text-sm font-bold sm:text-base">{item.name || p.name}</h3>
+                            <p className="mt-1 text-sm text-black/55">{unit}</p>
+                            <p className="mt-2 text-sm font-black">{money(price)} <span className="font-normal text-black/45 line-through">{money(itemMrp(item, products))}</span></p>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:flex-col sm:items-end">
+                            <Qty value={item.qty} max={max} unit={unit} onChange={(qty) => setQty(item.id || p.id, qty)} onInvalid={(message) => toast(message, "error")} />
+                            <button type="button" onClick={() => removeFromCart(item.id || p.id)} className="text-sm font-bold text-black/55 hover:text-red-600">Remove</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <ProductSection title="Recommended Products" products={products.filter(isCustomerVisibleProduct).slice(0, 4)} />
+              </section>
+              <Summary t={t} code={code} couponCode={couponCode} coupons={coupons} setCode={setCode} applyCoupon={() => applyCoupon(code)} />
+            </div>
+          ) : <Empty title="Your cart is empty" cta="Continue shopping" href="/products" />}
+        </div>
+        {cart.length > 0 && <div className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white p-3 shadow-2xl lg:hidden"><Link href="/checkout" className="mx-auto flex max-w-xl items-center justify-between rounded-md bg-[#0b8f20] px-4 py-2.5 text-white"><span><b className="block text-base">{money(t.total)}</b><span className="text-[11px] uppercase">Total</span></span><span className="text-base font-bold">Checkout <ChevronRight size={18} className="inline" /></span></Link></div>}
+      </main>
     </CustomerShell>
   );
 }
@@ -890,7 +1026,7 @@ function Qty({ value, max, unit, onChange, onInvalid }: { value: number; max: nu
       return;
     }
     if (qty > max) {
-      onInvalid(`Only ${max} ${unit || "units"} available.`);
+      onInvalid("Selected quantity is not available.");
       setDraft(String(value));
       return;
     }
@@ -900,13 +1036,66 @@ function Qty({ value, max, unit, onChange, onInvalid }: { value: number; max: nu
   return <div className="inline-flex h-11 items-center overflow-hidden rounded-md border bg-white"><button type="button" aria-label="Decrease quantity" className="h-11 px-3" onClick={() => commit(String(Math.max(1, value - 1)))}><Minus size={15} /></button><input aria-label="Quantity" inputMode="numeric" value={draft} onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))} onBlur={() => commit(draft)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className="h-11 w-14 border-x text-center text-sm font-bold outline-none" /><button type="button" aria-label="Increase quantity" className="h-11 px-3" onClick={() => commit(String(value + 1))}><Plus size={15} /></button></div>;
 }
 
-function Summary({ t, code, coupons, setCode, applyCoupon }: { t: ReturnType<typeof totals>; code: string; coupons: StoreCoupons; setCode: (x: string) => void; applyCoupon: () => void }) {
-  return <aside className="premium-card h-fit p-5 lg:sticky lg:top-24"><h2 className="display-font text-xl font-bold">Price Summary</h2><div className="mt-4 h-2 rounded-full bg-black/10"><div className="h-2 rounded-full bg-[#d4af37]" style={{ width: `${Math.min(100, (t.subtotal / 799) * 100)}%` }} /></div><p className="mt-2 text-xs text-black/55">Free delivery above Rs 799</p><div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto]"><input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="w-full min-w-0 rounded-md border px-3 py-2" placeholder="Coupon" /><Button variant="gold" onClick={applyCoupon}>Apply</Button></div><div className="mt-4 space-y-2 text-sm">{[["Subtotal", t.subtotal], ["Discount", -t.discount], ["Coupon discount", -t.couponDiscount], ["GST/tax", t.gst], ["Delivery charge", t.delivery], ["Handling charge", t.handling]].map(([k, v]) => <div key={String(k)} className="flex justify-between gap-3"><span>{String(k)}</span><span>{money(Number(v))}</span></div>)}</div><div className="mt-4 flex justify-between gap-3 border-t pt-4 display-font text-xl font-black"><span>Total</span><span>{money(t.total)}</span></div><Link href="/checkout"><Button variant="gold" className="mt-4 w-full">Checkout</Button></Link><div className="mt-4 grid gap-2">{coupons.map((c) => <button key={c.code} onClick={() => { setCode(c.code); }} className="rounded-md border p-2 text-left text-xs"><b>{c.code}</b> - {c.title}</button>)}</div></aside>;
+function Summary({ t, code, couponCode = "", coupons, setCode, applyCoupon, showCoupons = true, showCheckout = true }: { t: ReturnType<typeof totals>; code: string; couponCode?: string; coupons: StoreCoupons; setCode: (x: string) => void; applyCoupon: () => void; showCoupons?: boolean; showCheckout?: boolean }) {
+  const savings = t.discount + t.couponDiscount;
+  const appliedCoupon = couponCode ? coupons.find((coupon) => coupon.code === couponCode) : undefined;
+  const freeDeliveryMinimum = 799;
+  const freeDeliveryProgress = Math.min(100, (t.subtotal / freeDeliveryMinimum) * 100);
+  const freeDeliveryRemaining = Math.max(0, freeDeliveryMinimum - t.subtotal);
+  const rows = [
+    ["Items total", t.subtotal, t.discount ? t.subtotal + t.discount : null],
+    ["Coupon discount", -t.couponDiscount, null],
+    ["GST/tax", t.gst, null],
+    ["Delivery charge", t.delivery, null],
+    ["Handling charge", t.handling, null],
+  ] as const;
+  return (
+    <aside className="h-fit lg:sticky lg:top-24">
+      {savings > 0 && <div className="mb-4 flex items-center justify-between rounded-md bg-[#dce9ff] px-4 py-3 text-sm font-black text-[#1262ff]"><span>Your total savings</span><span>{money(savings)}</span></div>}
+      <section className="rounded-md bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-black">Bill details</h2>
+        <div className="mt-4">
+          <div className="h-2 overflow-hidden rounded-full bg-black/10">
+            <div className="h-full rounded-full bg-[#d4af37] transition-all" style={{ width: `${freeDeliveryProgress}%` }} />
+          </div>
+          <p className="mt-2 text-sm text-black/55">{freeDeliveryRemaining > 0 ? `Add ${money(freeDeliveryRemaining)} more for free delivery` : "Free delivery unlocked"}</p>
+        </div>
+        <div className="mt-4 grid gap-3 text-sm">
+          {rows.map(([label, value, before]) => (
+            <div key={label} className="flex items-center justify-between gap-3">
+              <span className="text-black/75">{label}{label === "Coupon discount" && appliedCoupon ? <span className="ml-1 font-bold text-[#0b8f20]">({appliedCoupon.code})</span> : null}</span>
+              <span className="font-semibold">{before ? <span className="mr-2 font-normal text-black/45 line-through">{money(before)}</span> : null}{label === "Delivery charge" && value === 0 ? <span className="text-[#1262ff]">FREE</span> : money(value)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-dashed border-black/20 pt-4 text-lg font-black">
+          <span>Grand total</span>
+          <span>{money(t.total)}</span>
+        </div>
+      </section>
+      {showCoupons && <section className="mt-4 rounded-md bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-black">Apply coupon</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto]">
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="w-full min-w-0 rounded-md border border-[#d8d1c2] px-3 py-3 outline-none focus:border-[#0b8f20]" placeholder="Coupon" />
+          <Button variant="gold" onClick={applyCoupon}>Apply</Button>
+        </div>
+        <div className="mt-4 grid max-h-56 gap-2 overflow-y-auto pr-1">{coupons.map((c) => <button key={c.code} onClick={() => { setCode(c.code); }} className="rounded-md border border-[#d8d1c2] bg-white p-3 text-left text-sm hover:border-[#0b8f20]"><b>{c.code}</b> - {c.title}</button>)}</div>
+      </section>}
+      <section className="mt-4 rounded-md bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-black">Cancellation Policy</h3>
+        <p className="mt-2 text-sm leading-5 text-black/60">Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.</p>
+      </section>
+      {showCheckout && <Link href="/checkout" className="mt-4 hidden rounded-md bg-[#0b8f20] px-4 py-3 text-white shadow-sm transition hover:bg-[#087a1b] lg:flex lg:items-center lg:justify-between">
+        <span><b className="block text-base">{money(t.total)}</b><span className="text-[11px] uppercase">Total</span></span>
+        <span className="text-base font-bold">Checkout <ChevronRight size={18} className="inline" /></span>
+      </Link>}
+    </aside>
+  );
 }
 
 function WishlistPage() {
   const { wishlist, products, moveWishlistToCart, toggleWishlist } = useStore();
-  const list = products.filter((p) => wishlist.includes(p.id));
+  const list = products.filter((p) => wishlist.includes(p.id) && isCustomerVisibleProduct(p));
   return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/products" label="Back to products" /><h1 className="display-font text-3xl font-black">Wishlist</h1>{list.length ? <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{list.map((product) => <ProductCard key={product.id} product={product} footer={<div className="mt-3 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => moveWishlistToCart(product.id)}>Move to cart</Button><Button variant="ghost" onClick={() => toggleWishlist(product.id)}>Remove</Button></div>} />)}</div> : <Empty title="Wishlist is empty" cta="Browse products" href="/products" />}</main></CustomerShell>;
 }
 
@@ -952,6 +1141,10 @@ function AddressManager({ selectedId, onSelect }: { selectedId?: string; onSelec
   const { addresses, addAddress, updateAddress, deleteAddress } = useStore();
   const [mode, setMode] = useState<"new" | null>(null);
   const [editing, setEditing] = useState<Address | null>(null);
+  const startNewAddress = () => {
+    setEditing(null);
+    setMode("new");
+  };
   const save = (address: AddressInput | Address) => {
     if ("id" in address) updateAddress(address);
     else addAddress(address);
@@ -959,34 +1152,46 @@ function AddressManager({ selectedId, onSelect }: { selectedId?: string; onSelec
     setEditing(null);
   };
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="display-font text-xl font-bold">Delivery Address</h2><p className="text-sm text-black/55">Add, update, delete, and select a serviceable delivery address.</p></div>
-        <Button variant="outline" onClick={() => { setEditing(null); setMode("new"); }}><Plus size={16} /> Add address</Button>
-      </div>
+    <div className="grid gap-4">
+      <button type="button" onClick={startNewAddress} className="flex min-h-14 items-center gap-3 rounded-md bg-white px-4 text-left font-black text-[#0b8f20] shadow-sm ring-1 ring-black/5 transition hover:ring-[#0b8f20]/30">
+        <Plus size={22} strokeWidth={3} />
+        Add a new address
+      </button>
       {mode === "new" && <AddressForm onCancel={() => setMode(null)} onSave={save} />}
       {editing && <AddressForm initial={editing} onCancel={() => setEditing(null)} onSave={save} />}
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {addresses.map((a) => (
-          <div key={a.id} className={`rounded-md border p-4 text-left ${selectedId === a.id ? "border-[#d4af37] bg-[#fff8df]" : "border-[#eadfca] bg-white"}`}>
-            <button type="button" onClick={() => onSelect?.(a)} className="w-full text-left">
-              <div className="flex items-center justify-between gap-2"><b>{a.label}</b>{a.isDefault && <span className="rounded-full bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">Default</span>}</div>
-              <p className="mt-1 text-sm font-semibold">{a.name} | {a.phone}</p>
-              <p className="text-sm text-black/65">{a.line}, {a.city} - {a.pincode}</p>
-              {a.landmark && <p className="text-xs text-black/50">Landmark: {a.landmark}</p>}
-              <p className="mt-2 text-xs text-green-700">Serviceable pincode</p>
-            </button>
-            <div className="mt-3 flex gap-2"><Button variant="outline" onClick={() => { setMode(null); setEditing(a); }}>Edit</Button><Button variant="ghost" onClick={() => deleteAddress(a.id)}>Delete</Button></div>
+      <div>
+        <p className="text-sm font-semibold text-black/60">Your saved address</p>
+        {addresses.length ? <div className="mt-3 grid gap-3">
+          {addresses.map((a) => (
+            <div key={a.id} className={`rounded-md bg-white p-4 shadow-sm ring-1 transition ${selectedId === a.id ? "ring-[#0b8f20]" : "ring-black/5"}`}>
+              <button type="button" onClick={() => onSelect?.(a)} className="grid w-full grid-cols-[48px_minmax(0,1fr)] gap-3 text-left">
+                <span className="grid h-12 w-12 place-items-center rounded-md bg-[#f6f6f6] text-[#d4af37]"><Home size={22} /></span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2"><b className="text-base">{a.label}</b>{a.isDefault && <span className="rounded-full bg-black px-2 py-1 text-[10px] font-bold uppercase text-white">Default</span>}{selectedId === a.id && <span className="rounded-full bg-[#eaf8ee] px-2 py-1 text-[10px] font-black uppercase text-[#0b8f20]">Selected</span>}</span>
+                  <span className="mt-1 block text-sm font-semibold text-black/70">{a.name} | {a.phone}</span>
+                  <span className="mt-1 block text-sm leading-5 text-black/60">{a.line}, {a.city}, {a.state} - {a.pincode}</span>
+                  {a.landmark && <span className="mt-1 block text-xs text-black/45">Landmark: {a.landmark}</span>}
+                </span>
+              </button>
+              <div className="ml-[60px] mt-3 flex gap-2">
+                <button type="button" onClick={() => { setMode(null); setEditing(a); }} className="rounded-full border border-[#0b8f20] px-3 py-1 text-xs font-bold text-[#0b8f20]">Edit</button>
+                <button type="button" onClick={() => deleteAddress(a.id)} className="rounded-full border border-black/10 px-3 py-1 text-xs font-bold text-black/55 hover:text-red-600">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div> : (
+          <div className="mt-3 rounded-md bg-white p-8 text-center shadow-sm ring-1 ring-black/5">
+            <h3 className="display-font text-2xl font-black">No saved addresses</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-black/55">Add a delivery address to continue checkout.</p>
           </div>
-        ))}
+        )}
       </div>
-      {!addresses.length && mode !== "new" && <Empty title="No saved addresses" cta="Add address" href="/account/addresses" />}
     </div>
   );
 }
 
 function CheckoutPage() {
-  const { customer, cart, products, coupons, addresses, placeOrder, placeBackendCodOrder, refreshCustomerData, toast } = useStore();
+  const { customer, authReady, cart, products, coupons, couponCode, addresses, placeOrder, placeBackendCodOrder, refreshCustomerData, toast } = useStore();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
@@ -1002,7 +1207,7 @@ function CheckoutPage() {
   const [processing, setProcessing] = useState<{ label: string; amount?: number; orderNumber?: string } | null>(null);
   const [cancelled, setCancelled] = useState<RazorpayCreateOrderResponse | null>(null);
   const [terms, setTerms] = useState(false);
-  const t = totals(cart, products, coupons);
+  const t = totals(cart, products, coupons, couponCode);
   const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
   const minDeliveryDate = todayLocalDate();
   const deliveryDateIsPast = isPastDeliveryDate(deliveryDate);
@@ -1166,6 +1371,9 @@ function CheckoutPage() {
     }
     router.push(`/order-success/${order.orderNumber}`);
   };
+  if (!authReady) {
+    return <CustomerShell><main className="container-premium flex min-h-[60vh] items-center justify-center py-10"><section className="premium-card max-w-lg p-8 text-center"><h1 className="display-font text-3xl font-black">Loading checkout</h1><p className="mt-2 text-black/60">Checking your account session...</p></section></main></CustomerShell>;
+  }
   if (!customer) {
     return <CustomerShell><main className="container-premium flex min-h-[60vh] items-center justify-center py-10"><section className="premium-card max-w-lg p-8 text-center"><User className="mx-auto text-[#8a6500]" size={46} /><h1 className="display-font mt-4 text-3xl font-black">Login Required</h1><p className="mt-2 text-black/60">Please login first to checkout, manage cart, and place orders.</p><div className="mt-6 flex justify-center gap-3"><Link href="/login"><Button variant="gold">Login</Button></Link><Link href="/signup"><Button variant="outline">Create Account</Button></Link></div></section></main></CustomerShell>;
   }
@@ -1174,18 +1382,17 @@ function CheckoutPage() {
       <main className="container-premium py-8">
         <BackNav fallback="/cart" label="Back to cart" />
         <h1 className="display-font text-3xl font-black">Secure Checkout</h1>
-        <div className="mt-4 max-w-lg"><PincodeChecker /></div>
         <div className="responsive-scroll mt-4 flex gap-2 overflow-x-auto pb-1">
           {["Address", "Delivery", "Review"].map((x, i) => <button key={x} onClick={() => setStep(i + 1)} className={`min-w-fit rounded-full px-3 py-2 text-xs font-bold ${step === i + 1 ? "bg-black text-white" : "bg-white"}`}>{i + 1}. {x}</button>)}
         </div>
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="premium-card min-w-0 p-4 sm:p-5">
+          <section className="min-w-0 rounded-md bg-[#f4f6fb] p-4 sm:p-5">
             {step === 1 && <AddressManager selectedId={address?.id} onSelect={setAddress} />}
             {step === 2 && <div><h2 className="display-font text-xl font-bold">Delivery</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => setFulfillmentType("DELIVERY")} className={`rounded-md border p-4 text-left ${fulfillmentType === "DELIVERY" ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Truck className="mb-2" /><b>Home Delivery</b></button><button type="button" onClick={() => { setFulfillmentType("PICKUP"); setPayment("COD"); }} className={`rounded-md border p-4 text-left ${fulfillmentType === "PICKUP" ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Package className="mb-2" /><b>Pickup From Store</b><span className="mt-1 block text-sm text-black/55">No delivery charge or slot required</span></button></div><label className="mt-4 block text-sm font-bold">Date<input aria-label="Delivery date" type="date" min={minDeliveryDate} value={deliveryDate} onChange={(event) => selectDeliveryDate(event.target.value)} className="mt-1 block w-full rounded-md border px-3 py-2 sm:w-auto" /></label>{deliveryDateIsPast && <p className="mt-2 text-sm font-bold text-red-600">Past dates are not available.</p>}{fulfillmentType === "DELIVERY" && (remoteSlots.length && !deliveryDateIsPast ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{remoteSlots.map((remote) => <button key={remote.id} disabled={deliveryDateIsPast} onClick={() => { setSlot(remote.label); setSlotId(remote.id); }} className={`rounded-md border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50 ${slotId === remote.id ? "border-[#d4af37] bg-[#fff8df]" : "bg-white"}`}><Truck className="mb-2" /><b>{remote.label}</b>{remote.startTime && remote.endTime && <span className="mt-1 block text-sm text-black/55">{remote.startTime} - {remote.endTime}</span>}</button>)}</div> : <div className="mt-4 rounded-md border border-[#eadfca] bg-white p-4 text-sm font-semibold text-black/60">Select a saved India address and a valid delivery date to load delivery slots.</div>)}</div>}
             {step === 3 && <div><h2 className="display-font text-xl font-bold">Review Order</h2><div className="mt-4 grid gap-3 md:grid-cols-2"><PaymentCard active={payment === "COD"} title="Cash on Delivery" text={fulfillmentType === "PICKUP" ? "Pay when you pick up your groceries." : "Pay when your groceries arrive."} onClick={() => setPayment("COD")}><div className="mt-3 rounded-md bg-black/5 p-3 text-xs font-bold text-black/60">COD pending until fulfillment.</div></PaymentCard><PaymentCard active={payment === "Razorpay"} title={onlinePaymentEnabled ? "Online Payment" : "Online Payment Coming Soon"} text={onlinePaymentEnabled ? "Pay securely online." : "Online payment is disabled until production Razorpay is ready."} onClick={() => onlinePaymentEnabled && fulfillmentType === "DELIVERY" ? setPayment("Razorpay") : toast("Online Payment Coming Soon", "info")}>{!onlinePaymentEnabled && <p className="mt-3 rounded-md bg-[#fff8df] p-3 text-xs font-bold text-[#8a6500]">Coming Soon</p>}</PaymentCard></div><p className="mt-5 text-sm text-black/60">{cart.length} items, {fulfillmentType === "PICKUP" ? "pickup from store" : `delivery ${deliveryDate} at ${slot}`}, payment {payment}</p>{address && <p className="mt-2 text-sm text-black/60">{fulfillmentType === "PICKUP" ? "Customer" : "Deliver to"} {address.name}, {address.line}, {address.city} - {address.pincode}</p>}<label className="mt-5 flex gap-2 text-sm"><input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} /> I agree to terms, easy cancellation, and freshness policy.</label><Button variant="gold" className="mt-5 w-full sm:w-auto" onClick={() => finish(true)} disabled={placing || deliveryDateIsPast}>{placing ? "Placing..." : "Place Order"}</Button></div>}
             <div className="mt-6 grid grid-cols-2 gap-3 sm:flex sm:justify-between"><Button variant="ghost" onClick={() => setStep(Math.max(1, step - 1))}>Back</Button>{step < 3 && <Button onClick={() => setStep(Math.min(3, step + 1))}>Next</Button>}</div>
           </section>
-          <Summary t={fulfillmentType === "PICKUP" ? { ...t, delivery: 0, total: t.total - t.delivery } : t} code="" coupons={coupons} setCode={() => {}} applyCoupon={() => {}} />
+          <Summary t={fulfillmentType === "PICKUP" ? { ...t, delivery: 0, total: t.total - t.delivery } : t} code="" couponCode={couponCode} coupons={coupons} setCode={() => {}} applyCoupon={() => {}} showCoupons={false} showCheckout={false} />
         </div>
       </main>
       {processing && <RazorpayProcessing state={processing} />}
@@ -1253,8 +1460,17 @@ function PaymentFailed() {
 function TrackOrder({ number }: { number?: string }) {
   const { orders, products } = useStore();
   const [remoteOrder, setRemoteOrder] = useState<Order | null>(null);
-  useEffect(() => { if (number) fetchTracking(number).then((data) => setRemoteOrder(data.order)).catch(() => undefined); }, [number]);
-  const order = remoteOrder || orders.find((o) => o.orderNumber === number) || orders[0];
+  const [loading, setLoading] = useState(Boolean(number));
+  useEffect(() => {
+    if (!number) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchTracking(number).then((data) => setRemoteOrder(data.order)).catch(() => undefined).finally(() => setLoading(false));
+  }, [number]);
+  const order = remoteOrder || orders.find((o) => o.orderNumber === number) || (!number ? orders[0] : null);
+  if (loading && !order) return <CustomerShell><main className="container-premium py-10"><section className="premium-card mx-auto max-w-xl p-8 text-center"><PackageCheck className="mx-auto text-[#8a6500]" size={52} /><h1 className="display-font mt-4 text-3xl font-black">Loading tracking</h1><p className="mt-2 text-black/60">Please wait while we load your order tracking.</p></section></main></CustomerShell>;
   if (!order) return <CustomerShell><main className="container-premium py-10"><Empty title="Tracking not available" cta="Go to orders" href="/orders" /></main></CustomerShell>;
   const steps = ["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered"];
   const current = steps.indexOf(order.status);
@@ -1303,12 +1519,141 @@ function OrdersPage() {
       setSavingReturn(false);
     }
   };
+  return (
+    <CustomerShell>
+      <main className="bg-[#f4f6fb] py-6">
+        <div className="container-premium">
+          <BackNav fallback="/account" label="Back to account" />
+          <h1 className="display-font text-3xl font-black">My Orders</h1>
+          {list.length ? <div className="mt-6 grid gap-4">
+            {list.map((o) => {
+              const activeReturns = (o.returns || []).filter((item) => item.status !== "REJECTED");
+              const canReturn = o.status === "Delivered" && !activeReturns.some((item) => item.status !== "COMPLETED");
+              const isReturning = returningOrder === o.orderNumber;
+              const orderTotal = o.grandTotal || totals(o.items, products, coupons, o.couponCode).total;
+              const completed = ["Delivered", "Refunded"].includes(o.status);
+              return (
+                <div key={o.orderNumber} className="overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-black/5">
+                  <Link href={`/orders/${o.orderNumber}`} className="flex items-center justify-between gap-4 p-4">
+                    <div className="flex items-center gap-3">
+                      <span className={`grid h-10 w-10 place-items-center rounded-md ${completed ? "bg-green-50 text-green-700" : "bg-[#fff8df] text-[#8a6500]"}`}>{completed ? "✓" : <PackageCheck size={20} />}</span>
+                      <div>
+                        <h3 className="text-lg font-black">{completed ? "Delivered" : o.status}</h3>
+                        <p className="text-sm text-black/60">{money(orderTotal)} · {new Date(o.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={20} />
+                  </Link>
+                  <div className="border-t border-black/5 p-4">
+                    <div className="responsive-scroll flex gap-3 overflow-x-auto pb-1">
+                      {o.items.slice(0, 6).map((item) => {
+                        const p = products.find((entry) => entry.id === item.productId);
+                        return <Link href={`/orders/${o.orderNumber}`} key={item.id || item.sku || item.name} className="grid h-16 w-24 shrink-0 place-items-center rounded-md border border-[#e8dfcd] bg-white"><img src={p?.image || imageFallback} alt={item.name || p?.name || "Order item"} className="h-14 w-20 object-contain" /></Link>;
+                      })}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={() => reorder(o)}><RotateCcw size={16} /> Reorder</Button>
+                      {canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold"><FileText size={16} /> Download invoice</Button></Link>}
+                      {o.paymentStatus === "Failed" && <><Link href="/checkout?payment=razorpay"><Button variant="gold">Retry Payment</Button></Link><Link href="/checkout?payment=cod"><Button variant="outline">Choose COD</Button></Link></>}
+                      {canReturn && <Button variant="ghost" onClick={() => { setReturningOrder(isReturning ? null : o.orderNumber); setReturnItemId(""); setReturnReason(""); setReturnBank(blankReturnBank); }}><PackageCheck size={16} /> Request return</Button>}
+                    </div>
+                    {activeReturns.length > 0 && <div className="mt-4 rounded-md border border-[#e6d7aa] bg-[#fffaf0] p-3 text-sm"><p className="font-bold">Return and refund status</p>{activeReturns.map((item) => { const refund = item.refunds?.[0]; return <p key={item.id} className="mt-1 text-black/65">{item.orderItemId ? o.items.find((orderItem) => orderItem.id === item.orderItemId)?.name || "Selected item" : "Full order"}: <span className="font-bold text-[#8a6500]"> {item.status.replace("_", " ")}</span>{refund ? <span> · Refund {money(refund.amount)} {refund.status.replace("_", " ")}</span> : <span> · Refund starts after approval</span>}</p>; })}</div>}
+                    {isReturning && <div className="mt-4 grid gap-3 rounded-md border bg-white p-4"><label className="grid gap-1 text-sm font-bold">Return selection<select value={returnItemId} onChange={(event) => setReturnItemId(event.target.value)} className="rounded-md border px-3 py-2 font-normal"><option value="">Full order</option>{o.items.map((item) => <option key={item.id || item.sku} value={item.id}>{item.name || item.sku} {item.unit ? `- ${item.unit}` : ""}</option>)}</select></label><label className="grid gap-1 text-sm font-bold">Reason<textarea value={returnReason} onChange={(event) => setReturnReason(event.target.value)} rows={3} className="rounded-md border px-3 py-2 font-normal" placeholder="Tell us what went wrong with the delivered product" /></label><div className="grid gap-3 md:grid-cols-2"><input value={returnBank.bankAccountHolder} onChange={(e) => setReturnBank({ ...returnBank, bankAccountHolder: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Account holder name" /><input value={returnBank.bankName} onChange={(e) => setReturnBank({ ...returnBank, bankName: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Bank name" /><input value={returnBank.bankAccountNumber} onChange={(e) => setReturnBank({ ...returnBank, bankAccountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} className="rounded-md border px-3 py-2" placeholder="Account number" /><input value={returnBank.bankIfsc} onChange={(e) => setReturnBank({ ...returnBank, bankIfsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} className="rounded-md border px-3 py-2" placeholder="IFSC code" /></div><p className="text-sm text-black/55">Bank details are saved with this return request and shown only to authorized admin staff for refund processing.</p><div className="flex flex-wrap gap-2"><Button variant="gold" disabled={savingReturn} onClick={() => submitReturn(o)}>{savingReturn ? "Submitting..." : "Submit return"}</Button><Button variant="outline" disabled={savingReturn} onClick={() => setReturningOrder(null)}>Cancel</Button></div></div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div> : <Empty title="No orders yet" cta="Start shopping" href="/products" />}
+        </div>
+      </main>
+    </CustomerShell>
+  );
   return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/account" label="Back to account" /><h1 className="display-font text-3xl font-black">My Orders</h1><div className="mt-6 grid gap-4">{list.map((o) => {
     const activeReturns = (o.returns || []).filter((item) => item.status !== "REJECTED");
     const canReturn = o.status === "Delivered" && !activeReturns.some((item) => item.status !== "COMPLETED");
     const isReturning = returningOrder === o.orderNumber;
     return <div key={o.orderNumber} className="premium-card p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="display-font font-bold">{o.orderNumber}</h3><p className="text-sm text-black/55">{o.items.length} items | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p><p className="mt-1 text-xs font-bold text-black/50">{o.paymentMethod} payment {o.razorpayPaymentId ? `| ${o.razorpayPaymentId}` : ""}</p></div><div className="flex gap-2"><StatusBadge value={o.status} /><StatusBadge value={o.paymentStatus} /></div></div>{activeReturns.length > 0 && <div className="mt-4 rounded-md border border-[#e6d7aa] bg-[#fffaf0] p-3 text-sm"><p className="font-bold">Return and refund status</p>{activeReturns.map((item) => { const refund = item.refunds?.[0]; return <p key={item.id} className="mt-1 text-black/65">{item.orderItemId ? o.items.find((orderItem) => orderItem.id === item.orderItemId)?.name || "Selected item" : "Full order"}: <span className="font-bold text-[#8a6500]"> {item.status.replace("_", " ")}</span>{refund ? <span> · Refund {money(refund.amount)} {refund.status.replace("_", " ")}</span> : <span> · Refund starts after approval</span>}</p>; })}</div>}<div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" onClick={() => reorder(o)}><RotateCcw size={16} /> Reorder</Button><Link href={`/track-order/${o.orderNumber}`}><Button>Track</Button></Link>{canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold"><FileText size={16} /> Invoice</Button></Link>}{o.paymentStatus === "Failed" && <><Link href="/checkout?payment=razorpay"><Button variant="gold">Retry Payment</Button></Link><Link href="/checkout?payment=cod"><Button variant="outline">Choose COD</Button></Link></>}{canReturn && <Button variant="ghost" onClick={() => { setReturningOrder(isReturning ? null : o.orderNumber); setReturnItemId(""); setReturnReason(""); setReturnBank(blankReturnBank); }}><PackageCheck size={16} /> Request return</Button>}</div>{isReturning && <div className="mt-4 grid gap-3 rounded-md border bg-white p-4"><label className="grid gap-1 text-sm font-bold">Return selection<select value={returnItemId} onChange={(event) => setReturnItemId(event.target.value)} className="rounded-md border px-3 py-2 font-normal"><option value="">Full order</option>{o.items.map((item) => <option key={item.id || item.sku} value={item.id}>{item.name || item.sku} {item.unit ? `- ${item.unit}` : ""}</option>)}</select></label><label className="grid gap-1 text-sm font-bold">Reason<textarea value={returnReason} onChange={(event) => setReturnReason(event.target.value)} rows={3} className="rounded-md border px-3 py-2 font-normal" placeholder="Tell us what went wrong with the delivered product" /></label><div className="grid gap-3 md:grid-cols-2"><input value={returnBank.bankAccountHolder} onChange={(e) => setReturnBank({ ...returnBank, bankAccountHolder: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Account holder name" /><input value={returnBank.bankName} onChange={(e) => setReturnBank({ ...returnBank, bankName: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Bank name" /><input value={returnBank.bankAccountNumber} onChange={(e) => setReturnBank({ ...returnBank, bankAccountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} className="rounded-md border px-3 py-2" placeholder="Account number" /><input value={returnBank.bankIfsc} onChange={(e) => setReturnBank({ ...returnBank, bankIfsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} className="rounded-md border px-3 py-2" placeholder="IFSC code" /></div><p className="text-sm text-black/55">Bank details are saved with this return request and shown only to authorized admin staff for refund processing.</p><div className="flex flex-wrap gap-2"><Button variant="gold" disabled={savingReturn} onClick={() => submitReturn(o)}>{savingReturn ? "Submitting..." : "Submit return"}</Button><Button variant="outline" disabled={savingReturn} onClick={() => setReturningOrder(null)}>Cancel</Button></div></div>}</div>;
   })}</div></main></CustomerShell>;
+}
+
+function OrderSummaryPage({ number }: { number?: string }) {
+  const { orders, products, coupons } = useStore();
+  const [remoteOrder, setRemoteOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(Boolean(number));
+  useEffect(() => {
+    if (!number) {
+      setLoading(false);
+      return;
+    }
+    fetchOrder(number)
+      .then(setRemoteOrder)
+      .catch(() => fetchAdminOrder(number).then(setRemoteOrder).catch(() => undefined))
+      .finally(() => setLoading(false));
+  }, [number]);
+  const order = remoteOrder || orders.find((o) => o.orderNumber === number) || null;
+  if (loading && !order) return <CustomerShell><main className="container-premium py-10"><section className="premium-card p-8 text-center">Loading order summary...</section></main></CustomerShell>;
+  if (!order) return <CustomerShell><main className="container-premium py-10"><Empty title="Order not available" cta="Go to orders" href="/orders" /></main></CustomerShell>;
+  const snapshot = totals(order.items, products, coupons, order.couponCode);
+  const subtotal = order.subtotal || snapshot.subtotal;
+  const grandTotal = order.grandTotal || snapshot.total;
+  const couponDiscount = order.couponDiscount ?? snapshot.couponDiscount;
+  const handlingCharge = order.handlingCharge ?? snapshot.handling;
+  const deliveryCharge = order.deliveryCharge ?? snapshot.delivery;
+  const address = order.address;
+  return (
+    <CustomerShell>
+      <main className="bg-white py-6">
+        <div className="container-premium max-w-4xl">
+          <BackNav fallback="/orders" label="Back" />
+          <section className="mt-4">
+            <h1 className="text-2xl font-black">Order summary</h1>
+            <p className="mt-1 text-sm text-black/60">{order.status === "Delivered" ? "Delivered" : order.status} · {new Date(order.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+            {canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`} className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[#0b8f20]">Download invoice <FileText size={15} /></Link>}
+          </section>
+          <section className="mt-6">
+            <h2 className="font-black">{order.items.length} {order.items.length === 1 ? "item" : "items"} in this order</h2>
+            <div className="mt-3 grid gap-3">
+              {order.items.map((item) => {
+                const p = products.find((entry) => entry.id === item.productId);
+                return (
+                  <div key={item.id || item.sku || item.name} className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-3">
+                    <img src={p?.image || imageFallback} alt={item.name || p?.name || "Order item"} className="h-16 w-16 rounded-md border border-[#e8dfcd] object-contain p-1" />
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-semibold">{item.name || p?.name || "Order item"}</p>
+                      <p className="mt-1 text-sm text-black/55">{itemUnit(item, p)} x {item.qty}</p>
+                    </div>
+                    <b className="text-sm">{money(itemLineTotal(item, products))}</b>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <div className="my-6 h-2 bg-black/[0.04]" />
+          <section>
+            <h2 className="font-black">Bill details</h2>
+            <div className="mt-4 grid gap-3 text-sm">
+              <div className="flex justify-between"><span className="text-black/60">MRP</span><span>{money(subtotal)}</span></div>
+              {couponDiscount > 0 && <div className="flex justify-between"><span className="text-black/60">Coupon discount {order.couponCode ? `(${order.couponCode})` : ""}</span><span>-{money(couponDiscount)}</span></div>}
+              <div className="flex justify-between"><span className="text-black/60">Handling charge</span><span>{money(handlingCharge)}</span></div>
+              <div className="flex justify-between"><span className="text-black/60">Delivery charges</span><span>{money(deliveryCharge)}</span></div>
+              <div className="flex justify-between border-t pt-3 font-black"><span>Bill total</span><span>{money(grandTotal)}</span></div>
+            </div>
+          </section>
+          <div className="my-6 h-2 bg-black/[0.04]" />
+          <section>
+            <h2 className="font-black">Order details</h2>
+            <div className="mt-4 grid gap-4 text-sm">
+              <div><p className="text-black/50">Order id</p><p className="font-semibold">{order.orderNumber}</p></div>
+              <div><p className="text-black/50">Payment</p><p className="font-semibold">{order.paymentMethod === "Razorpay" ? "Online payment" : "Cash on delivery"} · {order.paymentStatus}</p></div>
+              <div><p className="text-black/50">Deliver to</p><p className="font-semibold">{address.name}, {address.line}, {address.city}, {address.state || "Gujarat"} - {address.pincode}</p></div>
+              <div><p className="text-black/50">Order placed</p><p className="font-semibold">{new Date(order.createdAt).toLocaleString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</p></div>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2"><Link href={`/track-order/${order.orderNumber}`}><Button>Track order</Button></Link>{canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">Download invoice</Button></Link>}<Link href="/orders"><Button variant="outline">Order history</Button></Link></div>
+          </section>
+        </div>
+      </main>
+    </CustomerShell>
+  );
 }
 
 function InvoicePage({ number }: { number?: string }) {
@@ -1460,7 +1805,39 @@ function ProfilePanel() {
 
   const initials = (customer?.name || "EM").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const joined = customer?.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : "Recently";
-  return <section className="grid gap-5 xl:grid-cols-[320px_1fr]"><aside className="premium-card p-6 text-center"><div className="mx-auto flex h-36 w-36 items-center justify-center rounded-full border-4 border-[#efe6c8] bg-black text-5xl font-black text-[#d4af37] shadow-xl">{initials}</div><h2 className="display-font mt-5 text-2xl font-black">{resetting ? form.name || customer?.name || "Customer" : customer?.name || "Customer"}</h2><p className="text-sm text-black/55">{customer?.email}</p><div className="mt-6 rounded-md border border-[#eadfca] bg-[#faf7ef] p-4 text-left"><p className="text-xs font-black uppercase tracking-wide text-black/55">Customer ID</p><b>{customer?.id || "-"}</b><p className="mt-3 text-xs font-black uppercase tracking-wide text-black/55">Phone</p><b>{resetting ? form.phone || "Not added" : customer?.phone || "Not added"}</b></div></aside><form onSubmit={submit} className="premium-card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfca] p-5"><div><h2 className="display-font text-2xl font-black">Personal Information</h2><p className="text-sm text-black/55">{resetting ? "Refreshing your profile from database..." : "Update your customer account details from database."}</p></div><span className="rounded-full bg-[#fff4c9] px-4 py-2 text-xs font-black text-[#8a6500]">CUSTOMER ID: {customer?.id?.slice(-8).toUpperCase()}</span></div><div className="grid gap-5 p-5 md:grid-cols-2"><label className="text-xs font-black uppercase tracking-wide text-black/65">Full name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" placeholder="Full name" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Mobile number<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" placeholder="10 digit mobile number" /></label><label className="text-xs font-black uppercase tracking-wide text-black/65">Email address<input value={customer?.email || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-black/55">Account status</p><b>{customer?.status || "ACTIVE"}</b><p className="mt-1 text-sm text-black/50">Joined {joined}</p></div><div className="md:col-span-2"><p className="text-xs font-black uppercase tracking-wide text-black/65">Profile completeness</p><div className="mt-3 grid grid-cols-4 gap-2">{[form.name, customer?.email, form.phone, customer?.status].map((item, index) => <span key={index} className={`h-2 rounded-full ${item ? "bg-[#d4af37]" : "bg-black/10"}`} />)}</div></div></div><div className="flex flex-wrap justify-end gap-3 border-t border-[#eadfca] bg-[#faf7ef] p-5"><Button type="button" variant="outline" disabled={saving || resetting} onClick={resetForm}>{resetting ? "Resetting..." : "Reset profile"}</Button><Button variant="gold" disabled={saving || resetting || !hasChanges}>{saving ? "Saving..." : "Save changes"}</Button></div></form><div className="premium-card border-l-4 border-l-[#d4af37] p-5"><p className="text-xs font-black uppercase tracking-wide text-black/55">Active since</p><h3 className="display-font mt-2 text-2xl font-black">{joined}</h3><p className="mt-2 text-sm text-[#8a6500]">{customer?.status || "ACTIVE"}</p></div><div className="premium-card border-l-4 border-l-[#d4af37] p-5"><p className="text-xs font-black uppercase tracking-wide text-black/55">Profile access</p><h3 className="display-font mt-2 text-2xl font-black">{customer?.email ? "Verified Account" : "Customer Account"}</h3><p className="mt-2 text-sm text-black/55">Linked to {customer?.email || customer?.phone || "your customer login"}.</p></div></section>;
+  return (
+    <section className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="rounded-md bg-white p-5 text-center shadow-sm ring-1 ring-black/5">
+        <div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-black text-4xl font-black text-[#d4af37] ring-4 ring-[#f1e7c8]">{initials}</div>
+        <h2 className="mt-4 text-2xl font-black">{form.name || customer?.name || "Customer"}</h2>
+        <p className="mt-1 text-sm text-black/55">{customer?.email}</p>
+        <div className="mt-5 grid gap-3 rounded-md bg-[#f7f4ec] p-4 text-left text-sm">
+          <div><p className="text-xs font-black uppercase text-black/50">Customer ID</p><p className="mt-1 break-all font-bold">{customer?.id || "-"}</p></div>
+          <div><p className="text-xs font-black uppercase text-black/50">Joined</p><p className="mt-1 font-bold">{joined}</p></div>
+          <div><p className="text-xs font-black uppercase text-black/50">Status</p><p className="mt-1 font-bold text-[#0b8f20]">{customer?.status || "ACTIVE"}</p></div>
+        </div>
+      </aside>
+      <form onSubmit={submit} className="rounded-md bg-white shadow-sm ring-1 ring-black/5">
+        <div className="border-b border-[#eadfca] p-5">
+          <h2 className="text-2xl font-black">Personal Information</h2>
+          <p className="mt-1 text-sm text-black/55">{resetting ? "Refreshing your saved profile..." : "Update the details used for orders, invoices, and support."}</p>
+        </div>
+        <div className="grid gap-4 p-5 md:grid-cols-2">
+          <label className="text-sm font-bold">Full name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" placeholder="Full name" /></label>
+          <label className="text-sm font-bold">Mobile number<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} className="mt-2 w-full rounded-md border border-[#cfc4a6] bg-white px-4 py-3 text-base font-normal outline-none focus:border-[#d4af37]" placeholder="10 digit mobile number" inputMode="numeric" /></label>
+          <label className="text-sm font-bold md:col-span-2">Email address<input value={customer?.email || ""} readOnly className="mt-2 w-full rounded-md border border-[#eadfca] bg-[#f7f3ea] px-4 py-3 text-base font-normal text-black/60 outline-none" /></label>
+          <div className="rounded-md border border-[#eadfca] bg-[#fbfaf6] p-4 md:col-span-2">
+            <p className="text-sm font-bold">Account access</p>
+            <p className="mt-1 text-sm text-black/60">{customer?.email ? `Verified account linked to ${customer.email}.` : "Customer account access is active."}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-3 border-t border-[#eadfca] bg-[#faf7ef] p-5">
+          <Button type="button" variant="outline" disabled={saving || resetting} onClick={resetForm}>{resetting ? "Resetting..." : "Reset"}</Button>
+          <Button variant="gold" disabled={saving || resetting || !hasChanges}>{saving ? "Saving..." : "Save changes"}</Button>
+        </div>
+      </form>
+    </section>
+  );
 }
 
 function AccountOrderCard({ order, products, coupons, onReturnSubmitted }: { order: Order; products: Product[]; coupons: StoreCoupons; onReturnSubmitted: () => Promise<void> }) {
@@ -1501,11 +1878,11 @@ function AccountPage({ section = "dashboard" }: { section?: string }) {
   const active = section || "dashboard";
   const totalSpent = orders.reduce((s, o) => s + totals(o.items, products, coupons, o.couponCode).total, 0);
   const totalSavings = orders.reduce((s, o) => { const next = totals(o.items, products, coupons, o.couponCode); return s + next.discount + next.couponDiscount; }, 0);
-  const wishlistProducts = products.filter((p) => wishlist.includes(p.id));
+  const wishlistProducts = products.filter((p) => wishlist.includes(p.id) && isCustomerVisibleProduct(p));
   const recentOrder = orders[0];
   const activeOrders = orders.filter((o) => !["Delivered", "Cancelled"].includes(o.status));
   const defaultAddress = addresses.find((a) => a.isDefault) || addresses[0];
-  const reorderSuggestions = products.filter((p) => p.stock > 0).slice(0, 4);
+  const reorderSuggestions = products.filter(isCustomerVisibleProduct).slice(0, 4);
   const logout = async () => { await logoutCustomer(); router.push("/"); };
   const content = () => {
     if (active === "profile") return <ProfilePanel />;
@@ -1731,7 +2108,7 @@ function ContactPage() {
 }
 
 function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "reset-password" }) {
-  const { loginCustomer, registerCustomer, toast } = useStore();
+  const { loginCustomer, requestSignupOtp, verifySignupOtp, toast } = useStore();
   const router = useRouter();
   const params = useSearchParams();
   const [show, setShow] = useState(false);
@@ -1739,9 +2116,11 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [providerConfig, setProviderConfig] = useState<AuthProviderConfig | null>(null);
-  const [channel, setChannel] = useState<"email" | "sms">("email");
   const [otp, setOtp] = useState("");
   const [grant, setGrant] = useState("");
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [signupId, setSignupId] = useState("");
+  const signupChannel = "email";
   const [retryAfter, setRetryAfter] = useState(0);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirm: "", terms: false, remember: true });
   const update = (key: keyof typeof form, value: string | boolean) => setForm((next) => ({ ...next, [key]: value }));
@@ -1756,7 +2135,7 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
   const passwordChecks = [
     ["At least 8 characters", form.password.length >= 8],
     ["Letters and numbers", /[A-Za-z]/.test(form.password) && /\d/.test(form.password)],
-    ["Passwords match", mode !== "signup" || (!!form.confirm && form.password === form.confirm)],
+    ["Passwords match", !(mode === "signup" || mode === "reset-password" || (mode === "forgot-password" && grant)) || (!!form.confirm && form.password === form.confirm)],
   ];
   const safeNext = () => {
     const next = params.get("next");
@@ -1769,8 +2148,28 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
     setLoading(true);
     try {
       if (mode === "forgot-password") {
-        const result = await forgotCustomerPassword(channel === "email" ? { channel, email: form.email } : { channel, phone: form.phone });
-        setStatus(result.providerConfigured ? result.message : "Recovery is configured safely, but this delivery provider is not enabled yet.");
+        if (!form.email || !/^\S+@\S+\.\S+$/.test(form.email)) return setError("Enter a valid email address.");
+        if (grant) {
+          await resetCustomerPassword({ grant, password: form.password, confirmPassword: form.confirm });
+          toast("Password reset complete. Please login.", "success");
+          router.push("/login");
+          return;
+        }
+        if (forgotOtpSent) {
+          if (otp.length !== 6) return setError("Enter the 6 digit OTP.");
+          const result = await verifyCustomerResetOtp({ email: form.email, otp });
+          setGrant(result.grant);
+          setStatus("OTP verified. Set your new password.");
+          return;
+        }
+        const result = await forgotCustomerPassword({ email: form.email });
+        if (!result.providerConfigured) {
+          setRetryAfter(0);
+          return setError("Email OTP service is not configured yet.");
+        }
+        setForgotOtpSent(true);
+        setRetryAfter(result.resendAfterSeconds || 60);
+        setStatus(result.message);
         return;
       }
       if (mode === "reset-password") {
@@ -1786,9 +2185,19 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
         if (!/^[6-9]\d{9}$/.test(form.phone.replace(/\D/g, "").slice(-10))) return setError("Enter a valid 10 digit mobile number.");
         if (form.password !== form.confirm) return setError("Passwords do not match.");
         if (!form.terms) return setError("Accept the terms to create an account.");
+        if (signupId) {
+          if (otp.length !== 6) return setError("Enter the 6 digit OTP.");
+          await verifySignupOtp({ signupId, otp });
+          router.push(safeNext());
+          return;
+        }
+        const result = await requestSignupOtp({ name: form.name, email: form.email, phone: form.phone, password: form.password, confirmPassword: form.confirm, terms: form.terms, channel: signupChannel });
+        setSignupId(result.signupId);
+        setStatus(result.message);
+        setRetryAfter(result.resendAfterSeconds || 60);
+        return;
       }
       if (mode === "login") await loginCustomer({ email: form.email, password: form.password });
-      if (mode === "signup") await registerCustomer({ name: form.name, email: form.email, phone: form.phone, password: form.password, terms: form.terms });
       router.push(safeNext());
     } catch (authError) {
       if (authError instanceof ApiError && authError.retryAfterSeconds) setRetryAfter(authError.retryAfterSeconds);
@@ -1797,21 +2206,8 @@ function AuthPage({ mode }: { mode: "login" | "signup" | "forgot-password" | "re
       setLoading(false);
     }
   };
-  const verifyOtp = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const result = await verifyCustomerResetOtp({ phone: form.phone, otp });
-      setGrant(result.grant);
-      setStatus("Verification complete. Set a new password.");
-    } catch (authError) {
-      setError(authError instanceof Error ? authError.message : "Verification failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
   const title = mode === "signup" ? "Create Account" : mode === "forgot-password" ? "Forgot Password" : mode === "reset-password" ? "Reset Password" : "Login";
-  return <CustomerShell><main className="min-h-[78vh] bg-[#131313] text-white"><div className="container-premium grid min-h-[78vh] items-center gap-8 py-10 lg:grid-cols-2"><section className="hidden lg:block"><Logo invert /><h1 className="display-font mt-8 text-5xl font-black">Welcome to Eagle Mart</h1><p className="mt-4 max-w-md text-white/65">Premium grocery access, order history, saved addresses, and curated essentials in one secure account.</p></section><section className="rounded-md border border-[#d4af37]/20 bg-[#20201f] p-6 shadow-2xl md:p-8"><Logo invert /><h2 className="display-font mt-6 text-2xl font-black">{title}</h2><p className="mt-1 text-sm text-white/60">Eagle Mart Grocery & Essentials</p>{(mode === "login" || mode === "signup") && <div className="mt-5 grid gap-2">{providerConfig?.google && <a className="rounded-md border border-white/15 bg-white px-4 py-3 text-center text-sm font-black text-black" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/google`}>Continue with Google</a>}{providerConfig?.apple && <a className="rounded-md border border-white/15 bg-black px-4 py-3 text-center text-sm font-black text-white" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/apple`}>Continue with Apple</a>}</div>}<form onSubmit={submit} className="mt-6 grid gap-4">{mode === "forgot-password" && <div className="grid grid-cols-2 gap-2 rounded-md bg-black p-1"><button type="button" onClick={() => setChannel("email")} className={`rounded px-3 py-2 text-sm font-bold ${channel === "email" ? "bg-[#d4af37] text-black" : "text-white/70"}`}>Email</button><button type="button" onClick={() => setChannel("sms")} className={`rounded px-3 py-2 text-sm font-bold ${channel === "sms" ? "bg-[#d4af37] text-black" : "text-white/70"}`}>Mobile SMS</button></div>}{mode === "signup" && <input aria-label="Full name" value={form.name} onChange={(e) => update("name", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Full name" />}{(mode === "login" || mode === "signup" || (mode === "forgot-password" && channel === "email")) && <input aria-label="Email address" value={form.email} onChange={(e) => update("email", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Email address" type="email" />}{(mode === "signup" || (mode === "forgot-password" && channel === "sms")) && <input aria-label="Mobile number" value={form.phone} onChange={(e) => update("phone", e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="10 digit mobile number" />}{mode === "forgot-password" && channel === "sms" && <div className="grid grid-cols-[1fr_auto] gap-2"><input aria-label="Six digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} className="rounded-md border border-white/10 bg-black px-3 py-3 tracking-[0.4em] outline-none focus:border-[#d4af37]" placeholder="000000" /><Button type="button" variant="outline" disabled={loading || otp.length !== 6} onClick={verifyOtp}>Verify</Button></div>}{mode !== "forgot-password" && <div className="relative"><input aria-label="Password" value={form.password} onChange={(e) => update("password", e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder={mode === "reset-password" ? "New password" : "Password"} type={show ? "text" : "password"} /><button type="button" aria-label="Toggle password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>}{(mode === "signup" || mode === "reset-password") && <input aria-label="Confirm password" value={form.confirm} onChange={(e) => update("confirm", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Confirm password" type="password" />}{(mode === "signup" || mode === "reset-password") && <div className="grid gap-1 text-xs text-white/65">{passwordChecks.map(([label, ok]) => <span key={String(label)} className={ok ? "text-[#e7c766]" : "text-white/50"}>{ok ? "OK" : "-"} {label}</span>)}</div>}{mode === "login" && <div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input checked={form.remember} onChange={(e) => update("remember", e.target.checked)} type="checkbox" /> Remember me</label><Link href="/forgot-password" className="text-[#e7c766]">Forgot password?</Link></div>}{mode === "signup" && <label className="flex items-center gap-2 text-sm text-white/75"><input checked={form.terms} onChange={(e) => update("terms", e.target.checked)} type="checkbox" /> I agree to Eagle Mart terms</label>}{retryAfter > 0 && <p className="rounded-md bg-[#d4af37]/15 p-3 text-sm text-[#e7c766]">Try again in {String(Math.floor(retryAfter / 60)).padStart(2, "0")}:{String(retryAfter % 60).padStart(2, "0")}</p>}{status && <p className="rounded-md bg-green-500/15 p-3 text-sm text-green-100">{status}</p>}{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading || retryAfter > 0}>{loading ? "Loading..." : title}</Button></form><div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{mode !== "login" ? <Link href="/login" className="text-[#e7c766]">Back to login</Link> : <Link href="/signup" className="text-[#e7c766]">Create account</Link>}</div></section></div></main></CustomerShell>;
+  return <CustomerShell><main className="min-h-[78vh] bg-[#131313] text-white"><div className="container-premium grid min-h-[78vh] items-center gap-8 py-10 lg:grid-cols-2"><section className="hidden lg:block"><Logo invert /><h1 className="display-font mt-8 text-5xl font-black">Welcome to Eagle Mart</h1><p className="mt-4 max-w-md text-white/65">Premium grocery access, order history, saved addresses, and curated essentials in one secure account.</p></section><section className="rounded-md border border-[#d4af37]/20 bg-[#20201f] p-6 shadow-2xl md:p-8"><Logo invert /><h2 className="display-font mt-6 text-2xl font-black">{signupId ? "Verify Email OTP" : title}</h2><p className="mt-1 text-sm text-white/60">Eagle Mart Grocery & Essentials</p>{(mode === "login" || (mode === "signup" && !signupId)) && <div className="mt-5 grid gap-2">{providerConfig?.google && <a className="rounded-md border border-white/15 bg-white px-4 py-3 text-center text-sm font-black text-black" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/google`}>Continue with Google</a>}{providerConfig?.apple && <a className="rounded-md border border-white/15 bg-black px-4 py-3 text-center text-sm font-black text-white" href={`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000"}/api/auth/apple`}>Continue with Apple</a>}</div>}<form onSubmit={submit} className="mt-6 grid gap-4">{mode === "signup" && !signupId && <input aria-label="Full name" value={form.name} onChange={(e) => update("name", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Full name" />}{(mode === "login" || (mode === "signup" && !signupId) || mode === "forgot-password") && <input aria-label="Email address" value={form.email} onChange={(e) => update("email", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Email address" type="email" disabled={mode === "forgot-password" && (forgotOtpSent || !!grant)} />}{mode === "signup" && !signupId && <input aria-label="Mobile number" value={form.phone} onChange={(e) => update("phone", e.target.value.replace(/\D/g, "").slice(0, 10))} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="10 digit mobile number" />}{mode === "signup" && signupId && <input aria-label="Signup OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} className="rounded-md border border-white/10 bg-black px-3 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-[#d4af37]" placeholder="000000" />}{mode === "forgot-password" && forgotOtpSent && !grant && <input aria-label="Six digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} className="rounded-md border border-white/10 bg-black px-3 py-3 text-center text-xl tracking-[0.35em] outline-none focus:border-[#d4af37]" placeholder="000000" />}{((mode !== "forgot-password" && !signupId) || (mode === "forgot-password" && grant)) && <div className="relative"><input aria-label="Password" value={form.password} onChange={(e) => update("password", e.target.value)} className="w-full rounded-md border border-white/10 bg-black px-3 py-3 pr-12 outline-none focus:border-[#d4af37]" placeholder={mode === "reset-password" || mode === "forgot-password" ? "New password" : "Password"} type={show ? "text" : "password"} /><button type="button" aria-label="Toggle password visibility" onClick={() => setShow(!show)} className="absolute right-3 top-3 text-white/60">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>}{(mode === "signup" || mode === "reset-password" || (mode === "forgot-password" && grant)) && !signupId && <input aria-label="Confirm password" value={form.confirm} onChange={(e) => update("confirm", e.target.value)} className="rounded-md border border-white/10 bg-black px-3 py-3 outline-none focus:border-[#d4af37]" placeholder="Confirm password" type="password" />}{(mode === "signup" || mode === "reset-password" || (mode === "forgot-password" && grant)) && !signupId && <div className="grid gap-1 text-xs text-white/65">{passwordChecks.map(([label, ok]) => <span key={String(label)} className={ok ? "text-[#e7c766]" : "text-white/50"}>{ok ? "OK" : "-"} {label}</span>)}</div>}{mode === "login" && <div className="flex items-center justify-between text-sm"><label className="flex items-center gap-2"><input checked={form.remember} onChange={(e) => update("remember", e.target.checked)} type="checkbox" /> Remember me</label><Link href="/forgot-password" className="text-[#e7c766]">Forgot password?</Link></div>}{mode === "signup" && !signupId && <label className="flex items-center gap-2 text-sm text-white/75"><input checked={form.terms} onChange={(e) => update("terms", e.target.checked)} type="checkbox" /> I agree to Eagle Mart terms</label>}{mode === "signup" && signupId && <button type="button" className="text-left text-sm font-bold text-[#e7c766]" onClick={() => { setSignupId(""); setOtp(""); setStatus(""); setRetryAfter(0); }}>Change details</button>}{retryAfter > 0 && mode !== "signup" && !forgotOtpSent && <p className="rounded-md bg-[#d4af37]/15 p-3 text-sm text-[#e7c766]">Try again in {String(Math.floor(retryAfter / 60)).padStart(2, "0")}:{String(retryAfter % 60).padStart(2, "0")}</p>}{status && <p className="rounded-md bg-green-500/15 p-3 text-sm text-green-100">{status}</p>}{error && <p className="rounded-md bg-red-500/15 p-3 text-sm text-red-200">{error}</p>}<Button variant="gold" disabled={loading || (mode !== "signup" && mode !== "forgot-password" && retryAfter > 0)}>{loading ? "Loading..." : mode === "signup" && signupId ? "Verify & Create Account" : mode === "signup" ? "Send Email OTP" : mode === "forgot-password" && grant ? "Reset Password" : mode === "forgot-password" && forgotOtpSent ? "Verify OTP" : mode === "forgot-password" ? "Send Email OTP" : title}</Button></form><div className="mt-5 flex flex-wrap justify-between gap-3 text-sm">{mode !== "login" ? <Link href="/login" className="text-[#e7c766]">Back to login</Link> : <Link href="/signup" className="text-[#e7c766]">Create account</Link>}</div></section></div></main></CustomerShell>;
 }
 
 function Empty({ title, cta, href = "/products" }: { title: string; cta: string; href?: string }) {
@@ -1827,6 +2223,8 @@ function OrderMini({ order, products }: { order: Order; products: Product[] }) {
 function Router({ slug }: { slug: string[] }) {
   const [first, second] = slug;
   if (!first) return <HomePage />;
+  if (first === "education") return <ComingSoonPage variant="education" />;
+  if (first === "entertainment") return <ComingSoonPage variant="entertainment" />;
   if (first === "products" || first === "search") return <ProductsPage mode={first} />;
   if (first === "category") return <ProductsPage mode="category" value={second} />;
   if (first === "product") return <ProductDetail slug={second} />;
@@ -1838,7 +2236,7 @@ function Router({ slug }: { slug: string[] }) {
   if (first === "order-success") return <OrderSuccess number={second} />;
   if (first === "payment-failed") return <PaymentFailed />;
   if (first === "track-order") return <TrackOrder number={second} />;
-  if (first === "orders") return <OrdersPage />;
+  if (first === "orders") return second ? <OrderSummaryPage number={second} /> : <OrdersPage />;
   if (first === "invoice") return <InvoicePage number={second} />;
   if (["login", "signup", "forgot-password", "reset-password"].includes(first)) return <AuthPage mode={first as "login" | "signup" | "forgot-password" | "reset-password"} />;
   if (first === "account") return <AccountPage section={second || "dashboard"} />;

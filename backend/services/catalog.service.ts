@@ -25,6 +25,35 @@ type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productIncl
 const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryImageFallback = "/assets/placeholders/category-placeholder.svg";
 
+const homepageCategoryGroups = [
+  { key: "fruits-vegetables", title: "Fruits & Vegetables", imageUrl: "/assets/categories/fruits-vegetables.png", aliases: ["fruits", "vegetables", "fresh produce", "fruit", "vegetable"] },
+  { key: "dairy-bread-eggs", title: "Dairy, Bread & Eggs", imageUrl: "/assets/categories/dairy-bread-eggs.png", aliases: ["dairy", "bread", "bakery", "eggs", "egg"] },
+  { key: "atta-rice-dal", title: "Atta, Rice & Dal", imageUrl: "/assets/categories/atta-rice-dal.png", aliases: ["atta", "flour", "rice", "pulses", "dal", "grains", "food items"] },
+  { key: "masala-oil", title: "Masala & Oil", imageUrl: "/assets/categories/masala-oil.png", aliases: ["spices", "masala", "cooking oil", "oil", "ghee", "food items"] },
+  { key: "snacks-beverages", title: "Snacks & Beverages", imageUrl: "/assets/categories/snacks-beverages.png", aliases: ["snacks", "biscuits", "namkeen", "beverages", "juice", "cold drinks", "tea", "coffee", "chocolates", "confectionery", "food items"] },
+  { key: "packaged-food", title: "Packaged Food", imageUrl: "/assets/categories/packaged-food.png", aliases: ["food items", "packaged food", "instant food", "noodles", "sauces", "breakfast", "confectionery"] },
+  { key: "household-essentials", title: "Household Essentials", imageUrl: "/assets/categories/household-essentials.png", aliases: ["home care", "cleaning supplies", "detergents", "disposable items", "disposables", "household", "electrical appliances"] },
+  { key: "personal-care", title: "Personal Care", imageUrl: "/assets/categories/personal-care.png", aliases: ["personal care", "skin care", "haircare", "hair care", "baby care", "oral care", "bath body", "body care"] },
+] as const;
+
+function categoryGroupFor(value?: string) {
+  const normalized = normalizeSearch(value || "");
+  if (!normalized) return null;
+  return homepageCategoryGroups.find((group) => group.key === slugify(value || "") || normalizeSearch(group.title) === normalized || group.aliases.some((alias) => normalized === normalizeSearch(alias)));
+}
+
+function categoryGroupWhere(value: string): Prisma.CategoryWhereInput {
+  const group = categoryGroupFor(value);
+  if (!group) return { OR: [{ slug: value }, { name: value }] };
+  return {
+    OR: [
+      { slug: group.key },
+      { name: group.title },
+      ...group.aliases.flatMap((alias) => [{ slug: slugify(alias) }, { name: { contains: alias } }]),
+    ],
+  };
+}
+
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -170,6 +199,8 @@ export function mapProduct(product: ProductWithCatalog) {
     slug: product.slug,
     name: product.name,
     sku: product.sku,
+    productCode: product.clientProductCode,
+    clientProductCode: product.clientProductCode,
     brand: product.brand.name,
     brandId: product.brandId,
     brandSlug: product.brand.slug,
@@ -188,12 +219,15 @@ export function mapProduct(product: ProductWithCatalog) {
     reviews: product.reviewCount,
     reviewCount: product.reviewCount,
     stock: stock.stock,
+    inStock: stock.stock > 0,
     lowStock: stock.lowStock,
     stockStatus: stock.stockStatus,
     imageStatus: primaryImageStatus(product),
     imageSource: product.imageSource,
     image,
+    primaryImageUrl: image,
     images: product.images.map((item) => ({ id: item.id, url: item.url || productImageFallback, alt: item.alt ?? product.name, isPrimary: item.isPrimary })),
+    categoryInfo: { id: product.categoryId, name: product.category.name, slug: product.category.slug },
     tags: tags(product.tags),
     featured: product.featured,
     isFeatured: product.featured,
@@ -256,7 +290,7 @@ function buildProductWhere(query: ProductQuery, admin = false): Prisma.ProductWh
       ...terms.map((term) => ({ category: { name: { contains: term } } })),
     ] satisfies Prisma.ProductWhereInput[];
   }
-  if (query.category) where.category = { OR: [{ slug: query.category }, { name: query.category }] };
+  if (query.category) where.category = categoryGroupWhere(query.category);
   if (query.brand) where.brand = { OR: [{ slug: query.brand }, { name: query.brand }] };
   if (query.minPrice != null || query.maxPrice != null) {
     where.variants = { some: { price: { gte: query.minPrice, lte: query.maxPrice } } };
@@ -398,6 +432,61 @@ export async function listProducts(query: ProductQuery, admin = false) {
   };
 }
 
+export async function getHomepageCatalogSections(limit = 8) {
+  const sections = [];
+  for (const group of homepageCategoryGroups) {
+    const where: Prisma.ProductWhereInput = {
+      deletedAt: null,
+      status: ProductStatus.ACTIVE,
+      category: categoryGroupWhere(group.key),
+    };
+    const rows = await db.product.findMany({
+      where,
+      include: productInclude,
+      orderBy: [{ featured: "desc" }, { updatedAt: "desc" }, { name: "asc" }],
+      take: Math.max(24, Math.min(limit * 6, 80)),
+    });
+    const count = await db.product.count({ where });
+    sections.push({
+      id: group.key,
+      key: group.key,
+      title: group.title,
+      slug: group.key,
+      description: categoryDescriptionsForApi(group.title),
+      imageUrl: group.imageUrl,
+      productCount: count,
+      products: rows.sort(sortHomepageProducts).slice(0, limit).map(mapProduct),
+      resolvedCategorySlugs: group.aliases.map(slugify),
+    });
+  }
+  return { sections };
+}
+
+function sortHomepageProducts(a: ProductWithCatalog, b: ProductWithCatalog) {
+  const aStock = stockSummary(a).stock > 0 ? 1 : 0;
+  const bStock = stockSummary(b).stock > 0 ? 1 : 0;
+  if (a.featured !== b.featured) return a.featured ? -1 : 1;
+  if (aStock !== bStock) return bStock - aStock;
+  const aImage = primaryImageStatus(a) !== "Placeholder" ? 1 : 0;
+  const bImage = primaryImageStatus(b) !== "Placeholder" ? 1 : 0;
+  if (aImage !== bImage) return bImage - aImage;
+  return a.name.localeCompare(b.name);
+}
+
+function categoryDescriptionsForApi(title: string) {
+  const descriptions: Record<string, string> = {
+    "Fruits & Vegetables": "Daily farm produce, greens, roots, and premium fruit picks.",
+    "Dairy, Bread & Eggs": "Fresh milk, butter, paneer, bread, and breakfast staples.",
+    "Atta, Rice & Dal": "Trusted grains, flours, pulses, and pantry foundations.",
+    "Masala & Oil": "Cooking oils, spices, salt, and essentials for Indian kitchens.",
+    "Snacks & Beverages": "Tea, biscuits, juices, namkeen, and quick refreshment picks.",
+    "Packaged Food": "Family packs, noodles, ready pantry refills, and packaged staples.",
+    "Household Essentials": "Cleaning, laundry, hygiene, and home-care supplies.",
+    "Personal Care": "Everyday care, oral care, handwash, and grooming essentials.",
+  };
+  return descriptions[title] || "Premium Eagle Mart grocery essentials.";
+}
+
 export async function getProductBySlug(slug: string) {
   const product = await db.product.findFirst({
     where: { slug, deletedAt: null, status: ProductStatus.ACTIVE },
@@ -518,6 +607,8 @@ export async function createProduct(input: any) {
   const brandId = await resolveBrand(input);
   const slug = input.slug || slugify(input.name);
   const variants = normalizedVariants(input);
+  const image = validateImportedPrimaryImageUrl(String(input.image || ""));
+  if (image.url && !image.valid) throw new Error("Enter a valid image URL.");
 
   const productId = await db.$transaction(async (tx) => {
     const sku = input.sku?.trim() || await generateSku(tx, categoryId);
@@ -535,11 +626,11 @@ export async function createProduct(input: any) {
         featured: input.featured,
         organic: input.organic,
         local: input.local,
-        imageStatus: input.image ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
-        imageSource: input.image || null,
-        imageCheckedAt: input.image ? new Date() : null,
+        imageStatus: image.url ? ImageStatus.VERIFIED : ImageStatus.PLACEHOLDER,
+        imageSource: image.url || null,
+        imageCheckedAt: image.url ? new Date() : null,
         status: input.status,
-        images: input.image ? { create: { url: input.image, alt: input.name, isPrimary: true } } : undefined,
+        images: image.url ? { create: { url: image.url, alt: input.name, isPrimary: true } } : undefined,
       },
     });
 
@@ -593,9 +684,11 @@ export async function updateProduct(id: string, input: any) {
     await tx.product.update({ where: { id }, data });
 
     if (input.image) {
-      await tx.product.update({ where: { id }, data: { imageStatus: ImageStatus.VERIFIED, imageSource: input.image, imageCheckedAt: new Date() } });
+      const image = validateImportedPrimaryImageUrl(String(input.image));
+      if (!image.valid) throw new Error("Enter a valid image URL.");
+      await tx.product.update({ where: { id }, data: { imageStatus: ImageStatus.VERIFIED, imageSource: image.url, imageCheckedAt: new Date() } });
       await tx.productImage.deleteMany({ where: { productId: id } });
-      await tx.productImage.create({ data: { productId: id, url: input.image, alt: input.name, isPrimary: true } });
+      await tx.productImage.create({ data: { productId: id, url: image.url, alt: input.name, isPrimary: true } });
     }
 
     if (input.variants?.length) {
@@ -849,7 +942,7 @@ function templateSample() {
     sellingPrice: "149",
     mrp: "180",
     stock: "25",
-    primaryImageUrl: "/assets/products/fresh-apple-1kg.png",
+    primaryImageUrl: "",
     description: "Fresh, crisp apples selected for everyday household use.",
     gst: "0",
     hsn: "",
@@ -1001,11 +1094,9 @@ function validateImportedPrimaryImageUrl(value: string): { url: string; valid: b
   if (raw.startsWith("/assets/") || raw.startsWith("/uploads/")) return { url: raw, valid: true, message: "Valid Eagle Mart asset path." };
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:") return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
+    if (url.protocol !== "https:" && url.protocol !== "http:") return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
     if (isBlockedImageHost(url.hostname)) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
-    if (!eagleMartImageHosts().has(url.hostname.toLowerCase())) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
-    if (!/\.(jpe?g|png|webp)(?:$|\?)/i.test(url.pathname + url.search)) return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
-    return { url: raw, valid: true, message: "Valid Eagle Mart image URL." };
+    return { url: raw, valid: true, message: "Valid image URL." };
   } catch {
     return { url: raw, valid: false, message: "Product imported, but primary image URL was invalid." };
   }

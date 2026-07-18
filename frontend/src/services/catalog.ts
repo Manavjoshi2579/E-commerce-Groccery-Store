@@ -98,6 +98,31 @@ export async function fetchProduct(slug: string) {
   return mapApiProduct(data.product);
 }
 
+export type HomepageCatalogSection = {
+  id: string;
+  key: string;
+  title: string;
+  slug: string;
+  description: string;
+  imageUrl: string;
+  productCount: number;
+  products: Product[];
+};
+
+export async function fetchHomepageCatalog() {
+  const data = await requestApi<{ sections: any[] }>("/api/catalog/home");
+  return data.sections.map((section) => ({
+    id: section.id,
+    key: section.key,
+    title: section.title,
+    slug: section.slug,
+    description: section.description,
+    imageUrl: asset(section.imageUrl, categoryFallback),
+    productCount: Number(section.productCount || 0),
+    products: Array.isArray(section.products) ? section.products.map(mapApiProduct) : [],
+  })) satisfies HomepageCatalogSection[];
+}
+
 export async function fetchAdminProducts(params: Record<string, string | number | boolean | undefined> = {}) {
   const search = new URLSearchParams({ limit: "25", ...Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== "").map(([key, value]) => [key, String(value)])) });
   const data = await requestApi<{ products: any[]; pagination?: any }>(`/api/admin/products?${search}`);
