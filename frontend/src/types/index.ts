@@ -52,6 +52,18 @@ export type Category = {
   slug: string;
   name: string;
   image: string;
+  imageUrl?: string;
+  bannerImageUrl?: string | null;
+  description?: string;
+  productCount?: number;
+  activeProductCount?: number;
+  displayOrder?: number;
+  sortOrder?: number;
+  homepageVisible?: boolean;
+  active?: boolean;
+  status?: string;
+  parentCategory?: { id: string; name: string; slug: string } | null;
+  parentId?: string | null;
 };
 
 export type Coupon = {

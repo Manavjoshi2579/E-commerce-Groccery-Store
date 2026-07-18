@@ -1,0 +1,8 @@
+categoryId,categoryName,categorySlug,productCount,currentImageUrl,reason,suggestedSubject
+"cmrmcz7fs000ctaqcsehrtctn","Body Care","body-care","1","","No distinct body-care banner supplied without reusing personal-care/skin-care.","Dedicated Body Care category banner"
+"cmrmcz7fi0006taqc1q5n170p","Cleaning","cleaning","31","","No cleaning-specific supplied banner distinct from home-care/detergents.","Dedicated Cleaning category banner"
+"cmrmcz7fo0009taqcfmxf7w6v","Dishwashing","dishwashing","16","","No dishwashing-specific supplied banner.","Dedicated Dishwashing category banner"
+"cmrmcz7ei0000taqc4j03rmxf","Disposables","disposables","21","","Expected disposable banner was not present in the archive copy inspected.","Dedicated Disposables category banner"
+"cmrmcz7fp000ataqc88qamxd8","Electrical Appliances","electrical-appliances","2","","No electrical-appliances banner supplied.","Dedicated Electrical Appliances category banner"
+"cmrmcz7fl0007taqcg60yssrn","Pooja Essentials","pooja-essentials","8","","No pooja essentials banner supplied.","Dedicated Pooja Essentials category banner"
+"cmrmcz7fq000btaqcfszrdht8","Stationery","stationery","6","","No stationery banner supplied.","Dedicated Stationery category banner"

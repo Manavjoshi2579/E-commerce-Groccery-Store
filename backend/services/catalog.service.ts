@@ -23,7 +23,7 @@ const productInclude = {
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
 const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
-const categoryImageFallback = "/assets/placeholders/category-placeholder.svg";
+const categoryImageFallback = "/assets/categories/category-placeholder.webp";
 
 const homepageCategoryGroups = [
   { key: "fruits-vegetables", title: "Fruits & Vegetables", imageUrl: "/assets/categories/fruits-vegetables.png", aliases: ["fruits", "vegetables", "fresh produce", "fruit", "vegetable"] },
@@ -35,25 +35,6 @@ const homepageCategoryGroups = [
   { key: "household-essentials", title: "Household Essentials", imageUrl: "/assets/categories/household-essentials.png", aliases: ["home care", "cleaning supplies", "detergents", "disposable items", "disposables", "household", "electrical appliances"] },
   { key: "personal-care", title: "Personal Care", imageUrl: "/assets/categories/personal-care.png", aliases: ["personal care", "skin care", "haircare", "hair care", "baby care", "oral care", "bath body", "body care"] },
 ] as const;
-
-const categoryArtBySlug: Record<string, string> = {
-  "baby-care": "/assets/categories/baby-care.png",
-  "body-care": "/assets/categories/personal-care.png",
-  "chocolates-confectionery": "/assets/categories/snacks-beverages.png",
-  cleaning: "/assets/categories/household-essentials.png",
-  detergents: "/assets/categories/household-essentials.png",
-  dishwashing: "/assets/categories/household-essentials.png",
-  disposables: "/assets/categories/household-essentials.png",
-  "electrical-appliances": "/assets/categories/household-essentials.png",
-  "food-items": "/assets/categories/atta-rice-dal.png",
-  "hair-care": "/assets/categories/personal-care.png",
-  "home-care": "/assets/categories/household-essentials.png",
-  "oral-care": "/assets/categories/personal-care.png",
-  "personal-care": "/assets/categories/personal-care.png",
-  "pooja-essentials": "/assets/categories/masala-oil.png",
-  "skin-care": "/assets/categories/personal-care.png",
-  stationery: "/assets/categories/packaged-food.png",
-};
 
 function categoryGroupFor(value?: string) {
   const normalized = normalizeSearch(value || "");
@@ -75,7 +56,7 @@ function categoryGroupWhere(value: string): Prisma.CategoryWhereInput {
 
 function categoryArtwork(category: { slug: string; image: string | null }) {
   if (category.image && category.image !== categoryImageFallback) return category.image;
-  return categoryArtBySlug[category.slug] || categoryImageFallback;
+  return categoryImageFallback;
 }
 
 export function slugify(value: string) {
@@ -187,15 +168,25 @@ function stockSummary(product: ProductWithCatalog) {
   return { stock, lowStock, stockStatus };
 }
 
-export function mapCategory(category: { id: string; slug: string; name: string; image: string | null; status: ProductStatus; sortOrder?: number }) {
+export function mapCategory(category: { id: string; slug: string; name: string; image: string | null; status: ProductStatus; sortOrder?: number; parentId?: string | null; parent?: { id: string; name: string; slug: string } | null; _count?: { products: number } }, activeProductCount?: number) {
+  const bannerImageUrl = category.image || categoryImageFallback;
   return {
     id: category.id,
     slug: category.slug,
     name: category.name,
-    image: category.image || categoryImageFallback,
+    description: categoryDescriptionsForApi(category.name),
+    image: bannerImageUrl,
+    imageUrl: bannerImageUrl,
+    bannerImageUrl,
     status: category.status,
     active: category.status === ProductStatus.ACTIVE,
+    homepageVisible: category.status === ProductStatus.ACTIVE,
+    productCount: category._count?.products ?? 0,
+    activeProductCount: activeProductCount ?? category._count?.products ?? 0,
+    displayOrder: category.sortOrder ?? 0,
     sortOrder: category.sortOrder ?? 0,
+    parentCategory: category.parent ? { id: category.parent.id, name: category.parent.name, slug: category.parent.slug } : null,
+    parentId: category.parentId ?? null,
   };
 }
 
@@ -371,14 +362,19 @@ function applyComputedFilters(products: ProductWithCatalog[], query: ProductQuer
 export async function listCategories(admin = false) {
   const rows = await db.category.findMany({
     where: admin ? { deletedAt: null } : { deletedAt: null, status: ProductStatus.ACTIVE },
+    include: { parent: { select: { id: true, name: true, slug: true } }, _count: { select: { products: true } } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
-  return rows.map(mapCategory);
+  const activeCounts = await db.product.groupBy({ by: ["categoryId"], where: { deletedAt: null, status: ProductStatus.ACTIVE }, _count: { _all: true } });
+  const activeByCategory = new Map(activeCounts.map((item) => [item.categoryId, item._count._all]));
+  return rows.map((row) => mapCategory(row, activeByCategory.get(row.id) || 0));
 }
 
 export async function getCategoryBySlug(slug: string) {
-  const row = await db.category.findFirst({ where: { slug, deletedAt: null, status: ProductStatus.ACTIVE } });
-  return row ? mapCategory(row) : null;
+  const row = await db.category.findFirst({ where: { slug, deletedAt: null, status: ProductStatus.ACTIVE }, include: { parent: { select: { id: true, name: true, slug: true } }, _count: { select: { products: true } } } });
+  if (!row) return null;
+  const activeProductCount = await db.product.count({ where: { categoryId: row.id, deletedAt: null, status: ProductStatus.ACTIVE } });
+  return mapCategory(row, activeProductCount);
 }
 
 export async function listBrands(admin = false) {
@@ -482,6 +478,7 @@ export async function getHomepageCatalogSections() {
       slug: category.slug,
       description: categoryDescriptionsForApi(category.name),
       imageUrl: categoryArtwork(category),
+      bannerImageUrl: categoryArtwork(category),
       productCount: products.length,
       products,
       resolvedCategorySlugs: [category.slug],

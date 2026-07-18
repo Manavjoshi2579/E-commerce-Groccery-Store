@@ -4,7 +4,7 @@ import type { Category, Product } from "@/types";
 import { API_BASE, requestApi } from "./api";
 
 const productFallback = "/assets/placeholders/product-placeholder-generated.png";
-const categoryFallback = "/assets/placeholders/category-placeholder.svg";
+const categoryFallback = "/assets/categories/category-placeholder.webp";
 
 function asset(value: string | undefined, fallback: string) {
   return value && value.trim() ? value : fallback;
@@ -66,11 +66,23 @@ export function mapApiProduct(input: any): Product {
 }
 
 export function mapApiCategory(input: any): Category {
+  const bannerImageUrl = asset(input.bannerImageUrl || input.imageUrl || input.image, categoryFallback);
   return {
     id: input.id,
     slug: input.slug,
     name: input.name,
-    image: asset(input.image, categoryFallback),
+    image: bannerImageUrl,
+    imageUrl: bannerImageUrl,
+    bannerImageUrl,
+    description: input.description || "",
+    productCount: Number(input.productCount || 0),
+    activeProductCount: Number(input.activeProductCount || 0),
+    displayOrder: Number(input.displayOrder ?? input.sortOrder ?? 0),
+    sortOrder: Number(input.sortOrder ?? input.displayOrder ?? 0),
+    homepageVisible: input.homepageVisible ?? input.active !== false,
+    active: input.active ?? input.status === "ACTIVE",
+    parentCategory: input.parentCategory || null,
+    parentId: input.parentId || null,
   };
 }
 
@@ -105,6 +117,7 @@ export type HomepageCatalogSection = {
   slug: string;
   description: string;
   imageUrl: string;
+  bannerImageUrl?: string | null;
   productCount: number;
   products: Product[];
 };
@@ -117,7 +130,8 @@ export async function fetchHomepageCatalog() {
     title: section.title,
     slug: section.slug,
     description: section.description,
-    imageUrl: asset(section.imageUrl, categoryFallback),
+    imageUrl: asset(section.bannerImageUrl || section.imageUrl, categoryFallback),
+    bannerImageUrl: asset(section.bannerImageUrl || section.imageUrl, categoryFallback),
     productCount: Number(section.productCount || 0),
     products: Array.isArray(section.products) ? section.products.map(mapApiProduct) : [],
   })) satisfies HomepageCatalogSection[];
@@ -155,10 +169,11 @@ export async function createAdminCategory(name: string) {
   return mapApiCategory(data.category);
 }
 
-export async function updateAdminCategory(id: string, name: string) {
+export async function updateAdminCategory(id: string, input: string | Partial<Category>) {
+  const payload = typeof input === "string" ? { name: input } : input;
   const data = await requestApi<{ category: any }>(`/api/admin/categories/${id}`, {
     method: "PATCH",
-    body: JSON.stringify({ name, image: categoryFallback }),
+    body: JSON.stringify(payload),
   });
   return mapApiCategory(data.category);
 }

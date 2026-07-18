@@ -127,30 +127,6 @@ const categoryDescriptions: Record<string, string> = {
   "Baby Care": "Gentle essentials for babies and young families.",
 };
 
-const categoryArtworkBySlug: Record<string, string> = {
-  "baby-care": "/assets/categories/baby-care.png",
-  "body-care": "/assets/categories/personal-care.png",
-  "chocolates-confectionery": "/assets/categories/snacks-beverages.png",
-  cleaning: "/assets/categories/household-essentials.png",
-  detergents: "/assets/categories/household-essentials.png",
-  dishwashing: "/assets/categories/household-essentials.png",
-  disposables: "/assets/categories/household-essentials.png",
-  "electrical-appliances": "/assets/categories/household-essentials.png",
-  "food-items": "/assets/categories/atta-rice-dal.png",
-  "hair-care": "/assets/categories/personal-care.png",
-  "home-care": "/assets/categories/household-essentials.png",
-  "oral-care": "/assets/categories/personal-care.png",
-  "personal-care": "/assets/categories/personal-care.png",
-  "pooja-essentials": "/assets/categories/masala-oil.png",
-  "skin-care": "/assets/categories/personal-care.png",
-  stationery: "/assets/categories/packaged-food.png",
-};
-
-function categoryArtwork(category: Category | undefined, product: Product, slug: string) {
-  const image = category?.image || categoryArtworkBySlug[slug] || product.image || "/assets/placeholders/category-placeholder.svg";
-  return image.includes("category-placeholder") ? categoryArtworkBySlug[slug] || product.image : image;
-}
-
 function homepageSectionsFromProducts(products: Product[], categoryList: Category[]): HomepageCatalogSection[] {
   const categoriesBySlug = new Map(categoryList.map((category) => [category.slug, category]));
   const categoriesByName = new Map(categoryList.map((category) => [category.name, category]));
@@ -172,7 +148,8 @@ function homepageSectionsFromProducts(products: Product[], categoryList: Categor
       title,
       slug: key,
       description: categoryDescriptions[title] || "Premium Eagle Mart grocery essentials.",
-      imageUrl: categoryArtwork(category, product, key),
+      imageUrl: category?.bannerImageUrl || category?.imageUrl || category?.image || "/assets/categories/category-placeholder.webp",
+      bannerImageUrl: category?.bannerImageUrl || category?.imageUrl || category?.image || "/assets/categories/category-placeholder.webp",
       productCount: 1,
       products: [product],
     });
@@ -580,7 +557,7 @@ function ComingSoonPage({ variant }: { variant: ComingSoonVariant }) {
 
 function HomePage() {
   const { products, addToCart, customer } = useStore();
-  const [homeCategories, setHomeCategories] = useState<Category[]>(categories);
+  const [homeCategories, setHomeCategories] = useState<Category[]>([]);
   const [catalogSections, setCatalogSections] = useState<HomepageCatalogSection[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
@@ -591,7 +568,7 @@ function HomePage() {
   const starter = visibleProducts.find((product) => /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || visibleProducts[0];
   const fallbackCatalogSections = useMemo(() => homepageSectionsFromProducts(products, homeCategories), [homeCategories, products]);
   useEffect(() => {
-    fetchCategories().then((items) => setHomeCategories([...categories, ...items.filter((item) => !categories.some((cat) => cat.slug === item.slug))]));
+    fetchCategories().then(setHomeCategories).catch(() => setHomeCategories([]));
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -637,7 +614,7 @@ function HomePage() {
           </div>
           <Link href="/products" className="text-sm font-bold text-[#8a6500]">View all products</Link>
         </div>
-        <div className="responsive-scroll flex gap-4 overflow-x-auto pb-2">{homeCategories.slice(0, 10).map((cat) => <Link href={`/category/${cat.slug}`} key={cat.id} className="min-w-[170px] rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.image} alt={cat.name} className="mb-3 h-24 w-full rounded-md border border-[#f0e8d8] bg-white object-cover" /><span className="text-sm font-bold">{cat.name}</span></Link>)}</div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{homeCategories.map((cat) => <Link href={`/category/${cat.slug}`} key={cat.id} className="grid h-full rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.bannerImageUrl || cat.image} alt={`${cat.name} category`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="mb-3 aspect-video w-full rounded-md border border-[#f0e8d8] bg-[#f7f2e8] object-cover" /><span className="line-clamp-2 min-h-10 text-sm font-bold">{cat.name}</span><span className="mt-1 text-xs font-semibold text-black/50">{cat.activeProductCount ?? cat.productCount ?? 0} products</span></Link>)}</div>
       </section>
       <section className="bg-[#111] py-12 text-white">
         <div className="container-premium">
@@ -708,20 +685,33 @@ function CategoryShowcase({ section, loading, error }: { section: HomepageCatalo
   return (
     <section className="overflow-hidden rounded-md border border-white/10 bg-white/5">
       <div className="grid gap-0 lg:grid-cols-[230px_1fr]">
-        <Link href={`/category/${section.slug}`} className="relative min-h-44 overflow-hidden bg-black lg:min-h-full">
-          <img src={section.imageUrl} alt={section.title} onError={(event) => { event.currentTarget.src = "/assets/placeholders/category-placeholder.svg"; }} className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-500 hover:scale-105" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-4">
-            <h3 className="display-font text-xl font-black md:text-2xl">{section.title}</h3>
-            <p className="mt-2 text-sm text-white/70">{section.description}</p>
-            <span className="mt-3 inline-flex rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">View All</span>
-          </div>
-        </Link>
+        <CategoryBanner name={section.title} bannerImageUrl={section.bannerImageUrl || section.imageUrl} description={section.description} productCount={visibleProducts.length} href={`/category/${section.slug}`} />
         <div className="min-w-0 bg-[#f7f2e8] p-4">
           {loading ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-black"><p className="text-sm font-bold">{visibleProducts.length} products in this category</p><Link href={`/category/${section.slug}`} className="inline-flex min-h-10 items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-black text-white transition hover:bg-[#d4af37] hover:text-black">View All</Link></div><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[220px] shrink-0 snap-start text-black min-[420px]:w-[210px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{remainingCount > 0 && <div className="mt-3 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View {remainingCount} more</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
         </div>
       </div>
     </section>
+  );
+}
+
+function CategoryBanner({ name, bannerImageUrl, description, productCount, href, priority = false }: { name: string; bannerImageUrl?: string | null; description?: string; productCount?: number; href: string; priority?: boolean }) {
+  const [src, setSrc] = useState(bannerImageUrl || "/assets/categories/category-placeholder.webp");
+  useEffect(() => {
+    setSrc(bannerImageUrl || "/assets/categories/category-placeholder.webp");
+  }, [bannerImageUrl]);
+  return (
+    <Link href={href} className="group block bg-black p-3 lg:p-4">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-[#f7f2e8] sm:aspect-[3/2] lg:aspect-[16/9]">
+        <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 1024px) 230px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="h-full w-full object-cover object-left transition duration-500 group-hover:scale-[1.02]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/10 via-black/10 to-black/70" />
+        <div className="absolute inset-y-0 right-0 flex w-[58%] flex-col justify-center p-[clamp(20px,4vw,64px)] text-right text-white">
+          <h3 className="display-font text-xl font-black md:text-2xl">{name}</h3>
+          {description && <p className="mt-2 line-clamp-3 text-sm text-white/75">{description}</p>}
+          {productCount != null && <p className="mt-2 text-xs font-bold uppercase text-[#e7c766]">{productCount} products</p>}
+          <span className="mt-3 ml-auto inline-flex min-h-11 items-center rounded-md bg-[#d4af37] px-4 py-2 text-xs font-black text-black">View All</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
