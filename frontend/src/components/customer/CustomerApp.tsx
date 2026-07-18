@@ -620,7 +620,7 @@ function HomePage() {
         <div className="container-premium">
           <p className="text-center text-xs font-bold uppercase text-[#d4af37]">Premium aisles</p>
           <h2 className="display-font mt-2 text-center text-3xl font-black">Explore Every Category</h2>
-          <div className="mt-8 grid gap-6">
+          <div className="mx-auto mt-8 grid max-w-[1320px] gap-6">
             {(catalogSections.length ? catalogSections : fallbackCatalogSections).map((section) => <CategoryShowcase key={section.id} section={section} loading={catalogLoading && !section.products.length} error={catalogError} />)}
           </div>
         </div>
@@ -682,15 +682,16 @@ function CategoryShowcase({ section, loading, error }: { section: HomepageCatalo
   const visibleProducts = section.products.filter(isCustomerVisibleProduct);
   const previewProducts = visibleProducts.slice(0, 4);
   const hasMoreProducts = visibleProducts.length > previewProducts.length;
+  const productGridClass = previewProducts.length >= 4 ? "xl:grid-cols-4" : previewProducts.length === 3 ? "xl:max-w-[900px] xl:grid-cols-3" : previewProducts.length === 2 ? "xl:max-w-[600px] xl:grid-cols-2" : "xl:max-w-[300px] xl:grid-cols-1";
   return (
     <section className="overflow-hidden rounded-md border border-white/10 bg-[#f7f2e8] shadow-sm">
-      <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid gap-0 lg:grid-cols-[300px_minmax(0,1fr)]">
         <CategoryBanner name={section.title} bannerImageUrl={section.bannerImageUrl || section.imageUrl} description={section.description} href={`/category/${section.slug}`} />
-        <div className="min-w-0 p-5">
-          <div className="mb-5 flex items-center justify-end gap-3 text-black">
+        <div className="min-w-0 p-4 md:p-5">
+          <div className="mb-4 flex items-center justify-end gap-3 text-black">
             <Link href={`/category/${section.slug}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-black px-5 py-2 text-sm font-black text-white transition hover:bg-[#d4af37] hover:text-black">View All</Link>
           </div>
-        {loading ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-5 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{hasMoreProducts && <div className="mt-4 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View all products</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
+        {loading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className={`responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible ${productGridClass}`}>{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{hasMoreProducts && <div className="mt-4 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View all products</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
         </div>
       </div>
     </section>
@@ -703,7 +704,7 @@ function CategoryBanner({ name, bannerImageUrl, description, href, priority = fa
     setSrc(bannerImageUrl || "/assets/categories/category-placeholder.webp");
   }, [bannerImageUrl]);
   return (
-    <Link href={href} className="group relative block min-h-[420px] overflow-hidden bg-black text-white md:min-h-[460px] lg:h-full">
+    <Link href={href} className="group relative block min-h-[390px] overflow-hidden bg-black text-white md:min-h-[430px] lg:h-full">
       <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 1024px) 320px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="absolute inset-0 h-full w-full object-cover object-center transition duration-500 group-hover:scale-[1.03]" />
       <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-black/25 to-black/86" />
       <div className="absolute inset-x-0 bottom-0 p-6">
