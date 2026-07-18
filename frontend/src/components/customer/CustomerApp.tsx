@@ -567,7 +567,6 @@ function HomePage() {
   const bestSellerProducts = (featuredProducts.length ? featuredProducts : visibleProducts.filter((p) => p.stock > 0)).slice(0, 8);
   const starter = visibleProducts.find((product) => /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || visibleProducts[0];
   const fallbackCatalogSections = useMemo(() => homepageSectionsFromProducts(products, homeCategories), [homeCategories, products]);
-  const categoryCounts = useMemo(() => new Map((catalogSections.length ? catalogSections : fallbackCatalogSections).map((section) => [section.slug, section.productCount || section.products.length])), [catalogSections, fallbackCatalogSections]);
   useEffect(() => {
     fetchCategories().then(setHomeCategories).catch(() => setHomeCategories([]));
   }, []);
@@ -615,7 +614,7 @@ function HomePage() {
           </div>
           <Link href="/products" className="text-sm font-bold text-[#8a6500]">View all products</Link>
         </div>
-        <div className="responsive-scroll flex gap-4 overflow-x-auto pb-2">{homeCategories.map((cat) => { const count = categoryCounts.get(cat.slug) || cat.activeProductCount || cat.productCount || 0; return <Link href={`/category/${cat.slug}`} key={cat.id} className="grid min-w-[180px] max-w-[190px] shrink-0 rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.bannerImageUrl || cat.image} alt={`${cat.name} category`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="mb-3 aspect-video w-full rounded-md border border-[#f0e8d8] bg-[#f7f2e8] object-cover" /><span className="line-clamp-2 min-h-10 text-sm font-bold">{cat.name}</span><span className="mt-1 text-xs font-semibold text-black/50">{count} products</span></Link>; })}</div>
+        <div className="responsive-scroll flex gap-4 overflow-x-auto pb-2">{homeCategories.map((cat) => <Link href={`/category/${cat.slug}`} key={cat.id} className="grid min-w-[180px] max-w-[190px] shrink-0 rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.bannerImageUrl || cat.image} alt={`${cat.name} category`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="mb-3 aspect-video w-full rounded-md border border-[#f0e8d8] bg-[#f7f2e8] object-cover" /><span className="line-clamp-2 min-h-10 text-sm font-bold">{cat.name}</span></Link>)}</div>
       </section>
       <section className="bg-[#111] py-12 text-white">
         <div className="container-premium">
@@ -682,24 +681,23 @@ function HomePage() {
 function CategoryShowcase({ section, loading, error }: { section: HomepageCatalogSection; loading: boolean; error: string }) {
   const visibleProducts = section.products.filter(isCustomerVisibleProduct);
   const previewProducts = visibleProducts.slice(0, 4);
-  const remainingCount = Math.max(0, visibleProducts.length - previewProducts.length);
+  const hasMoreProducts = visibleProducts.length > previewProducts.length;
   return (
     <section className="overflow-hidden rounded-md border border-white/10 bg-[#f7f2e8] shadow-sm">
       <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <CategoryBanner name={section.title} bannerImageUrl={section.bannerImageUrl || section.imageUrl} description={section.description} productCount={visibleProducts.length} href={`/category/${section.slug}`} />
+        <CategoryBanner name={section.title} bannerImageUrl={section.bannerImageUrl || section.imageUrl} description={section.description} href={`/category/${section.slug}`} />
         <div className="min-w-0 p-5">
-          <div className="mb-5 flex items-center justify-between gap-3 text-black">
-            <p className="text-sm font-bold">{visibleProducts.length} products in this category</p>
+          <div className="mb-5 flex items-center justify-end gap-3 text-black">
             <Link href={`/category/${section.slug}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-black px-5 py-2 text-sm font-black text-white transition hover:bg-[#d4af37] hover:text-black">View All</Link>
           </div>
-        {loading ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-5 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{remainingCount > 0 && <div className="mt-4 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View {remainingCount} more products</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
+        {loading ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-5 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[240px] shrink-0 snap-start text-black min-[420px]:w-[220px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{hasMoreProducts && <div className="mt-4 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View all products</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
         </div>
       </div>
     </section>
   );
 }
 
-function CategoryBanner({ name, bannerImageUrl, description, productCount, href, priority = false }: { name: string; bannerImageUrl?: string | null; description?: string; productCount?: number; href: string; priority?: boolean }) {
+function CategoryBanner({ name, bannerImageUrl, description, href, priority = false }: { name: string; bannerImageUrl?: string | null; description?: string; href: string; priority?: boolean }) {
   const [src, setSrc] = useState(bannerImageUrl || "/assets/categories/category-placeholder.webp");
   useEffect(() => {
     setSrc(bannerImageUrl || "/assets/categories/category-placeholder.webp");
@@ -711,7 +709,6 @@ function CategoryBanner({ name, bannerImageUrl, description, productCount, href,
       <div className="absolute inset-x-0 bottom-0 p-6">
         <h3 className="display-font text-3xl font-black leading-tight">{name}</h3>
         {description && <p className="mt-3 max-w-[260px] text-base leading-7 text-white/76">{description}</p>}
-        {productCount != null && <p className="mt-4 text-sm font-black uppercase text-[#e7c766]">{productCount} products</p>}
         <span className="mt-4 inline-flex min-h-11 items-center rounded-md bg-[#d4af37] px-4 py-2 text-sm font-black text-black">View All</span>
       </div>
     </Link>
