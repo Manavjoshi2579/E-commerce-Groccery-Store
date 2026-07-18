@@ -36,6 +36,25 @@ const homepageCategoryGroups = [
   { key: "personal-care", title: "Personal Care", imageUrl: "/assets/categories/personal-care.png", aliases: ["personal care", "skin care", "haircare", "hair care", "baby care", "oral care", "bath body", "body care"] },
 ] as const;
 
+const categoryArtBySlug: Record<string, string> = {
+  "baby-care": "/assets/categories/baby-care.png",
+  "body-care": "/assets/categories/personal-care.png",
+  "chocolates-confectionery": "/assets/categories/snacks-beverages.png",
+  cleaning: "/assets/categories/household-essentials.png",
+  detergents: "/assets/categories/household-essentials.png",
+  dishwashing: "/assets/categories/household-essentials.png",
+  disposables: "/assets/categories/household-essentials.png",
+  "electrical-appliances": "/assets/categories/household-essentials.png",
+  "food-items": "/assets/categories/atta-rice-dal.png",
+  "hair-care": "/assets/categories/personal-care.png",
+  "home-care": "/assets/categories/household-essentials.png",
+  "oral-care": "/assets/categories/personal-care.png",
+  "personal-care": "/assets/categories/personal-care.png",
+  "pooja-essentials": "/assets/categories/masala-oil.png",
+  "skin-care": "/assets/categories/personal-care.png",
+  stationery: "/assets/categories/packaged-food.png",
+};
+
 function categoryGroupFor(value?: string) {
   const normalized = normalizeSearch(value || "");
   if (!normalized) return null;
@@ -52,6 +71,11 @@ function categoryGroupWhere(value: string): Prisma.CategoryWhereInput {
       ...group.aliases.flatMap((alias) => [{ slug: slugify(alias) }, { name: { contains: alias } }]),
     ],
   };
+}
+
+function categoryArtwork(category: { slug: string; image: string | null }) {
+  if (category.image && category.image !== categoryImageFallback) return category.image;
+  return categoryArtBySlug[category.slug] || categoryImageFallback;
 }
 
 export function slugify(value: string) {
@@ -457,7 +481,7 @@ export async function getHomepageCatalogSections() {
       title: category.name,
       slug: category.slug,
       description: categoryDescriptionsForApi(category.name),
-      imageUrl: category.image || categoryImageFallback,
+      imageUrl: categoryArtwork(category),
       productCount: products.length,
       products,
       resolvedCategorySlugs: [category.slug],

@@ -127,6 +127,30 @@ const categoryDescriptions: Record<string, string> = {
   "Baby Care": "Gentle essentials for babies and young families.",
 };
 
+const categoryArtworkBySlug: Record<string, string> = {
+  "baby-care": "/assets/categories/baby-care.png",
+  "body-care": "/assets/categories/personal-care.png",
+  "chocolates-confectionery": "/assets/categories/snacks-beverages.png",
+  cleaning: "/assets/categories/household-essentials.png",
+  detergents: "/assets/categories/household-essentials.png",
+  dishwashing: "/assets/categories/household-essentials.png",
+  disposables: "/assets/categories/household-essentials.png",
+  "electrical-appliances": "/assets/categories/household-essentials.png",
+  "food-items": "/assets/categories/atta-rice-dal.png",
+  "hair-care": "/assets/categories/personal-care.png",
+  "home-care": "/assets/categories/household-essentials.png",
+  "oral-care": "/assets/categories/personal-care.png",
+  "personal-care": "/assets/categories/personal-care.png",
+  "pooja-essentials": "/assets/categories/masala-oil.png",
+  "skin-care": "/assets/categories/personal-care.png",
+  stationery: "/assets/categories/packaged-food.png",
+};
+
+function categoryArtwork(category: Category | undefined, product: Product, slug: string) {
+  const image = category?.image || categoryArtworkBySlug[slug] || product.image || "/assets/placeholders/category-placeholder.svg";
+  return image.includes("category-placeholder") ? categoryArtworkBySlug[slug] || product.image : image;
+}
+
 function homepageSectionsFromProducts(products: Product[], categoryList: Category[]): HomepageCatalogSection[] {
   const categoriesBySlug = new Map(categoryList.map((category) => [category.slug, category]));
   const categoriesByName = new Map(categoryList.map((category) => [category.name, category]));
@@ -148,7 +172,7 @@ function homepageSectionsFromProducts(products: Product[], categoryList: Categor
       title,
       slug: key,
       description: categoryDescriptions[title] || "Premium Eagle Mart grocery essentials.",
-      imageUrl: category?.image || product.image || "/assets/placeholders/category-placeholder.svg",
+      imageUrl: categoryArtwork(category, product, key),
       productCount: 1,
       products: [product],
     });
@@ -432,10 +456,9 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
           <div className="min-w-0">
             <p className="text-[15px] font-black leading-none text-black">{money(price)}</p>
             {mrp > price && <p className="mt-1 text-xs text-black/45 line-through">{money(mrp)}</p>}
-            {!available && <p className="mt-1 text-xs font-bold text-red-600">Out of stock</p>}
           </div>
           <button type="button" disabled={!authReady || !available} onClick={() => addToCart(product.id, 1, selectedVariant?.id)} aria-label={`Add ${product.name}`} className="h-9 min-w-[72px] rounded-md border border-[#0c8f28] bg-white px-4 text-sm font-black text-[#0c8f28] transition hover:bg-[#f0fff4] disabled:border-black/15 disabled:text-black/35">
-            {available ? "ADD" : "OUT"}
+            ADD
           </button>
         </div>
       </div>
@@ -974,13 +997,13 @@ function ProductDetail({ slug }: { slug?: string }) {
               </div>
               {(qtyError || unitInputError) && <p className="text-sm font-bold text-red-600">{unitInputError || qtyError}</p>}
             </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2"><Button variant="gold" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}><ShoppingBag size={18} /> {available ? "Add to cart" : "Out of stock"}</Button>{available ? <Button className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={buyNow}>Buy now</Button> : <Button className="w-full" disabled>Buy now</Button>}<Button variant="outline" disabled={!authReady} onClick={() => toggleWishlist(product.id)}><Heart size={18} /> Wishlist</Button></div>
-            <div className="mt-6 grid gap-3 rounded-md border bg-white p-4 text-sm"><p><b>Availability:</b> {selectedStock > 0 ? "In stock" : "Out of stock"}</p><p><b>What you get:</b> Fresh, checked, and safely packed groceries.</p><p><b>How to store:</b> Keep in a cool, dry place. Refrigerate only if the product needs it.</p><p><b>Replacement:</b> Same-day replacement for damaged or expired items.</p></div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2"><Button variant="gold" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}><ShoppingBag size={18} /> Add to cart</Button>{available ? <Button className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={buyNow}>Buy now</Button> : <Button className="w-full" disabled>Buy now</Button>}<Button variant="outline" disabled={!authReady} onClick={() => toggleWishlist(product.id)}><Heart size={18} /> Wishlist</Button></div>
+            <div className="mt-6 grid gap-3 rounded-md border bg-white p-4 text-sm"><p><b>What you get:</b> Fresh, checked, and safely packed groceries.</p><p><b>How to store:</b> Keep in a cool, dry place. Refrigerate only if the product needs it.</p><p><b>Replacement:</b> Same-day replacement for damaged or expired items.</p></div>
           </section>
         </div>
         <ProductSection title="Frequently Bought Together" products={related.length ? related : visibleProducts.slice(0, 4)} />
       </main>
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white p-3 shadow-2xl md:hidden"><Button variant="gold" className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}>{available ? `Add to cart - ${money(lineTotal)}` : "Out of stock"}</Button></div>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white p-3 shadow-2xl md:hidden"><Button variant="gold" className="w-full" disabled={!authReady || !canBuySelectedUnit} onClick={addSelectedToCart}>Add to cart{available ? ` - ${money(lineTotal)}` : ""}</Button></div>
     </CustomerShell>
   );
 }
