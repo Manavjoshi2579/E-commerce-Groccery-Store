@@ -432,31 +432,35 @@ export async function listProducts(query: ProductQuery, admin = false) {
   };
 }
 
-export async function getHomepageCatalogSections(limit = 8) {
+export async function getHomepageCatalogSections() {
+  const categories = await db.category.findMany({
+    where: { deletedAt: null, status: ProductStatus.ACTIVE },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
   const sections = [];
-  for (const group of homepageCategoryGroups) {
+  for (const category of categories) {
     const where: Prisma.ProductWhereInput = {
       deletedAt: null,
       status: ProductStatus.ACTIVE,
-      category: categoryGroupWhere(group.key),
+      categoryId: category.id,
     };
     const rows = await db.product.findMany({
       where,
       include: productInclude,
       orderBy: [{ featured: "desc" }, { updatedAt: "desc" }, { name: "asc" }],
-      take: Math.max(24, Math.min(limit * 6, 80)),
     });
-    const count = await db.product.count({ where });
+    if (!rows.length) continue;
+    const products = rows.sort(sortHomepageProducts).map(mapProduct);
     sections.push({
-      id: group.key,
-      key: group.key,
-      title: group.title,
-      slug: group.key,
-      description: categoryDescriptionsForApi(group.title),
-      imageUrl: group.imageUrl,
-      productCount: count,
-      products: rows.sort(sortHomepageProducts).slice(0, limit).map(mapProduct),
-      resolvedCategorySlugs: group.aliases.map(slugify),
+      id: category.id,
+      key: category.slug,
+      title: category.name,
+      slug: category.slug,
+      description: categoryDescriptionsForApi(category.name),
+      imageUrl: category.image || categoryImageFallback,
+      productCount: products.length,
+      products,
+      resolvedCategorySlugs: [category.slug],
     });
   }
   return { sections };

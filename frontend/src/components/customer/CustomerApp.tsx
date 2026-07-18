@@ -127,6 +127,35 @@ const categoryDescriptions: Record<string, string> = {
   "Baby Care": "Gentle essentials for babies and young families.",
 };
 
+function homepageSectionsFromProducts(products: Product[], categoryList: Category[]): HomepageCatalogSection[] {
+  const categoriesBySlug = new Map(categoryList.map((category) => [category.slug, category]));
+  const categoriesByName = new Map(categoryList.map((category) => [category.name, category]));
+  const sections = new Map<string, HomepageCatalogSection>();
+  products.filter(isCustomerVisibleProduct).forEach((product) => {
+    const slug = product.categorySlug || categoriesByName.get(product.category)?.slug || product.categoryId || product.category;
+    const category = categoriesBySlug.get(slug) || categoriesByName.get(product.category);
+    const title = category?.name || product.category || "Grocery Essentials";
+    const key = category?.slug || slug;
+    const existing = sections.get(key);
+    if (existing) {
+      existing.products.push(product);
+      existing.productCount += 1;
+      return;
+    }
+    sections.set(key, {
+      id: category?.id || key,
+      key,
+      title,
+      slug: key,
+      description: categoryDescriptions[title] || "Premium Eagle Mart grocery essentials.",
+      imageUrl: category?.image || product.image || "/assets/placeholders/category-placeholder.svg",
+      productCount: 1,
+      products: [product],
+    });
+  });
+  return Array.from(sections.values()).sort((a, b) => a.title.localeCompare(b.title));
+}
+
 function normalizeSearch(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -537,6 +566,7 @@ function HomePage() {
   const featuredProducts = visibleProducts.filter((p) => p.featured);
   const bestSellerProducts = (featuredProducts.length ? featuredProducts : visibleProducts.filter((p) => p.stock > 0)).slice(0, 8);
   const starter = visibleProducts.find((product) => /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || visibleProducts[0];
+  const fallbackCatalogSections = useMemo(() => homepageSectionsFromProducts(products, homeCategories), [homeCategories, products]);
   useEffect(() => {
     fetchCategories().then((items) => setHomeCategories([...categories, ...items.filter((item) => !categories.some((cat) => cat.slug === item.slug))]));
   }, []);
@@ -551,7 +581,9 @@ function HomePage() {
       })
       .catch((error) => {
         if (cancelled) return;
-        setCatalogError(error instanceof Error ? error.message : "Unable to load homepage catalogue.");
+        const fallbackSections = homepageSectionsFromProducts(products, homeCategories);
+        setCatalogSections(fallbackSections);
+        setCatalogError(fallbackSections.length ? "" : error instanceof Error ? error.message : "Unable to load homepage catalogue.");
       })
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
@@ -559,7 +591,7 @@ function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [homeCategories, products]);
   return (
     <CustomerShell>
       <section className="relative min-h-[620px] overflow-hidden bg-black text-white">
@@ -589,7 +621,7 @@ function HomePage() {
           <p className="text-center text-xs font-bold uppercase text-[#d4af37]">Premium aisles</p>
           <h2 className="display-font mt-2 text-center text-3xl font-black">Explore Every Category</h2>
           <div className="mt-8 grid gap-6">
-            {(catalogSections.length ? catalogSections : homeCategories.slice(0, 8).map((cat) => ({ id: cat.id, key: cat.slug, title: cat.name, slug: cat.slug, description: categoryDescriptions[cat.name] || "Premium Eagle Mart grocery essentials.", imageUrl: cat.image, productCount: 0, products: [] }))).map((section) => <CategoryShowcase key={section.id} section={section} loading={catalogLoading} error={catalogError} />)}
+            {(catalogSections.length ? catalogSections : fallbackCatalogSections).map((section) => <CategoryShowcase key={section.id} section={section} loading={catalogLoading && !section.products.length} error={catalogError} />)}
           </div>
         </div>
       </section>

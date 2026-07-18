@@ -52,9 +52,11 @@ describe("homepage catalogue synchronization", () => {
 
   it("returns active placeholder products in homepage groups", async () => {
     const response = await request(app).get("/api/catalog/home").expect(200);
-    const packaged = response.body.data.sections.find((section: any) => section.slug === "packaged-food");
-    expect(packaged.products.some((product: any) => product.id === ids.productId)).toBe(true);
-    const product = packaged.products.find((item: any) => item.id === ids.productId);
+    const section = response.body.data.sections.find((item: any) => item.slug === `food-items-test-${stamp}`);
+    expect(section).toBeTruthy();
+    expect(section.productCount).toBe(section.products.length);
+    expect(section.products.some((product: any) => product.id === ids.productId)).toBe(true);
+    const product = section.products.find((item: any) => item.id === ids.productId);
     expect(product.primaryImageUrl).toContain("/assets/placeholders/");
     expect(product.costPrice).toBeUndefined();
   });
