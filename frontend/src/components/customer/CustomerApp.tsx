@@ -567,6 +567,7 @@ function HomePage() {
   const bestSellerProducts = (featuredProducts.length ? featuredProducts : visibleProducts.filter((p) => p.stock > 0)).slice(0, 8);
   const starter = visibleProducts.find((product) => /milk|dairy|bread|eggs/i.test(`${product.name} ${product.category}`)) || visibleProducts[0];
   const fallbackCatalogSections = useMemo(() => homepageSectionsFromProducts(products, homeCategories), [homeCategories, products]);
+  const categoryCounts = useMemo(() => new Map((catalogSections.length ? catalogSections : fallbackCatalogSections).map((section) => [section.slug, section.productCount || section.products.length])), [catalogSections, fallbackCatalogSections]);
   useEffect(() => {
     fetchCategories().then(setHomeCategories).catch(() => setHomeCategories([]));
   }, []);
@@ -614,13 +615,13 @@ function HomePage() {
           </div>
           <Link href="/products" className="text-sm font-bold text-[#8a6500]">View all products</Link>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{homeCategories.map((cat) => <Link href={`/category/${cat.slug}`} key={cat.id} className="grid h-full rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.bannerImageUrl || cat.image} alt={`${cat.name} category`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="mb-3 aspect-video w-full rounded-md border border-[#f0e8d8] bg-[#f7f2e8] object-cover" /><span className="line-clamp-2 min-h-10 text-sm font-bold">{cat.name}</span><span className="mt-1 text-xs font-semibold text-black/50">{cat.activeProductCount ?? cat.productCount ?? 0} products</span></Link>)}</div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{homeCategories.map((cat) => { const count = cat.activeProductCount || cat.productCount || categoryCounts.get(cat.slug) || 0; return <Link href={`/category/${cat.slug}`} key={cat.id} className="grid h-full rounded-md border border-[#eadfca] bg-white p-3 text-black shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37]"><img src={cat.bannerImageUrl || cat.image} alt={`${cat.name} category`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="mb-3 aspect-video w-full rounded-md border border-[#f0e8d8] bg-[#f7f2e8] object-cover" /><span className="line-clamp-2 min-h-10 text-sm font-bold">{cat.name}</span><span className="mt-1 text-xs font-semibold text-black/50">{count} products</span></Link>; })}</div>
       </section>
       <section className="bg-[#111] py-12 text-white">
         <div className="container-premium">
           <p className="text-center text-xs font-bold uppercase text-[#d4af37]">Premium aisles</p>
           <h2 className="display-font mt-2 text-center text-3xl font-black">Explore Every Category</h2>
-          <div className="mt-8 grid gap-5">
+          <div className="mt-8 grid gap-6">
             {(catalogSections.length ? catalogSections : fallbackCatalogSections).map((section) => <CategoryShowcase key={section.id} section={section} loading={catalogLoading && !section.products.length} error={catalogError} />)}
           </div>
         </div>
@@ -683,12 +684,13 @@ function CategoryShowcase({ section, loading, error }: { section: HomepageCatalo
   const previewProducts = visibleProducts.slice(0, 4);
   const remainingCount = Math.max(0, visibleProducts.length - previewProducts.length);
   return (
-    <section className="overflow-hidden rounded-md border border-white/10 bg-white/5">
-      <div className="grid gap-0 lg:grid-cols-[230px_1fr]">
+    <section className="overflow-hidden rounded-md border border-[#eadfca] bg-[#f7f2e8] shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-[#eadfca] bg-white p-4 md:flex-row md:items-center md:justify-between">
         <CategoryBanner name={section.title} bannerImageUrl={section.bannerImageUrl || section.imageUrl} description={section.description} productCount={visibleProducts.length} href={`/category/${section.slug}`} />
-        <div className="min-w-0 bg-[#f7f2e8] p-4">
-          {loading ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-black"><p className="text-sm font-bold">{visibleProducts.length} products in this category</p><Link href={`/category/${section.slug}`} className="inline-flex min-h-10 items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-black text-white transition hover:bg-[#d4af37] hover:text-black">View All</Link></div><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 md:grid md:grid-cols-2 md:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[220px] shrink-0 snap-start text-black min-[420px]:w-[210px] md:w-auto md:max-w-none md:shrink"><ProductCard product={product} /></div>)}</div>{remainingCount > 0 && <div className="mt-3 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View {remainingCount} more</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
-        </div>
+        <Link href={`/category/${section.slug}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-black px-5 py-2 text-sm font-black text-white transition hover:bg-[#d4af37] hover:text-black">View All</Link>
+      </div>
+      <div className="p-4">
+        {loading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-md border border-[#eadfca] bg-white/80" />)}</div> : error ? <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-center text-sm text-red-700"><b>We couldn't load these products.</b><span className="mt-1 text-black/55">Please try again.</span></div> : visibleProducts.length ? <><div className="responsive-scroll flex w-full min-w-0 touch-pan-x snap-x gap-4 overflow-x-auto overscroll-x-contain pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4">{previewProducts.map((product) => <div key={product.id} className="w-[78vw] max-w-[220px] shrink-0 snap-start text-black min-[420px]:w-[210px] sm:w-auto sm:max-w-none sm:shrink"><ProductCard product={product} /></div>)}</div>{remainingCount > 0 && <div className="mt-4 flex justify-end"><Link href={`/category/${section.slug}`} className="text-sm font-black text-[#8a6500] hover:text-black">View {remainingCount} more products</Link></div>}</> : <div className="flex min-h-28 items-center justify-center rounded-md border border-[#eadfca] bg-white p-6 text-sm text-black/55">No products are currently available in this category.</div>}
       </div>
     </section>
   );
@@ -700,16 +702,12 @@ function CategoryBanner({ name, bannerImageUrl, description, productCount, href,
     setSrc(bannerImageUrl || "/assets/categories/category-placeholder.webp");
   }, [bannerImageUrl]);
   return (
-    <Link href={href} className="group block bg-black p-3 lg:p-4">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-[#f7f2e8] sm:aspect-[3/2] lg:aspect-[16/9]">
-        <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 1024px) 230px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="h-full w-full object-cover object-left transition duration-500 group-hover:scale-[1.02]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/10 via-black/10 to-black/70" />
-        <div className="absolute inset-y-0 right-0 flex w-[58%] flex-col justify-center p-[clamp(20px,4vw,64px)] text-right text-white">
-          <h3 className="display-font text-xl font-black md:text-2xl">{name}</h3>
-          {description && <p className="mt-2 line-clamp-3 text-sm text-white/75">{description}</p>}
-          {productCount != null && <p className="mt-2 text-xs font-bold uppercase text-[#e7c766]">{productCount} products</p>}
-          <span className="mt-3 ml-auto inline-flex min-h-11 items-center rounded-md bg-[#d4af37] px-4 py-2 text-xs font-black text-black">View All</span>
-        </div>
+    <Link href={href} className="group grid min-w-0 gap-4 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
+      <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 768px) 180px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="aspect-video w-full rounded-md border border-[#eadfca] bg-[#f7f2e8] object-cover object-left transition duration-300 group-hover:scale-[1.01] md:w-[180px]" />
+      <div className="min-w-0 text-black">
+        <h3 className="display-font text-2xl font-black leading-tight">{name}</h3>
+        {description && <p className="mt-1 line-clamp-2 max-w-2xl text-sm leading-6 text-black/60">{description}</p>}
+        {productCount != null && <p className="mt-2 text-xs font-black uppercase text-[#8a6500]">{productCount} products</p>}
       </div>
     </Link>
   );
