@@ -705,10 +705,11 @@ function CategoryBanner({ name, bannerImageUrl, description, productCount, href,
     setSrc(bannerImageUrl || "/assets/categories/category-placeholder.webp");
   }, [bannerImageUrl]);
   return (
-    <Link href={href} className="group relative block min-h-[420px] overflow-hidden bg-black text-white md:min-h-[460px] lg:h-full">
-      <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 1024px) 320px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="absolute inset-0 h-full w-full object-cover object-left transition duration-500 group-hover:scale-[1.03]" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/5" />
-      <div className="absolute inset-x-0 bottom-0 p-6">
+    <Link href={href} className="group flex h-full min-h-[420px] flex-col bg-black p-4 text-white md:min-h-[460px]">
+      <div className="overflow-hidden rounded-md border border-white/10 bg-[#f7f2e8]">
+        <img src={src} alt={`${name} category`} loading={priority ? "eager" : "lazy"} sizes="(min-width: 1024px) 288px, 100vw" onError={() => setSrc("/assets/categories/category-placeholder.webp")} className="aspect-video h-auto w-full object-contain object-center transition duration-500 group-hover:scale-[1.02]" />
+      </div>
+      <div className="mt-auto pt-6">
         <h3 className="display-font text-3xl font-black leading-tight">{name}</h3>
         {description && <p className="mt-3 max-w-[260px] text-base leading-7 text-white/76">{description}</p>}
         {productCount != null && <p className="mt-4 text-sm font-black uppercase text-[#e7c766]">{productCount} products</p>}
