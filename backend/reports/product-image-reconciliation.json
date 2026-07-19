@@ -1,0 +1,57 @@
+{
+  "generatedAt": "2026-07-19T16:44:17.428Z",
+  "mode": "apply",
+  "totals": {
+    "totalProducts": 844,
+    "activeProducts": 839,
+    "productsWithProductImageRows": 844,
+    "productsWithReachablePrimaryImage": 154,
+    "productsWithPlaceholderImages": 690,
+    "productsWithoutImages": 687,
+    "manuallyUploadedImages": 0,
+    "urlImportedImages": 38,
+    "historicalImportedImages": 47,
+    "imagesScanned": 619,
+    "uniqueImages": 619,
+    "exactMappings": 0,
+    "highConfidenceMappings": 47,
+    "reviewRequiredMappings": 549,
+    "rejectedMappings": 23,
+    "unmatchedUploadedImages": 0,
+    "duplicateProductAssignments": 11,
+    "duplicateImageAssignments": 0,
+    "duplicatePrimaryIssuesRepaired": 0,
+    "orphanProductImageRowsRepaired": 0,
+    "filesWritten": 0,
+    "productImageRecordsCreated": 0,
+    "productImageRecordsUpdated": 47,
+    "existingManualImagesPreserved": 0
+  },
+  "archives": [
+    {
+      "path": "C:\\Users\\manav\\Downloads\\stitch_ai_product_image_generator.zip",
+      "scanned": 191,
+      "validImages": 191,
+      "invalidImages": 0
+    },
+    {
+      "path": "C:\\Users\\manav\\Downloads\\stitch_ai_image_generator.zip",
+      "scanned": 218,
+      "validImages": 218,
+      "invalidImages": 0
+    },
+    {
+      "path": "C:\\Users\\manav\\Downloads\\stitch_eagle_mart_product_catalogue_images.zip",
+      "scanned": 210,
+      "validImages": 210,
+      "invalidImages": 0
+    }
+  ],
+  "paths": {
+    "sharedImageResolver": "backend/lib/product-image-resolver.ts",
+    "masterMappingManifest": "backend/data/product-image-master-mapping.json",
+    "reviewOverride": "backend/data/product-image-review-overrides.json",
+    "missingImageReport": "backend/reports/products-still-missing-images.csv",
+    "imageStorage": "frontend/public/assets/products/client-catalog"
+  }
+}

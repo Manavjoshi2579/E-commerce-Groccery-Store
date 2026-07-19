@@ -1,0 +1,3296 @@
+[
+  {
+    "sku": "CLN-000027",
+    "decision": "PENDING",
+    "targetFilename": "cln-000027-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000037",
+    "decision": "PENDING",
+    "targetFilename": "skn-000037-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000091",
+    "decision": "PENDING",
+    "targetFilename": "hai-000091-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; category compatible"
+  },
+  {
+    "sku": "PER-000071",
+    "decision": "PENDING",
+    "targetFilename": "per-000071-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000076",
+    "decision": "PENDING",
+    "targetFilename": "hom-000076-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000039",
+    "decision": "PENDING",
+    "targetFilename": "skn-000039-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000075",
+    "decision": "PENDING",
+    "targetFilename": "per-000075-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000090",
+    "decision": "PENDING",
+    "targetFilename": "hai-000090-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; category compatible"
+  },
+  {
+    "sku": "CLN-000020",
+    "decision": "PENDING",
+    "targetFilename": "cln-000020-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000012",
+    "decision": "PENDING",
+    "targetFilename": "ora-000012-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000018",
+    "decision": "PENDING",
+    "targetFilename": "ora-000018-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000047",
+    "decision": "PENDING",
+    "targetFilename": "skn-000047-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000078",
+    "decision": "PENDING",
+    "targetFilename": "skn-000078-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000080",
+    "decision": "PENDING",
+    "targetFilename": "skn-000080-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000061",
+    "decision": "PENDING",
+    "targetFilename": "per-000061-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "CLN-000026",
+    "decision": "PENDING",
+    "targetFilename": "cln-000026-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "SKN-000042",
+    "decision": "PENDING",
+    "targetFilename": "skn-000042-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000080",
+    "decision": "PENDING",
+    "targetFilename": "hom-000080-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000024",
+    "decision": "PENDING",
+    "targetFilename": "bab-000024-primary.webp",
+    "notes": "brand match; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "PER-000070",
+    "decision": "PENDING",
+    "targetFilename": "per-000070-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000055",
+    "decision": "PENDING",
+    "targetFilename": "dis-000055-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000077",
+    "decision": "PENDING",
+    "targetFilename": "hai-000077-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000042",
+    "decision": "PENDING",
+    "targetFilename": "det-000042-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "PER-000065",
+    "decision": "PENDING",
+    "targetFilename": "per-000065-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000097",
+    "decision": "PENDING",
+    "targetFilename": "hai-000097-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; category compatible"
+  },
+  {
+    "sku": "DET-000047",
+    "decision": "PENDING",
+    "targetFilename": "det-000047-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "SKN-000053",
+    "decision": "PENDING",
+    "targetFilename": "skn-000053-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000021",
+    "decision": "PENDING",
+    "targetFilename": "cln-000021-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000081",
+    "decision": "PENDING",
+    "targetFilename": "hom-000081-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000049",
+    "decision": "PENDING",
+    "targetFilename": "skn-000049-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "PER-000080",
+    "decision": "PENDING",
+    "targetFilename": "per-000080-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000076",
+    "decision": "PENDING",
+    "targetFilename": "skn-000076-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000081",
+    "decision": "PENDING",
+    "targetFilename": "skn-000081-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "HAI-000082",
+    "decision": "PENDING",
+    "targetFilename": "hai-000082-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000029",
+    "decision": "PENDING",
+    "targetFilename": "cln-000029-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000004",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000004-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000025",
+    "decision": "PENDING",
+    "targetFilename": "cln-000025-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000064",
+    "decision": "PENDING",
+    "targetFilename": "per-000064-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000079",
+    "decision": "PENDING",
+    "targetFilename": "hom-000079-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000562",
+    "decision": "PENDING",
+    "targetFilename": "foo-000562-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000078",
+    "decision": "PENDING",
+    "targetFilename": "hai-000078-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000838",
+    "decision": "PENDING",
+    "targetFilename": "foo-000838-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000053",
+    "decision": "PENDING",
+    "targetFilename": "dis-000053-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000044",
+    "decision": "PENDING",
+    "targetFilename": "skn-000044-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000027",
+    "decision": "PENDING",
+    "targetFilename": "skn-000027-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "SKN-000046",
+    "decision": "PENDING",
+    "targetFilename": "skn-000046-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "CLN-000013",
+    "decision": "PENDING",
+    "targetFilename": "cln-000013-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "POO-000012",
+    "decision": "PENDING",
+    "targetFilename": "poo-000012-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000026",
+    "decision": "PENDING",
+    "targetFilename": "bab-000026-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000016",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000016-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000057",
+    "decision": "PENDING",
+    "targetFilename": "dis-000057-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000028",
+    "decision": "PENDING",
+    "targetFilename": "cln-000028-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000078",
+    "decision": "PENDING",
+    "targetFilename": "per-000078-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000006",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000006-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000900",
+    "decision": "PENDING",
+    "targetFilename": "foo-000900-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000070",
+    "decision": "PENDING",
+    "targetFilename": "hai-000070-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000051",
+    "decision": "PENDING",
+    "targetFilename": "skn-000051-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000074",
+    "decision": "PENDING",
+    "targetFilename": "hom-000074-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000026",
+    "decision": "PENDING",
+    "targetFilename": "bab-000026-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000086",
+    "decision": "PENDING",
+    "targetFilename": "hai-000086-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000080",
+    "decision": "PENDING",
+    "targetFilename": "per-000080-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000060",
+    "decision": "PENDING",
+    "targetFilename": "skn-000060-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "DET-000055",
+    "decision": "PENDING",
+    "targetFilename": "det-000055-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000082",
+    "decision": "PENDING",
+    "targetFilename": "hai-000082-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000048",
+    "decision": "PENDING",
+    "targetFilename": "det-000048-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000085",
+    "decision": "PENDING",
+    "targetFilename": "hai-000085-primary.webp",
+    "notes": "brand match; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000584",
+    "decision": "PENDING",
+    "targetFilename": "foo-000584-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000900",
+    "decision": "PENDING",
+    "targetFilename": "foo-000900-primary.webp",
+    "notes": "brand match; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000075",
+    "decision": "PENDING",
+    "targetFilename": "skn-000075-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000063",
+    "decision": "PENDING",
+    "targetFilename": "per-000063-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000040",
+    "decision": "PENDING",
+    "targetFilename": "skn-000040-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; category compatible"
+  },
+  {
+    "sku": "PER-000073",
+    "decision": "PENDING",
+    "targetFilename": "per-000073-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "HAI-000090",
+    "decision": "PENDING",
+    "targetFilename": "hai-000090-primary.webp",
+    "notes": "brand match; token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000605",
+    "decision": "PENDING",
+    "targetFilename": "foo-000605-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000087",
+    "decision": "PENDING",
+    "targetFilename": "hai-000087-primary.webp",
+    "notes": "token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000840",
+    "decision": "PENDING",
+    "targetFilename": "foo-000840-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000063",
+    "decision": "PENDING",
+    "targetFilename": "det-000063-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000046",
+    "decision": "PENDING",
+    "targetFilename": "det-000046-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000070",
+    "decision": "PENDING",
+    "targetFilename": "skn-000070-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000058",
+    "decision": "PENDING",
+    "targetFilename": "skn-000058-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000089",
+    "decision": "PENDING",
+    "targetFilename": "hai-000089-primary.webp",
+    "notes": "brand match; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000059",
+    "decision": "PENDING",
+    "targetFilename": "skn-000059-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000057",
+    "decision": "PENDING",
+    "targetFilename": "per-000057-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000050",
+    "decision": "PENDING",
+    "targetFilename": "det-000050-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000078",
+    "decision": "PENDING",
+    "targetFilename": "per-000078-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000056",
+    "decision": "PENDING",
+    "targetFilename": "dis-000056-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BOD-000002",
+    "decision": "PENDING",
+    "targetFilename": "bod-000002-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000100",
+    "decision": "PENDING",
+    "targetFilename": "hai-000100-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000074",
+    "decision": "PENDING",
+    "targetFilename": "per-000074-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000075",
+    "decision": "PENDING",
+    "targetFilename": "skn-000075-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000075",
+    "decision": "PENDING",
+    "targetFilename": "skn-000075-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000081",
+    "decision": "PENDING",
+    "targetFilename": "hai-000081-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "DET-000044",
+    "decision": "PENDING",
+    "targetFilename": "det-000044-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000077",
+    "decision": "PENDING",
+    "targetFilename": "hom-000077-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000083",
+    "decision": "PENDING",
+    "targetFilename": "hom-000083-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000019",
+    "decision": "PENDING",
+    "targetFilename": "cln-000019-primary.webp",
+    "notes": "token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000005",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000005-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000065",
+    "decision": "PENDING",
+    "targetFilename": "skn-000065-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000024",
+    "decision": "PENDING",
+    "targetFilename": "bab-000024-primary.webp",
+    "notes": "brand match; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000084",
+    "decision": "PENDING",
+    "targetFilename": "hai-000084-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000070",
+    "decision": "PENDING",
+    "targetFilename": "hom-000070-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000093",
+    "decision": "PENDING",
+    "targetFilename": "hai-000093-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000041",
+    "decision": "PENDING",
+    "targetFilename": "skn-000041-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000054",
+    "decision": "PENDING",
+    "targetFilename": "per-000054-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000493",
+    "decision": "PENDING",
+    "targetFilename": "foo-000493-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000048",
+    "decision": "PENDING",
+    "targetFilename": "skn-000048-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000051",
+    "decision": "PENDING",
+    "targetFilename": "dis-000051-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000066",
+    "decision": "PENDING",
+    "targetFilename": "per-000066-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000024",
+    "decision": "PENDING",
+    "targetFilename": "cln-000024-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000663",
+    "decision": "PENDING",
+    "targetFilename": "foo-000663-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000059",
+    "decision": "PENDING",
+    "targetFilename": "per-000059-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000079",
+    "decision": "PENDING",
+    "targetFilename": "skn-000079-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000052",
+    "decision": "PENDING",
+    "targetFilename": "dis-000052-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000533",
+    "decision": "PENDING",
+    "targetFilename": "foo-000533-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000082",
+    "decision": "PENDING",
+    "targetFilename": "hom-000082-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000058",
+    "decision": "PENDING",
+    "targetFilename": "per-000058-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000098",
+    "decision": "PENDING",
+    "targetFilename": "hai-000098-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000023",
+    "decision": "PENDING",
+    "targetFilename": "cln-000023-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000076",
+    "decision": "PENDING",
+    "targetFilename": "per-000076-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000062",
+    "decision": "PENDING",
+    "targetFilename": "det-000062-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000064",
+    "decision": "PENDING",
+    "targetFilename": "skn-000064-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000057",
+    "decision": "PENDING",
+    "targetFilename": "skn-000057-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000071",
+    "decision": "PENDING",
+    "targetFilename": "hom-000071-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000060",
+    "decision": "PENDING",
+    "targetFilename": "per-000060-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000033",
+    "decision": "PENDING",
+    "targetFilename": "skn-000033-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "CLN-000030",
+    "decision": "PENDING",
+    "targetFilename": "cln-000030-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000625",
+    "decision": "PENDING",
+    "targetFilename": "foo-000625-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000067",
+    "decision": "PENDING",
+    "targetFilename": "hom-000067-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000645",
+    "decision": "PENDING",
+    "targetFilename": "foo-000645-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000007",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000007-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "DET-000034",
+    "decision": "PENDING",
+    "targetFilename": "det-000034-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000078",
+    "decision": "PENDING",
+    "targetFilename": "hom-000078-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000045",
+    "decision": "PENDING",
+    "targetFilename": "skn-000045-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "DET-000050",
+    "decision": "PENDING",
+    "targetFilename": "det-000050-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000050",
+    "decision": "PENDING",
+    "targetFilename": "det-000050-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000062",
+    "decision": "PENDING",
+    "targetFilename": "skn-000062-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000014",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000014-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000055",
+    "decision": "PENDING",
+    "targetFilename": "per-000055-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "PER-000082",
+    "decision": "PENDING",
+    "targetFilename": "per-000082-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000075",
+    "decision": "PENDING",
+    "targetFilename": "per-000075-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000096",
+    "decision": "PENDING",
+    "targetFilename": "hai-000096-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000068",
+    "decision": "PENDING",
+    "targetFilename": "per-000068-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000043",
+    "decision": "PENDING",
+    "targetFilename": "det-000043-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000068",
+    "decision": "PENDING",
+    "targetFilename": "skn-000068-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "POO-000013",
+    "decision": "PENDING",
+    "targetFilename": "poo-000013-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000058",
+    "decision": "PENDING",
+    "targetFilename": "dis-000058-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000061",
+    "decision": "PENDING",
+    "targetFilename": "det-000061-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000012",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000012-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000080",
+    "decision": "PENDING",
+    "targetFilename": "hai-000080-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000067",
+    "decision": "PENDING",
+    "targetFilename": "per-000067-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000054",
+    "decision": "PENDING",
+    "targetFilename": "skn-000054-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HAI-000094",
+    "decision": "PENDING",
+    "targetFilename": "hai-000094-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000056",
+    "decision": "PENDING",
+    "targetFilename": "per-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000061",
+    "decision": "PENDING",
+    "targetFilename": "skn-000061-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ELE-000004",
+    "decision": "PENDING",
+    "targetFilename": "ele-000004-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "PER-000062",
+    "decision": "PENDING",
+    "targetFilename": "per-000062-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000659",
+    "decision": "PENDING",
+    "targetFilename": "foo-000659-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000553",
+    "decision": "PENDING",
+    "targetFilename": "foo-000553-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "POO-000011",
+    "decision": "PENDING",
+    "targetFilename": "poo-000011-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000538",
+    "decision": "PENDING",
+    "targetFilename": "foo-000538-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000074",
+    "decision": "PENDING",
+    "targetFilename": "hai-000074-primary.webp",
+    "notes": "strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000637",
+    "decision": "PENDING",
+    "targetFilename": "foo-000637-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000006",
+    "decision": "PENDING",
+    "targetFilename": "skn-000006-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000098",
+    "decision": "PENDING",
+    "targetFilename": "hai-000098-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000616",
+    "decision": "PENDING",
+    "targetFilename": "foo-000616-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000052",
+    "decision": "PENDING",
+    "targetFilename": "per-000052-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000039",
+    "decision": "PENDING",
+    "targetFilename": "det-000039-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000597",
+    "decision": "PENDING",
+    "targetFilename": "foo-000597-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000019",
+    "decision": "PENDING",
+    "targetFilename": "bab-000019-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000020",
+    "decision": "PENDING",
+    "targetFilename": "skn-000020-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000044",
+    "decision": "PENDING",
+    "targetFilename": "dis-000044-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000602",
+    "decision": "PENDING",
+    "targetFilename": "foo-000602-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000607",
+    "decision": "PENDING",
+    "targetFilename": "foo-000607-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000554",
+    "decision": "PENDING",
+    "targetFilename": "foo-000554-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000568",
+    "decision": "PENDING",
+    "targetFilename": "foo-000568-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000048",
+    "decision": "PENDING",
+    "targetFilename": "per-000048-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000568",
+    "decision": "PENDING",
+    "targetFilename": "foo-000568-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000610",
+    "decision": "PENDING",
+    "targetFilename": "foo-000610-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000045",
+    "decision": "PENDING",
+    "targetFilename": "det-000045-primary.webp",
+    "notes": "brand match; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000549",
+    "decision": "PENDING",
+    "targetFilename": "foo-000549-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000017",
+    "decision": "PENDING",
+    "targetFilename": "skn-000017-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000590",
+    "decision": "PENDING",
+    "targetFilename": "foo-000590-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000640",
+    "decision": "PENDING",
+    "targetFilename": "foo-000640-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000018",
+    "decision": "PENDING",
+    "targetFilename": "skn-000018-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000045",
+    "decision": "PENDING",
+    "targetFilename": "det-000045-primary.webp",
+    "notes": "brand match; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000610",
+    "decision": "PENDING",
+    "targetFilename": "foo-000610-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000010",
+    "decision": "PENDING",
+    "targetFilename": "ora-000010-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000602",
+    "decision": "PENDING",
+    "targetFilename": "foo-000602-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000640",
+    "decision": "PENDING",
+    "targetFilename": "foo-000640-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000602",
+    "decision": "PENDING",
+    "targetFilename": "foo-000602-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000053",
+    "decision": "PENDING",
+    "targetFilename": "hai-000053-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000027",
+    "decision": "PENDING",
+    "targetFilename": "skn-000027-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000052",
+    "decision": "PENDING",
+    "targetFilename": "hai-000052-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000595",
+    "decision": "PENDING",
+    "targetFilename": "foo-000595-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000008",
+    "decision": "PENDING",
+    "targetFilename": "cln-000008-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000008",
+    "decision": "PENDING",
+    "targetFilename": "cln-000008-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000585",
+    "decision": "PENDING",
+    "targetFilename": "foo-000585-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000021",
+    "decision": "PENDING",
+    "targetFilename": "bab-000021-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000550",
+    "decision": "PENDING",
+    "targetFilename": "foo-000550-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000002",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000002-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000062",
+    "decision": "PENDING",
+    "targetFilename": "hai-000062-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000040",
+    "decision": "PENDING",
+    "targetFilename": "det-000040-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000024",
+    "decision": "PENDING",
+    "targetFilename": "skn-000024-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000555",
+    "decision": "PENDING",
+    "targetFilename": "foo-000555-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000062",
+    "decision": "PENDING",
+    "targetFilename": "hom-000062-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000547",
+    "decision": "PENDING",
+    "targetFilename": "foo-000547-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000608",
+    "decision": "PENDING",
+    "targetFilename": "foo-000608-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000028",
+    "decision": "PENDING",
+    "targetFilename": "skn-000028-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000503",
+    "decision": "PENDING",
+    "targetFilename": "foo-000503-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000062",
+    "decision": "PENDING",
+    "targetFilename": "hom-000062-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000470",
+    "decision": "PENDING",
+    "targetFilename": "foo-000470-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000577",
+    "decision": "PENDING",
+    "targetFilename": "foo-000577-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000003",
+    "decision": "PENDING",
+    "targetFilename": "cln-000003-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000003",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000003-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000041",
+    "decision": "PENDING",
+    "targetFilename": "det-000041-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000620",
+    "decision": "PENDING",
+    "targetFilename": "foo-000620-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000044",
+    "decision": "PENDING",
+    "targetFilename": "dis-000044-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000052",
+    "decision": "PENDING",
+    "targetFilename": "per-000052-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000633",
+    "decision": "PENDING",
+    "targetFilename": "foo-000633-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000596",
+    "decision": "PENDING",
+    "targetFilename": "foo-000596-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000051",
+    "decision": "PENDING",
+    "targetFilename": "per-000051-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000033",
+    "decision": "PENDING",
+    "targetFilename": "det-000033-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000597",
+    "decision": "PENDING",
+    "targetFilename": "foo-000597-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000602",
+    "decision": "PENDING",
+    "targetFilename": "foo-000602-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000640",
+    "decision": "PENDING",
+    "targetFilename": "foo-000640-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000542",
+    "decision": "PENDING",
+    "targetFilename": "foo-000542-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000025",
+    "decision": "PENDING",
+    "targetFilename": "skn-000025-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "STA-000007",
+    "decision": "PENDING",
+    "targetFilename": "sta-000007-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000022",
+    "decision": "PENDING",
+    "targetFilename": "bab-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CHO-000002",
+    "decision": "PENDING",
+    "targetFilename": "cho-000002-primary.webp",
+    "notes": "token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000043",
+    "decision": "PENDING",
+    "targetFilename": "dis-000043-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000003",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000003-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000631",
+    "decision": "PENDING",
+    "targetFilename": "foo-000631-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000578",
+    "decision": "PENDING",
+    "targetFilename": "foo-000578-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000600",
+    "decision": "PENDING",
+    "targetFilename": "foo-000600-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000013",
+    "decision": "PENDING",
+    "targetFilename": "skn-000013-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000014",
+    "decision": "PENDING",
+    "targetFilename": "skn-000014-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000016",
+    "decision": "PENDING",
+    "targetFilename": "skn-000016-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000470",
+    "decision": "PENDING",
+    "targetFilename": "foo-000470-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000601",
+    "decision": "PENDING",
+    "targetFilename": "foo-000601-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000040",
+    "decision": "PENDING",
+    "targetFilename": "dis-000040-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000048",
+    "decision": "PENDING",
+    "targetFilename": "per-000048-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000022",
+    "decision": "PENDING",
+    "targetFilename": "bab-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000653",
+    "decision": "PENDING",
+    "targetFilename": "foo-000653-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000588",
+    "decision": "PENDING",
+    "targetFilename": "foo-000588-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000061",
+    "decision": "PENDING",
+    "targetFilename": "hom-000061-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000006",
+    "decision": "PENDING",
+    "targetFilename": "cln-000006-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000630",
+    "decision": "PENDING",
+    "targetFilename": "foo-000630-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000623",
+    "decision": "PENDING",
+    "targetFilename": "foo-000623-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "POO-000010",
+    "decision": "PENDING",
+    "targetFilename": "poo-000010-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000006",
+    "decision": "PENDING",
+    "targetFilename": "cln-000006-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000640",
+    "decision": "PENDING",
+    "targetFilename": "foo-000640-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000006",
+    "decision": "PENDING",
+    "targetFilename": "skn-000006-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000047",
+    "decision": "PENDING",
+    "targetFilename": "hom-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000058",
+    "decision": "PENDING",
+    "targetFilename": "hai-000058-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000056",
+    "decision": "PENDING",
+    "targetFilename": "hom-000056-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000637",
+    "decision": "PENDING",
+    "targetFilename": "foo-000637-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000012",
+    "decision": "PENDING",
+    "targetFilename": "skn-000012-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000025",
+    "decision": "PENDING",
+    "targetFilename": "skn-000025-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000001",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000001-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000048",
+    "decision": "PENDING",
+    "targetFilename": "per-000048-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000022",
+    "decision": "PENDING",
+    "targetFilename": "bab-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000048",
+    "decision": "PENDING",
+    "targetFilename": "per-000048-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000062",
+    "decision": "PENDING",
+    "targetFilename": "hai-000062-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000502",
+    "decision": "PENDING",
+    "targetFilename": "foo-000502-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000062",
+    "decision": "PENDING",
+    "targetFilename": "hai-000062-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000584",
+    "decision": "PENDING",
+    "targetFilename": "foo-000584-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000581",
+    "decision": "PENDING",
+    "targetFilename": "foo-000581-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000002",
+    "decision": "PENDING",
+    "targetFilename": "skn-000002-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000051",
+    "decision": "PENDING",
+    "targetFilename": "hom-000051-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000626",
+    "decision": "PENDING",
+    "targetFilename": "foo-000626-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000001",
+    "decision": "PENDING",
+    "targetFilename": "ora-000001-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000003",
+    "decision": "PENDING",
+    "targetFilename": "ora-000003-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000052",
+    "decision": "PENDING",
+    "targetFilename": "per-000052-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000610",
+    "decision": "PENDING",
+    "targetFilename": "foo-000610-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000072",
+    "decision": "PENDING",
+    "targetFilename": "hai-000072-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000568",
+    "decision": "PENDING",
+    "targetFilename": "foo-000568-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000005",
+    "decision": "PENDING",
+    "targetFilename": "skn-000005-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000568",
+    "decision": "PENDING",
+    "targetFilename": "foo-000568-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000538",
+    "decision": "PENDING",
+    "targetFilename": "foo-000538-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000637",
+    "decision": "PENDING",
+    "targetFilename": "foo-000637-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000049",
+    "decision": "PENDING",
+    "targetFilename": "dis-000049-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000572",
+    "decision": "PENDING",
+    "targetFilename": "foo-000572-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000070",
+    "decision": "PENDING",
+    "targetFilename": "hai-000070-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000040",
+    "decision": "PENDING",
+    "targetFilename": "dis-000040-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000053",
+    "decision": "PENDING",
+    "targetFilename": "hai-000053-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000619",
+    "decision": "PENDING",
+    "targetFilename": "foo-000619-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000538",
+    "decision": "PENDING",
+    "targetFilename": "foo-000538-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000019",
+    "decision": "PENDING",
+    "targetFilename": "bab-000019-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000001",
+    "decision": "PENDING",
+    "targetFilename": "ora-000001-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000624",
+    "decision": "PENDING",
+    "targetFilename": "foo-000624-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000587",
+    "decision": "PENDING",
+    "targetFilename": "foo-000587-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000536",
+    "decision": "PENDING",
+    "targetFilename": "foo-000536-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000627",
+    "decision": "PENDING",
+    "targetFilename": "foo-000627-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000661",
+    "decision": "PENDING",
+    "targetFilename": "foo-000661-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000630",
+    "decision": "PENDING",
+    "targetFilename": "foo-000630-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000593",
+    "decision": "PENDING",
+    "targetFilename": "foo-000593-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000070",
+    "decision": "PENDING",
+    "targetFilename": "hai-000070-primary.webp",
+    "notes": "token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000628",
+    "decision": "PENDING",
+    "targetFilename": "foo-000628-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000589",
+    "decision": "PENDING",
+    "targetFilename": "foo-000589-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000498",
+    "decision": "PENDING",
+    "targetFilename": "foo-000498-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000064",
+    "decision": "PENDING",
+    "targetFilename": "hom-000064-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000006",
+    "decision": "PENDING",
+    "targetFilename": "cln-000006-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000659",
+    "decision": "PENDING",
+    "targetFilename": "foo-000659-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000044",
+    "decision": "PENDING",
+    "targetFilename": "dis-000044-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000001",
+    "decision": "PENDING",
+    "targetFilename": "ora-000001-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000056",
+    "decision": "PENDING",
+    "targetFilename": "hai-000056-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000656",
+    "decision": "PENDING",
+    "targetFilename": "foo-000656-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000022",
+    "decision": "PENDING",
+    "targetFilename": "bab-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000037",
+    "decision": "PENDING",
+    "targetFilename": "det-000037-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000540",
+    "decision": "PENDING",
+    "targetFilename": "foo-000540-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000563",
+    "decision": "PENDING",
+    "targetFilename": "foo-000563-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000579",
+    "decision": "PENDING",
+    "targetFilename": "foo-000579-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000580",
+    "decision": "PENDING",
+    "targetFilename": "foo-000580-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000058",
+    "decision": "PENDING",
+    "targetFilename": "hai-000058-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000022",
+    "decision": "PENDING",
+    "targetFilename": "skn-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000019",
+    "decision": "PENDING",
+    "targetFilename": "skn-000019-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000050",
+    "decision": "PENDING",
+    "targetFilename": "hai-000050-primary.webp",
+    "notes": "token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000011",
+    "decision": "PENDING",
+    "targetFilename": "cln-000011-primary.webp",
+    "notes": "brand match; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000622",
+    "decision": "PENDING",
+    "targetFilename": "foo-000622-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000023",
+    "decision": "PENDING",
+    "targetFilename": "skn-000023-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000049",
+    "decision": "PENDING",
+    "targetFilename": "per-000049-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000652",
+    "decision": "PENDING",
+    "targetFilename": "foo-000652-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000618",
+    "decision": "PENDING",
+    "targetFilename": "foo-000618-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000579",
+    "decision": "PENDING",
+    "targetFilename": "foo-000579-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000008",
+    "decision": "PENDING",
+    "targetFilename": "cln-000008-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000058",
+    "decision": "PENDING",
+    "targetFilename": "hai-000058-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000576",
+    "decision": "PENDING",
+    "targetFilename": "foo-000576-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000006",
+    "decision": "PENDING",
+    "targetFilename": "skn-000006-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000636",
+    "decision": "PENDING",
+    "targetFilename": "foo-000636-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000653",
+    "decision": "PENDING",
+    "targetFilename": "foo-000653-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000064",
+    "decision": "PENDING",
+    "targetFilename": "hom-000064-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000545",
+    "decision": "PENDING",
+    "targetFilename": "foo-000545-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000048",
+    "decision": "PENDING",
+    "targetFilename": "per-000048-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000558",
+    "decision": "PENDING",
+    "targetFilename": "foo-000558-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000548",
+    "decision": "PENDING",
+    "targetFilename": "foo-000548-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000073",
+    "decision": "PENDING",
+    "targetFilename": "hai-000073-primary.webp",
+    "notes": "quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000007",
+    "decision": "PENDING",
+    "targetFilename": "skn-000007-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000474",
+    "decision": "PENDING",
+    "targetFilename": "foo-000474-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000038",
+    "decision": "PENDING",
+    "targetFilename": "dis-000038-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000043",
+    "decision": "PENDING",
+    "targetFilename": "hom-000043-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000473",
+    "decision": "PENDING",
+    "targetFilename": "foo-000473-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000001",
+    "decision": "PENDING",
+    "targetFilename": "skn-000001-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000546",
+    "decision": "PENDING",
+    "targetFilename": "foo-000546-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000475",
+    "decision": "PENDING",
+    "targetFilename": "foo-000475-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000476",
+    "decision": "PENDING",
+    "targetFilename": "foo-000476-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000477",
+    "decision": "PENDING",
+    "targetFilename": "foo-000477-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000478",
+    "decision": "PENDING",
+    "targetFilename": "foo-000478-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000044",
+    "decision": "PENDING",
+    "targetFilename": "hom-000044-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000480",
+    "decision": "PENDING",
+    "targetFilename": "foo-000480-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000481",
+    "decision": "PENDING",
+    "targetFilename": "foo-000481-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000479",
+    "decision": "PENDING",
+    "targetFilename": "foo-000479-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000482",
+    "decision": "PENDING",
+    "targetFilename": "foo-000482-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000481",
+    "decision": "PENDING",
+    "targetFilename": "foo-000481-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000050",
+    "decision": "PENDING",
+    "targetFilename": "hai-000050-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "HOM-000046",
+    "decision": "PENDING",
+    "targetFilename": "hom-000046-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000483",
+    "decision": "PENDING",
+    "targetFilename": "foo-000483-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000485",
+    "decision": "PENDING",
+    "targetFilename": "foo-000485-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000578",
+    "decision": "PENDING",
+    "targetFilename": "foo-000578-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000477",
+    "decision": "PENDING",
+    "targetFilename": "foo-000477-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000562",
+    "decision": "PENDING",
+    "targetFilename": "foo-000562-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000491",
+    "decision": "PENDING",
+    "targetFilename": "foo-000491-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000492",
+    "decision": "PENDING",
+    "targetFilename": "foo-000492-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000641",
+    "decision": "PENDING",
+    "targetFilename": "foo-000641-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000495",
+    "decision": "PENDING",
+    "targetFilename": "foo-000495-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000496",
+    "decision": "PENDING",
+    "targetFilename": "foo-000496-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "DET-000036",
+    "decision": "PENDING",
+    "targetFilename": "det-000036-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "DET-000036",
+    "decision": "PENDING",
+    "targetFilename": "det-000036-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "DET-000033",
+    "decision": "PENDING",
+    "targetFilename": "det-000033-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DET-000053",
+    "decision": "PENDING",
+    "targetFilename": "det-000053-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000497",
+    "decision": "PENDING",
+    "targetFilename": "foo-000497-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "BAB-000016",
+    "decision": "PENDING",
+    "targetFilename": "bab-000016-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; category compatible; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000498",
+    "decision": "PENDING",
+    "targetFilename": "foo-000498-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000500",
+    "decision": "PENDING",
+    "targetFilename": "foo-000500-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000530",
+    "decision": "PENDING",
+    "targetFilename": "foo-000530-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "BAB-000017",
+    "decision": "PENDING",
+    "targetFilename": "bab-000017-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000505",
+    "decision": "PENDING",
+    "targetFilename": "foo-000505-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000506",
+    "decision": "PENDING",
+    "targetFilename": "foo-000506-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000507",
+    "decision": "PENDING",
+    "targetFilename": "foo-000507-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000511",
+    "decision": "PENDING",
+    "targetFilename": "foo-000511-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000068",
+    "decision": "PENDING",
+    "targetFilename": "hom-000068-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000513",
+    "decision": "PENDING",
+    "targetFilename": "foo-000513-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000515",
+    "decision": "PENDING",
+    "targetFilename": "foo-000515-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000515",
+    "decision": "PENDING",
+    "targetFilename": "foo-000515-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000581",
+    "decision": "PENDING",
+    "targetFilename": "foo-000581-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000001",
+    "decision": "PENDING",
+    "targetFilename": "cln-000001-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000516",
+    "decision": "PENDING",
+    "targetFilename": "foo-000516-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000581",
+    "decision": "PENDING",
+    "targetFilename": "foo-000581-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000002",
+    "decision": "PENDING",
+    "targetFilename": "cln-000002-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000519",
+    "decision": "PENDING",
+    "targetFilename": "foo-000519-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000051",
+    "decision": "PENDING",
+    "targetFilename": "hai-000051-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap; category compatible"
+  },
+  {
+    "sku": "PER-000042",
+    "decision": "PENDING",
+    "targetFilename": "per-000042-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000043",
+    "decision": "PENDING",
+    "targetFilename": "per-000043-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000520",
+    "decision": "PENDING",
+    "targetFilename": "foo-000520-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000521",
+    "decision": "PENDING",
+    "targetFilename": "foo-000521-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "POO-000009",
+    "decision": "PENDING",
+    "targetFilename": "poo-000009-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000523",
+    "decision": "PENDING",
+    "targetFilename": "foo-000523-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000524",
+    "decision": "PENDING",
+    "targetFilename": "foo-000524-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000525",
+    "decision": "PENDING",
+    "targetFilename": "foo-000525-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000526",
+    "decision": "PENDING",
+    "targetFilename": "foo-000526-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000049",
+    "decision": "PENDING",
+    "targetFilename": "hom-000049-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000039",
+    "decision": "PENDING",
+    "targetFilename": "dis-000039-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000749",
+    "decision": "PENDING",
+    "targetFilename": "foo-000749-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000531",
+    "decision": "PENDING",
+    "targetFilename": "foo-000531-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000522",
+    "decision": "PENDING",
+    "targetFilename": "foo-000522-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000530",
+    "decision": "PENDING",
+    "targetFilename": "foo-000530-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000533",
+    "decision": "PENDING",
+    "targetFilename": "foo-000533-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000531",
+    "decision": "PENDING",
+    "targetFilename": "foo-000531-primary.webp",
+    "notes": "quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000535",
+    "decision": "PENDING",
+    "targetFilename": "foo-000535-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000522",
+    "decision": "PENDING",
+    "targetFilename": "foo-000522-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000050",
+    "decision": "PENDING",
+    "targetFilename": "hom-000050-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000004",
+    "decision": "PENDING",
+    "targetFilename": "skn-000004-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000051",
+    "decision": "PENDING",
+    "targetFilename": "hom-000051-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000538",
+    "decision": "PENDING",
+    "targetFilename": "foo-000538-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000052",
+    "decision": "PENDING",
+    "targetFilename": "hom-000052-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000539",
+    "decision": "PENDING",
+    "targetFilename": "foo-000539-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000541",
+    "decision": "PENDING",
+    "targetFilename": "foo-000541-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000546",
+    "decision": "PENDING",
+    "targetFilename": "foo-000546-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "HOM-000053",
+    "decision": "PENDING",
+    "targetFilename": "hom-000053-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000550",
+    "decision": "PENDING",
+    "targetFilename": "foo-000550-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000552",
+    "decision": "PENDING",
+    "targetFilename": "foo-000552-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000003",
+    "decision": "PENDING",
+    "targetFilename": "cln-000003-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000006",
+    "decision": "PENDING",
+    "targetFilename": "skn-000006-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HAI-000053",
+    "decision": "PENDING",
+    "targetFilename": "hai-000053-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000709",
+    "decision": "PENDING",
+    "targetFilename": "foo-000709-primary.webp",
+    "notes": "quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000559",
+    "decision": "PENDING",
+    "targetFilename": "foo-000559-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000564",
+    "decision": "PENDING",
+    "targetFilename": "foo-000564-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "ORA-000006",
+    "decision": "PENDING",
+    "targetFilename": "ora-000006-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "HOM-000043",
+    "decision": "PENDING",
+    "targetFilename": "hom-000043-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000666",
+    "decision": "PENDING",
+    "targetFilename": "foo-000666-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000883",
+    "decision": "PENDING",
+    "targetFilename": "foo-000883-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000592",
+    "decision": "PENDING",
+    "targetFilename": "foo-000592-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000904",
+    "decision": "PENDING",
+    "targetFilename": "foo-000904-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000511",
+    "decision": "PENDING",
+    "targetFilename": "foo-000511-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000046",
+    "decision": "PENDING",
+    "targetFilename": "per-000046-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000065",
+    "decision": "PENDING",
+    "targetFilename": "skn-000065-primary.webp",
+    "notes": "quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000008",
+    "decision": "PENDING",
+    "targetFilename": "skn-000008-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000498",
+    "decision": "PENDING",
+    "targetFilename": "foo-000498-primary.webp",
+    "notes": "token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000641",
+    "decision": "PENDING",
+    "targetFilename": "foo-000641-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000683",
+    "decision": "PENDING",
+    "targetFilename": "foo-000683-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000507",
+    "decision": "PENDING",
+    "targetFilename": "foo-000507-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "confidence below threshold"
+  },
+  {
+    "sku": "CLN-000013",
+    "decision": "PENDING",
+    "targetFilename": "cln-000013-primary.webp",
+    "notes": "quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000731",
+    "decision": "PENDING",
+    "targetFilename": "foo-000731-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000496",
+    "decision": "PENDING",
+    "targetFilename": "foo-000496-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "confidence below threshold"
+  },
+  {
+    "sku": "FOO-000791",
+    "decision": "PENDING",
+    "targetFilename": "foo-000791-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000753",
+    "decision": "PENDING",
+    "targetFilename": "foo-000753-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000826",
+    "decision": "PENDING",
+    "targetFilename": "foo-000826-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000941",
+    "decision": "PENDING",
+    "targetFilename": "foo-000941-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000942",
+    "decision": "PENDING",
+    "targetFilename": "foo-000942-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000835",
+    "decision": "PENDING",
+    "targetFilename": "foo-000835-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000484",
+    "decision": "PENDING",
+    "targetFilename": "foo-000484-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000675",
+    "decision": "PENDING",
+    "targetFilename": "foo-000675-primary.webp",
+    "notes": "strong product name coverage; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000684",
+    "decision": "PENDING",
+    "targetFilename": "foo-000684-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000726",
+    "decision": "PENDING",
+    "targetFilename": "foo-000726-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000635",
+    "decision": "PENDING",
+    "targetFilename": "foo-000635-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000508",
+    "decision": "PENDING",
+    "targetFilename": "foo-000508-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000928",
+    "decision": "PENDING",
+    "targetFilename": "foo-000928-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000036",
+    "decision": "PENDING",
+    "targetFilename": "skn-000036-primary.webp",
+    "notes": "brand match; strong product name coverage; strong token overlap"
+  },
+  {
+    "sku": "SKN-000022",
+    "decision": "PENDING",
+    "targetFilename": "skn-000022-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000614",
+    "decision": "PENDING",
+    "targetFilename": "foo-000614-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000707",
+    "decision": "PENDING",
+    "targetFilename": "foo-000707-primary.webp",
+    "notes": "brand match; strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000915",
+    "decision": "PENDING",
+    "targetFilename": "foo-000915-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000037",
+    "decision": "PENDING",
+    "targetFilename": "skn-000037-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000012",
+    "decision": "PENDING",
+    "targetFilename": "cln-000012-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000507",
+    "decision": "PENDING",
+    "targetFilename": "foo-000507-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000018",
+    "decision": "PENDING",
+    "targetFilename": "skn-000018-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "confidence below threshold"
+  },
+  {
+    "sku": "HOM-000058",
+    "decision": "PENDING",
+    "targetFilename": "hom-000058-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DIS-000047",
+    "decision": "PENDING",
+    "targetFilename": "dis-000047-primary.webp",
+    "notes": "confidence below threshold"
+  },
+  {
+    "sku": "DET-000051",
+    "decision": "PENDING",
+    "targetFilename": "det-000051-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "CLN-000022",
+    "decision": "PENDING",
+    "targetFilename": "cln-000022-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000605",
+    "decision": "PENDING",
+    "targetFilename": "foo-000605-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000509",
+    "decision": "PENDING",
+    "targetFilename": "foo-000509-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000635",
+    "decision": "PENDING",
+    "targetFilename": "foo-000635-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000918",
+    "decision": "PENDING",
+    "targetFilename": "foo-000918-primary.webp",
+    "notes": "brand match; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000841",
+    "decision": "PENDING",
+    "targetFilename": "foo-000841-primary.webp",
+    "notes": "strong product name coverage; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000864",
+    "decision": "PENDING",
+    "targetFilename": "foo-000864-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000616",
+    "decision": "PENDING",
+    "targetFilename": "foo-000616-primary.webp",
+    "notes": "strong product name coverage; quantity match; strong token overlap"
+  },
+  {
+    "sku": "FOO-000853",
+    "decision": "PENDING",
+    "targetFilename": "foo-000853-primary.webp",
+    "notes": "brand match; strong product name coverage; quantity match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000666",
+    "decision": "PENDING",
+    "targetFilename": "foo-000666-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000727",
+    "decision": "PENDING",
+    "targetFilename": "foo-000727-primary.webp",
+    "notes": "brand match; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000906",
+    "decision": "PENDING",
+    "targetFilename": "foo-000906-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "DSH-000001",
+    "decision": "PENDING",
+    "targetFilename": "dsh-000001-primary.webp",
+    "notes": "quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000028",
+    "decision": "PENDING",
+    "targetFilename": "skn-000028-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "PER-000069",
+    "decision": "PENDING",
+    "targetFilename": "per-000069-primary.webp",
+    "notes": "strong product name coverage; strong token overlap; confidence below threshold"
+  },
+  {
+    "sku": "SKN-000025",
+    "decision": "PENDING",
+    "targetFilename": "skn-000025-primary.webp",
+    "notes": "brand match; token overlap; confidence below threshold"
+  },
+  {
+    "sku": "FOO-000711",
+    "decision": "PENDING",
+    "targetFilename": "foo-000711-primary.webp",
+    "notes": "brand match; quantity match; token overlap; confidence below threshold"
+  }
+]

@@ -1,6 +1,7 @@
 import { ImageStatus, Prisma, ProductStatus, SettingType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { db } from "../lib/db.js";
+import { productImageFallback, resolveProductImage } from "../lib/product-image-resolver.js";
 import type { productListQuerySchema } from "../validators/catalog.js";
 import type { z } from "zod";
 
@@ -22,7 +23,6 @@ const productInclude = {
 
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
-const productImageFallback = "/assets/placeholders/product-placeholder-generated.png";
 const categoryImageFallback = "/assets/categories/category-placeholder.webp";
 
 const homepageCategoryGroups = [
@@ -140,14 +140,7 @@ function mainVariant(product: ProductWithCatalog) {
 }
 
 function primaryImageStatus(product: ProductWithCatalog) {
-  const primary = product.images.find((image) => image.isPrimary) || product.images[0];
-  if (!primary?.url || primary.url === productImageFallback) return "Placeholder";
-  if (product.imageStatus === ImageStatus.VERIFIED) {
-    if (primary.url.startsWith("/assets/") || primary.url.startsWith("/uploads/")) return "Existing";
-    return "URL Imported";
-  }
-  if (product.imageStatus === ImageStatus.NEEDS_REVIEW) return "Needs Review";
-  return "Placeholder";
+  return resolveProductImage(product).status;
 }
 
 function variantInventory(product: ProductWithCatalog, variantId: string) {
@@ -205,7 +198,8 @@ export function mapProduct(product: ProductWithCatalog) {
   const variant = mainVariant(product);
   const mrp = decimal(variant?.mrp);
   const price = decimal(variant?.price);
-  const image = product.images[0]?.url || productImageFallback;
+  const resolvedImage = resolveProductImage(product);
+  const image = resolvedImage.url;
   const stock = stockSummary(product);
   const discountPercentage = mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
 
@@ -237,10 +231,10 @@ export function mapProduct(product: ProductWithCatalog) {
     inStock: stock.stock > 0,
     lowStock: stock.lowStock,
     stockStatus: stock.stockStatus,
-    imageStatus: primaryImageStatus(product),
-    imageSource: product.imageSource,
+    imageStatus: resolvedImage.status,
     image,
     primaryImageUrl: image,
+    imageAlt: resolvedImage.alt,
     images: product.images.map((item) => ({ id: item.id, url: item.url || productImageFallback, alt: item.alt ?? product.name, isPrimary: item.isPrimary })),
     categoryInfo: { id: product.categoryId, name: product.category.name, slug: product.category.slug },
     tags: tags(product.tags),

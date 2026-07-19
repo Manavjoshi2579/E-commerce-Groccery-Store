@@ -24,7 +24,7 @@ import { ApiError } from "@/services/api";
 import { money } from "@/lib/money";
 import type { Address, CartItem, Category, FAQ, Order, Product, SupportTicket } from "@/types";
 
-const imageFallback = "/assets/placeholders/product-placeholder-generated.png";
+const imageFallback = "/assets/products/product-placeholder.svg";
 
 type StoreCoupons = ReturnType<typeof useStore>["coupons"];
 type ComingSoonVariant = "education" | "entertainment";

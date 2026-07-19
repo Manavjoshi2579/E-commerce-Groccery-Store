@@ -19,7 +19,9 @@ export type Product = {
   stock: number;
   lowStock: number;
   image: string;
-  imageStatus?: "Verified" | "Placeholder" | "Needs Review";
+  primaryImageUrl?: string;
+  imageAlt?: string;
+  imageStatus?: "Image Available" | "Placeholder" | "Missing" | "Broken" | "Review Required" | "Needs Review" | "Verified";
   imageSource?: string | null;
   images?: { id: string; url: string; alt?: string; isPrimary?: boolean }[];
   variants?: ProductVariant[];

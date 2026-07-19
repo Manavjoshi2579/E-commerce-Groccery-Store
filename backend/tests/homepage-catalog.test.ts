@@ -59,7 +59,7 @@ describe("homepage catalogue synchronization", () => {
     expect(section.productCount).toBe(section.products.length);
     expect(section.products.some((product: any) => product.id === ids.productId)).toBe(true);
     const product = section.products.find((item: any) => item.id === ids.productId);
-    expect(product.primaryImageUrl).toContain("/assets/placeholders/");
+    expect(product.primaryImageUrl).toBe("/assets/products/product-placeholder.svg");
     expect(product.primaryImageUrl).not.toBe(section.bannerImageUrl);
     expect(product.costPrice).toBeUndefined();
   });

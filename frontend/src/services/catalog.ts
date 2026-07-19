@@ -3,7 +3,7 @@
 import type { Category, Product } from "@/types";
 import { API_BASE, requestApi } from "./api";
 
-const productFallback = "/assets/placeholders/product-placeholder-generated.png";
+const productFallback = "/assets/products/product-placeholder.svg";
 const categoryFallback = "/assets/categories/category-placeholder.webp";
 
 function asset(value: string | undefined, fallback: string) {
@@ -52,6 +52,8 @@ export function mapApiProduct(input: any): Product {
     stock: Number(input.stock ?? 0),
     lowStock: Number(input.lowStock ?? 10),
     image: productAsset(input),
+    primaryImageUrl: productAsset(input),
+    imageAlt: input.imageAlt || input.name,
     imageStatus: input.imageStatus || "Placeholder",
     imageSource: input.imageSource,
     images: input.images,
