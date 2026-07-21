@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CouponType, UserStatus } from "@prisma/client";
 import { createApp } from "../app/app.js";
 import { db } from "../lib/db.js";
+import { ensureTestPrincipals } from "./test-fixtures.js";
 
 const app = createApp();
 const customer = request.agent(app);
@@ -12,12 +13,14 @@ const adminPassword = "Eagle" + "club@12345";
 const cleanup = {
   userId: "",
   couponIds: [] as string[],
+  orderIds: [] as string[],
 };
 let productId = "";
 let variantId = "";
 let cartItemId = "";
 
 beforeAll(async () => {
+  await ensureTestPrincipals();
   const suffix = Date.now();
   const user = await db.user.create({
     data: {
@@ -51,6 +54,7 @@ afterAll(async () => {
     await db.user.delete({ where: { id: cleanup.userId } });
   }
   if (cleanup.couponIds.length) await db.coupon.deleteMany({ where: { id: { in: cleanup.couponIds } } });
+  if (cleanup.orderIds.length) await db.order.deleteMany({ where: { id: { in: cleanup.orderIds } } });
   await db.$disconnect();
 });
 
@@ -180,7 +184,23 @@ describe("coupon APIs", () => {
       },
     });
     cleanup.couponIds.push(used.id);
-    const order = await db.order.findFirstOrThrow();
+    const order = await db.order.create({
+      data: {
+        orderNumber: `P7-${Date.now()}`,
+        userId: cleanup.userId,
+        customerName: "Phase Seven Customer",
+        customerPhone: "9876543210",
+        addressLine: "Coupon usage fixture",
+        addressCity: "Ahmedabad",
+        addressPincode: "380015",
+        deliveryDate: new Date(),
+        paymentMethod: "COD",
+        paymentStatus: "COD_PENDING",
+        subtotal: 100,
+        grandTotal: 100,
+      },
+    });
+    cleanup.orderIds.push(order.id);
     await db.couponUsage.create({ data: { couponId: used.id, userId: cleanup.userId, orderId: order.id, discountAmount: 10 } });
     expect((await customer.post("/api/coupons/validate").send({ code: used.code }).expect(200)).body.data.valid).toBe(false);
     await db.couponUsage.deleteMany({ where: { couponId: used.id, userId: cleanup.userId } });

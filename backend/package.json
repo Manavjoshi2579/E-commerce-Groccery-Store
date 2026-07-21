@@ -15,6 +15,8 @@
     "catalog:replace-client": "tsx scripts/catalog-replace-client.ts",
     "catalog:import-existing-images": "tsx scripts/import-existing-product-images.ts",
     "catalog:reconcile-product-images": "tsx scripts/catalog-reconcile-product-images.ts",
+    "catalog:integrate-sku-assets": "tsx scripts/catalog-integrate-sku-assets.ts",
+    "catalog:integrate-named-assets": "tsx scripts/catalog-integrate-named-zip-assets.ts",
     "catalog:import-category-banners": "tsx scripts/import-category-banners.ts",
     "db:prod-bootstrap": "tsx scripts/prod-bootstrap.ts",
     "db:seed": "prisma db seed",

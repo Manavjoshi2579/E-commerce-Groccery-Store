@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-label="Eagle Mart product placeholder">
-  <rect width="640" height="640" fill="#fffdf7"/>
-  <rect x="54" y="54" width="532" height="532" rx="30" fill="#fffaf0" stroke="#eadfca" stroke-width="8"/>
-  <path d="M196 407c32-103 83-156 154-160 34-2 64 8 92 28-39 17-65 46-78 86-13 41-42 61-86 59-30-1-58-4-82-13Z" fill="#d4af37"/>
-  <circle cx="247" cy="276" r="48" fill="#2f8f4e"/>
-  <circle cx="342" cy="254" r="41" fill="#d94a28"/>
-  <circle cx="406" cy="318" r="38" fill="#f3c43c"/>
-  <text x="320" y="504" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#1a1a1a">IMAGE COMING SOON</text>
-</svg>

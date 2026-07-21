@@ -2,6 +2,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app/app.js";
 import { db } from "../lib/db.js";
+import { ensureTestPrincipals } from "./test-fixtures.js";
 
 const app = createApp();
 const superAdmin = request.agent(app);
@@ -14,6 +15,7 @@ const created = {
 };
 
 beforeAll(async () => {
+  await ensureTestPrincipals();
   await superAdmin
     .post("/api/admin/auth/login")
     .send({ email: "superadmin@eagleclub.in", password: adminPassword })

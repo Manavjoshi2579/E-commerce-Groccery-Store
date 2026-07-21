@@ -40,6 +40,16 @@ export const registerSchema = z.object({
   turnstileToken: z.string().optional(),
 });
 
+export const signupOtpRequestSchema = registerSchema.extend({
+  channel: z.enum(["email", "mobile"]),
+  confirmPassword: z.string().optional(),
+}).refine((value) => !value.confirmPassword || value.password === value.confirmPassword, "Passwords do not match");
+
+export const signupOtpVerifySchema = z.object({
+  signupId: z.string().min(8),
+  otp: z.string().regex(/^\d{6}$/),
+});
+
 export const loginSchema = z.object({
   email: emailSchema.transform(normalizeEmail),
   password: z.string().min(1, "Password is required"),
@@ -56,14 +66,13 @@ export const adminProfileSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  channel: z.enum(["email", "sms"]),
+  channel: z.enum(["email"]),
   email: emailSchema.transform(normalizeEmail).optional(),
-  phone: z.string().transform(normalizeIndianMobile).pipe(phoneSchema).optional(),
   turnstileToken: z.string().optional(),
 });
 
 export const verifyOtpSchema = z.object({
-  phone: z.string().transform(normalizeIndianMobile).pipe(phoneSchema),
+  email: emailSchema.transform(normalizeEmail),
   otp: z.string().regex(/^\d{6}$/),
 });
 
@@ -84,4 +93,24 @@ export const changePasswordSchema = z.object({
   password: z.string().min(1),
   confirmPassword: z.string().min(1),
   mfaCode: z.string().optional(),
+}).refine((value) => value.password === value.confirmPassword, "Passwords do not match");
+
+export const adminMfaConfirmSchema = z.object({
+  code: z.string().regex(/^\d{6}$/),
+});
+
+export const adminMfaDisableSchema = z.object({
+  password: z.string().min(1),
+  code: z.string().regex(/^\d{6}$|^[A-Z0-9-]{8,}$/i),
+});
+
+export const adminPasswordResetRequestSchema = z.object({
+  email: emailSchema.transform(normalizeEmail),
+  turnstileToken: z.string().optional(),
+});
+
+export const adminPasswordResetSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(1),
+  confirmPassword: z.string().min(1),
 }).refine((value) => value.password === value.confirmPassword, "Passwords do not match");

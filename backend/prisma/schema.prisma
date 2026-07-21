@@ -40,6 +40,11 @@ enum OtpPurpose {
   PASSWORD_RESET
 }
 
+enum SignupVerificationChannel {
+  EMAIL
+  MOBILE
+}
+
 enum RoleName {
   SUPER_ADMIN
   STORE_MANAGER
@@ -116,6 +121,12 @@ enum DeliveryStatus {
 enum FulfillmentType {
   DELIVERY
   PICKUP
+}
+
+enum DeliveryBlockScope {
+  DELIVERY
+  PICKUP
+  ALL
 }
 
 enum ReturnStatus {
@@ -338,6 +349,27 @@ model MobileOtpChallenge {
 
   @@index([mobileNumber, purpose, consumedAt])
   @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+}
+
+model PendingSignup {
+  id           String                    @id @default(cuid())
+  name         String
+  email        String
+  normalizedEmail String
+  mobileNumber String
+  passwordHash String
+  channel      SignupVerificationChannel
+  otpHash      String
+  attempts     Int                       @default(0)
+  maxAttempts  Int                       @default(5)
+  expiresAt    DateTime
+  resendAfter  DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime                  @default(now())
+
+  @@index([normalizedEmail, consumedAt])
+  @@index([mobileNumber, consumedAt])
   @@index([expiresAt])
 }
 
@@ -785,20 +817,41 @@ model DeliveryZone {
 }
 
 model DeliverySlot {
-  id        String         @id @default(cuid())
-  zoneId    String?
-  label     String
-  startTime String
-  endTime   String
-  capacity  Int
-  active    Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id                      String         @id @default(cuid())
+  zoneId                  String?
+  label                   String
+  startTime               String
+  endTime                 String
+  capacity                Int
+  maxOrdersPerDate        Int?
+  minOrderAmount          Decimal?       @db.Decimal(10, 2)
+  deliveryTypeEligibility String         @default("DELIVERY")
+  advanceBookingDays      Int?
+  sameDayCutoffTime       String?
+  displayOrder            Int            @default(0)
+  active                  Boolean        @default(true)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
   zone      DeliveryZone?  @relation(fields: [zoneId], references: [id])
   orders    Order[]
 
   @@index([zoneId])
+  @@index([active])
+  @@index([active, displayOrder])
+}
+
+model DeliveryHoliday {
+  id        String             @id @default(cuid())
+  date      DateTime
+  scope     DeliveryBlockScope @default(DELIVERY)
+  reason    String?
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([date, scope])
+  @@index([date])
   @@index([active])
 }
 

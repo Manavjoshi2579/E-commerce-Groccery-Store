@@ -18,7 +18,7 @@ export const productListQuerySchema = z.object({
   local: z.coerce.boolean().optional(),
   sort: z.enum(["popular", "newest", "price_asc", "price_desc", "discount"]).default("popular"),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(500).default(20),
+  limit: z.coerce.number().int().min(1).max(1000).default(20),
 });
 
 export const categorySchema = z.object({

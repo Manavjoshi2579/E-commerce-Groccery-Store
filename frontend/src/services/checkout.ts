@@ -110,15 +110,6 @@ export async function fetchDeliverySlots(pincode: string, date: string) {
   return data;
 }
 
-export async function checkPincode(pincode: string) {
-  return requestApi<{ serviceable: boolean; message: string; zone: any }>(`/api/delivery/check-pincode?pincode=${encodeURIComponent(pincode)}`);
-}
-
-export async function reverseGeocodeLocation(latitude: number, longitude: number) {
-  const params = new URLSearchParams({ lat: String(latitude), lng: String(longitude) });
-  return requestApi<{ pincode: string; place: string; provider: string; serviceable: boolean; message: string; zone: any }>(`/api/delivery/reverse-geocode?${params}`);
-}
-
 export async function checkoutSummary() {
   const data = await requestApi<any>("/api/checkout/summary");
   return {

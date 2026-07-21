@@ -2,7 +2,7 @@ import { DeliveryStatus, FulfillmentType, OrderStatus, PaymentMethod, PaymentSta
 import { db } from "../lib/db.js";
 import type { RbacPrismaClient } from "../lib/prisma-rbac.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
-import { findZoneByPincode, listSlotsForPincode } from "./delivery.service.js";
+import { assertDeliverySlotAvailability, findZoneByPincode, listSlotsForPincode } from "./delivery.service.js";
 import { addCartItem } from "./cart.service.js";
 
 const orderInclude = {
@@ -131,10 +131,6 @@ export function mapOrder(order: any) {
   };
 }
 
-function orderNumber() {
-  return `EC-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
-}
-
 async function nextSequence(tx: Prisma.TransactionClient, key: string) {
   const current = await tx.setting.findUnique({ where: { key } });
   const next = Number(current?.value || "0") + 1;
@@ -146,12 +142,18 @@ async function nextSequence(tx: Prisma.TransactionClient, key: string) {
   return next;
 }
 
+async function nextOrderNumber(tx: Prisma.TransactionClient) {
+  const year = new Date().getFullYear();
+  const sequence = await nextSequence(tx, `order:${year}`);
+  return `ORD-${year}-${String(sequence).padStart(6, "0")}`;
+}
+
 async function createInvoiceForOrder(tx: Prisma.TransactionClient, order: any) {
   const year = new Date().getFullYear();
   const sequence = await nextSequence(tx, `invoice:${year}`);
   return tx.invoice.create({
     data: {
-      invoiceNumber: `EM-${year}-${String(sequence).padStart(6, "0")}`,
+      invoiceNumber: `INV-${year}-${String(sequence).padStart(6, "0")}`,
       orderId: order.id,
       subtotal: order.subtotal,
       couponDiscount: order.couponDiscount,
@@ -215,11 +217,12 @@ export async function placeCodOrder(userId: string, input: CheckoutSelection) {
   const validated = await validateCheckoutSelection(userId, input);
 
   return db.$transaction(async (tx) => {
+    await assertDeliverySlotAvailability(tx, validated.slot?.id, input.deliveryDate, validated.summary.total, validated.fulfillmentType);
     await assertStock(tx, validated.cart);
 
     const order = await tx.order.create({
       data: {
-        orderNumber: orderNumber(),
+        orderNumber: await nextOrderNumber(tx),
         userId,
         customerName: validated.address.name,
         customerPhone: validated.address.phone,
@@ -287,55 +290,57 @@ export async function placeCodOrder(userId: string, input: CheckoutSelection) {
 
 export async function placeOnlinePlaceholderOrder(userId: string, input: CheckoutSelection) {
   const validated = await validateCheckoutSelection(userId, input);
-  const order = await db.order.create({
-    data: {
-      orderNumber: orderNumber(),
-      userId,
-      customerName: validated.address.name,
-      customerPhone: validated.address.phone,
-      addressId: validated.address.id,
-      addressLabel: validated.address.label,
-      addressLine: validated.address.line,
-      addressCity: validated.address.city,
-      addressState: validated.address.state,
-      addressPincode: validated.address.pincode,
-      deliveryDate: input.deliveryDate,
-      deliverySlotId: validated.slot?.id,
-      fulfillmentType: validated.fulfillmentType,
-      status: OrderStatus.PENDING,
-      paymentStatus: PaymentStatus.PENDING,
-      paymentMethod: PaymentMethod.RAZORPAY,
-      couponId: validated.cart.couponId,
-      subtotal: validated.summary.subtotal,
-      discount: validated.summary.discount,
-      couponDiscount: validated.summary.couponDiscount,
-      gstTotal: validated.summary.tax,
-      deliveryCharge: validated.summary.deliveryCharge,
-      handlingCharge: validated.summary.handlingCharge,
-      grandTotal: validated.summary.total,
-      items: {
-        create: validated.cart.items.map((item) => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          unitSnapshot: item.customUnit ?? item.variant?.unit ?? item.variant?.label ?? "",
-          nameSnapshot: item.product.name,
-          skuSnapshot: item.variant?.sku ?? item.product.sku,
-          quantity: item.quantity,
-          mrp: item.customMrp ?? item.variant?.mrp ?? item.unitPriceSnapshot,
-          sellingPrice: item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot,
-          discount: 0,
-          gst: item.product.gst,
-          lineTotal: decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot) * item.quantity,
-        })),
+  return db.$transaction(async (tx) => {
+    await assertDeliverySlotAvailability(tx, validated.slot?.id, input.deliveryDate, validated.summary.total, validated.fulfillmentType);
+    const order = await tx.order.create({
+      data: {
+        orderNumber: await nextOrderNumber(tx),
+        userId,
+        customerName: validated.address.name,
+        customerPhone: validated.address.phone,
+        addressId: validated.address.id,
+        addressLabel: validated.address.label,
+        addressLine: validated.address.line,
+        addressCity: validated.address.city,
+        addressState: validated.address.state,
+        addressPincode: validated.address.pincode,
+        deliveryDate: input.deliveryDate,
+        deliverySlotId: validated.slot?.id,
+        fulfillmentType: validated.fulfillmentType,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+        paymentMethod: PaymentMethod.RAZORPAY,
+        couponId: validated.cart.couponId,
+        subtotal: validated.summary.subtotal,
+        discount: validated.summary.discount,
+        couponDiscount: validated.summary.couponDiscount,
+        gstTotal: validated.summary.tax,
+        deliveryCharge: validated.summary.deliveryCharge,
+        handlingCharge: validated.summary.handlingCharge,
+        grandTotal: validated.summary.total,
+        items: {
+          create: validated.cart.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            unitSnapshot: item.customUnit ?? item.variant?.unit ?? item.variant?.label ?? "",
+            nameSnapshot: item.product.name,
+            skuSnapshot: item.variant?.sku ?? item.product.sku,
+            quantity: item.quantity,
+            mrp: item.customMrp ?? item.variant?.mrp ?? item.unitPriceSnapshot,
+            sellingPrice: item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot,
+            discount: 0,
+            gst: item.product.gst,
+            lineTotal: decimal(item.customPrice ?? item.variant?.price ?? item.unitPriceSnapshot) * item.quantity,
+          })),
+        },
+        payment: { create: { method: PaymentMethod.RAZORPAY, status: PaymentStatus.PENDING, amount: validated.summary.total } },
       },
-      payment: { create: { method: PaymentMethod.RAZORPAY, status: PaymentStatus.PENDING, amount: validated.summary.total } },
-    },
-    include: orderInclude,
-  });
-  await db.$transaction(async (tx) => {
+      include: orderInclude,
+    });
     await createInvoiceForOrder(tx, order);
+    const fresh = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
+    return { order: mapOrder(fresh), orderNumber: order.orderNumber };
   });
-  return { order: mapOrder(order), orderNumber: order.orderNumber };
 }
 
 export async function listOrders(userId: string) {

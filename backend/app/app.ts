@@ -25,6 +25,8 @@ import { healthRouter } from "./api/health.js";
 import { supportRouter } from "./api/support.js";
 import { databaseConnectionMessage, isDatabaseError } from "../lib/db-health.js";
 import { sendError } from "../lib/http.js";
+import { csrfProtection } from "../middleware/csrf.js";
+import { adminMutationRateLimit } from "../middleware/rate-limit.js";
 
 function allowedOrigins() {
   const configured = process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "http://localhost:3000";
@@ -54,19 +56,20 @@ export function createApp() {
   app.post("/api/payments/razorpay/webhook", express.raw({ type: "application/json" }), razorpayWebhookHandler);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use(csrfProtection);
 
   app.get("/health", (_req, res) => res.json({ ok: true, service: "eagleclub-backend" }));
   app.use("/api", healthRouter);
   app.use("/api/auth", customerAuthRouter);
   app.use("/api/admin/auth", adminAuthRouter);
-  app.use("/api/admin", adminCatalogRouter);
-  app.use("/api/admin", adminCouponRouter);
-  app.use("/api/admin", adminCustomerRouter);
-  app.use("/api/admin", adminOrderRouter);
-  app.use("/api/admin", adminInventoryRouter);
-  app.use("/api/admin", adminFaqRouter);
-  app.use("/api/admin", adminMiscRouter);
-  app.use("/api/admin", adminSupportRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminCatalogRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminCouponRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminCustomerRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminOrderRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminInventoryRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminFaqRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminMiscRouter);
+  app.use("/api/admin", adminMutationRateLimit, adminSupportRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/support", supportRouter);
   app.use("/api/cart", cartRouter);

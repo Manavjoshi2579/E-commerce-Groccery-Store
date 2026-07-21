@@ -38,7 +38,13 @@ async function main() {
     }
   }
 
-  console.log("Gujarat delivery coverage enabled for PIN prefixes 36, 37, 38, and 39.");
+  await prisma.deliveryStaff.upsert({
+    where: { phone: "9999999999" },
+    update: { name: "Eagle Mart Delivery", zoneId: zone.id, active: true },
+    create: { name: "Eagle Mart Delivery", phone: "9999999999", zoneId: zone.id, active: true },
+  });
+
+  console.log("Gujarat delivery coverage, slots, and default delivery staff are enabled.");
 }
 
 main()

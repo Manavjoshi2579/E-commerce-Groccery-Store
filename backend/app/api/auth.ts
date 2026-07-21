@@ -2,8 +2,9 @@ import { Router } from "express";
 import { clearSessionCookie, randomToken, setSessionCookie } from "../../lib/auth.js";
 import { sendError, sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
-import { AuthError, beginOAuth, completeGoogleOAuth, getCustomerById, googleAuthorizationUrl, loginCustomer, providerStatus, registerCustomer, requestCustomerPasswordReset, resetCustomerPassword, resetCustomerProfile, revokeSession, updateCustomerProfile, verifyCustomerResetOtp } from "../../services/auth.service.js";
-import { forgotPasswordSchema, loginSchema, profileSchema, registerSchema, resetPasswordSchema, verifyOtpSchema } from "../../validators/auth.js";
+import { otpRateLimit, strictAuthRateLimit } from "../../middleware/rate-limit.js";
+import { AuthError, beginOAuth, completeGoogleOAuth, getCustomerById, googleAuthorizationUrl, loginCustomer, providerStatus, requestCustomerPasswordReset, requestSignupOtp, resetCustomerPassword, resetCustomerProfile, revokeSession, updateCustomerProfile, verifyCustomerResetOtp, verifySignupOtp } from "../../services/auth.service.js";
+import { forgotPasswordSchema, loginSchema, profileSchema, resetPasswordSchema, signupOtpRequestSchema, signupOtpVerifySchema, verifyOtpSchema } from "../../validators/auth.js";
 import { OAuthProvider } from "@prisma/client";
 
 export const customerAuthRouter = Router();
@@ -25,12 +26,12 @@ function oauthCookieOptions() {
   };
 }
 
-customerAuthRouter.post("/register", async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid registration payload.");
+customerAuthRouter.post("/register", strictAuthRateLimit, async (req, res) => {
+  const parsed = signupOtpVerifySchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, "Verify email or mobile OTP before account creation.", "AUTH_MOBILE_NOT_VERIFIED");
 
   try {
-    const result = await registerCustomer(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") });
+    const result = await verifySignupOtp(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") });
     setSessionCookie(res, "customer", result.token);
     return sendOk(res, { user: result.user }, 201);
   } catch (error) {
@@ -38,7 +39,29 @@ customerAuthRouter.post("/register", async (req, res) => {
   }
 });
 
-customerAuthRouter.post("/login", async (req, res) => {
+customerAuthRouter.post("/signup/request-otp", otpRateLimit, async (req, res) => {
+  const parsed = signupOtpRequestSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid signup payload.");
+  try {
+    return sendOk(res, await requestSignupOtp(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") }), 201);
+  } catch (error) {
+    return sendAuthError(res, error, "Could not send verification code.");
+  }
+});
+
+customerAuthRouter.post("/signup/verify-otp", strictAuthRateLimit, async (req, res) => {
+  const parsed = signupOtpVerifySchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid verification payload.", "AUTH_TOKEN_INVALID");
+  try {
+    const result = await verifySignupOtp(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") });
+    setSessionCookie(res, "customer", result.token);
+    return sendOk(res, { user: result.user }, 201);
+  } catch (error) {
+    return sendAuthError(res, error, "Registration failed.");
+  }
+});
+
+customerAuthRouter.post("/login", strictAuthRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid login payload.");
 
@@ -59,7 +82,7 @@ customerAuthRouter.post("/logout", async (req, res) => {
 
 customerAuthRouter.get("/config", (_req, res) => sendOk(res, { providers: providerStatus() }));
 
-customerAuthRouter.post("/forgot-password", async (req, res) => {
+customerAuthRouter.post("/forgot-password", otpRateLimit, async (req, res) => {
   const parsed = forgotPasswordSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid recovery payload.", "AUTH_TOKEN_INVALID");
   try {
@@ -69,7 +92,7 @@ customerAuthRouter.post("/forgot-password", async (req, res) => {
   }
 });
 
-customerAuthRouter.post("/forgot-password/verify-otp", async (req, res) => {
+customerAuthRouter.post("/forgot-password/verify-otp", strictAuthRateLimit, async (req, res) => {
   const parsed = verifyOtpSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid verification payload.", "AUTH_TOKEN_INVALID");
   try {
@@ -79,7 +102,7 @@ customerAuthRouter.post("/forgot-password/verify-otp", async (req, res) => {
   }
 });
 
-customerAuthRouter.post("/reset-password", async (req, res) => {
+customerAuthRouter.post("/reset-password", strictAuthRateLimit, async (req, res) => {
   const parsed = resetPasswordSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid reset payload.", "AUTH_TOKEN_INVALID");
   try {
@@ -147,5 +170,5 @@ function sendAuthError(res: Parameters<typeof sendError>[0], error: unknown, fal
   if (error instanceof AuthError) {
     return res.status(error.status).json({ ok: false, error: { code: error.code, message: error.message, retryAfterSeconds: error.retryAfterSeconds } });
   }
-  return sendError(res, 400, error instanceof Error ? error.message : fallback, "AUTH_TOKEN_INVALID");
+  return sendError(res, 400, fallback, "AUTH_TOKEN_INVALID");
 }

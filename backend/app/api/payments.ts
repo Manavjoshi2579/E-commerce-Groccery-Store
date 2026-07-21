@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { sendError, sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
+import { paymentRateLimit } from "../../middleware/rate-limit.js";
 import { createRazorpayOrder, handleRazorpayWebhook, markRazorpayFailed, paymentProviderStatus, verifyRazorpayPayment } from "../../services/payment.service.js";
 import { razorpayCreateOrderSchema, razorpayFailedSchema, razorpayVerifySchema } from "../../validators/payments.js";
 
@@ -8,7 +9,7 @@ export const paymentRouter = Router();
 
 paymentRouter.get("/config", (_req, res) => sendOk(res, { providers: paymentProviderStatus() }));
 
-paymentRouter.post("/razorpay/create-order", requireCustomer, async (req, res) => {
+paymentRouter.post("/razorpay/create-order", paymentRateLimit, requireCustomer, async (req, res) => {
   const parsed = razorpayCreateOrderSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid payment payload.");
   try {
@@ -18,7 +19,7 @@ paymentRouter.post("/razorpay/create-order", requireCustomer, async (req, res) =
   }
 });
 
-paymentRouter.post("/razorpay/verify", requireCustomer, async (req, res) => {
+paymentRouter.post("/razorpay/verify", paymentRateLimit, requireCustomer, async (req, res) => {
   const parsed = razorpayVerifySchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid verification payload.");
   try {
@@ -28,7 +29,7 @@ paymentRouter.post("/razorpay/verify", requireCustomer, async (req, res) => {
   }
 });
 
-paymentRouter.post("/razorpay/failed", requireCustomer, async (req, res) => {
+paymentRouter.post("/razorpay/failed", paymentRateLimit, requireCustomer, async (req, res) => {
   const parsed = razorpayFailedSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid failure payload.");
   try {

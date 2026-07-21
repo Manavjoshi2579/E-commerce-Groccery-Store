@@ -3,4 +3,4 @@ export function isGujaratPincode(pincode: string) {
   return /^3[6-9]\d{4}$/.test(normalized);
 }
 
-export const gujaratPincodePrefixes = ["36", "37", "38", "39"];
+export const gujaratPincodePrefixes = ["380015", "36", "37", "38", "39"];

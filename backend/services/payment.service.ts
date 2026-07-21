@@ -45,10 +45,6 @@ function tomorrow() {
   return date;
 }
 
-function newOrderNumber() {
-  return `EC-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
-}
-
 function signature(orderId: string, paymentId: string) {
   return crypto.createHmac("sha256", razorpaySecret()).update(`${orderId}|${paymentId}`).digest("hex");
 }
@@ -64,10 +60,16 @@ async function nextSequence(tx: Prisma.TransactionClient, key: string) {
   return next;
 }
 
+async function nextOrderNumber(tx: Prisma.TransactionClient) {
+  const year = new Date().getFullYear();
+  const sequence = await nextSequence(tx, `order:${year}`);
+  return `ORD-${year}-${String(sequence).padStart(6, "0")}`;
+}
+
 async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
   const year = new Date().getFullYear();
   const sequence = await nextSequence(tx, `invoice:${year}`);
-  return `EM-${year}-${String(sequence).padStart(6, "0")}`;
+  return `INV-${year}-${String(sequence).padStart(6, "0")}`;
 }
 
 function webhookSignature(body: Buffer) {
@@ -107,10 +109,9 @@ async function createProviderOrder(amountPaise: number, receipt: string, notes?:
 export async function createRazorpayOrder(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate?: Date; couponCode?: string; notes?: Record<string, string> }) {
   if (!razorpayAvailable()) throw new Error("Online payment is temporarily unavailable. Please use Cash on Delivery.");
   const selected = await validateSelection(userId, input);
-  const internalOrderNumber = newOrderNumber();
   const order = await db.$transaction(async (tx) => tx.order.create({
     data: {
-      orderNumber: internalOrderNumber,
+      orderNumber: await nextOrderNumber(tx),
       userId,
       customerName: selected.address.name,
       customerPhone: selected.address.phone,

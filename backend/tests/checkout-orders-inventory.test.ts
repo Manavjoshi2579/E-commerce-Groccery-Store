@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OrderStatus, StockMovementType, UserStatus } from "@prisma/client";
 import { createApp } from "../app/app.js";
 import { db } from "../lib/db.js";
+import { ensureTestPrincipals } from "./test-fixtures.js";
 
 const app = createApp();
 const customer = request.agent(app);
@@ -22,6 +23,7 @@ process.env.RAZORPAY_KEY_SECRET ||= "test_secret";
 process.env.RAZORPAY_WEBHOOK_SECRET ||= "webhook_secret";
 
 beforeAll(async () => {
+  await ensureTestPrincipals();
   const suffix = Date.now();
   const user = await db.user.create({
     data: {

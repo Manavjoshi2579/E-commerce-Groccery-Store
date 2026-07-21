@@ -35,9 +35,10 @@ import {
   logoutCustomer as logoutBackendCustomer,
   resetAdminProfile as resetBackendAdminProfile,
   resetCustomerProfile as resetBackendCustomerProfile,
-  registerCustomer as registerBackendCustomer,
+  requestSignupOtp as requestBackendSignupOtp,
   updateAdminProfile as updateBackendAdminProfile,
   updateCustomerProfile as updateBackendCustomerProfile,
+  verifySignupOtp as verifyBackendSignupOtp,
   type AdminSession,
   type CustomerSession,
 } from "@/services/auth";
@@ -45,6 +46,40 @@ import type { Address, CartItem, Coupon, Order, OrderStatus, Product } from "@/t
 import { uid } from "@/lib/money";
 
 type Toast = { id: string; message: string; tone?: "success" | "error" | "info" };
+type SoundTone = "cart" | "wishlist" | "order";
+
+export function playNotificationSound(tone: SoundTone) {
+  if (typeof window === "undefined") return;
+  const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return;
+  const context = new AudioContextCtor();
+  const now = context.currentTime;
+  const sequence: Record<SoundTone, number[]> = {
+    cart: [660, 880],
+    wishlist: [740, 988],
+    order: [660, 880, 1175],
+  };
+  const master = context.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.28, now + 0.018);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+  master.connect(context.destination);
+  sequence[tone].forEach((frequency, index) => {
+    const start = now + index * 0.13;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(tone === "order" ? 0.24 : 0.2, start + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+    oscillator.connect(gain);
+    gain.connect(master);
+    oscillator.start(start);
+    oscillator.stop(start + 0.18);
+  });
+  window.setTimeout(() => void context.close().catch(() => undefined), 850);
+}
 
 function rememberPlacedOrder(order: Order) {
   if (typeof window === "undefined") return;
@@ -67,7 +102,8 @@ type Store = {
   refreshCustomerData: () => Promise<void>;
   refreshCustomerProfile: () => Promise<CustomerSession>;
   loginCustomer: (input: { email: string; password: string }) => Promise<CustomerSession>;
-  registerCustomer: (input: { name: string; email: string; phone: string; password: string; terms?: boolean }) => Promise<CustomerSession>;
+  requestSignupOtp: (input: { name: string; email: string; phone: string; password: string; confirmPassword?: string; terms?: boolean; channel: "email" | "mobile" }) => Promise<{ signupId: string; message: string; providerConfigured: boolean; resendAfterSeconds: number }>;
+  verifySignupOtp: (input: { signupId: string; otp: string }) => Promise<CustomerSession>;
   updateCustomerProfile: (input: { name?: string; phone?: string }) => Promise<CustomerSession>;
   logoutCustomer: () => Promise<void>;
   loginAdmin: (input: { email: string; password: string }) => Promise<AdminSession | { mfaRequired: true; challengeId: string }>;
@@ -93,6 +129,7 @@ type Store = {
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
   replaceProducts: (products: Product[]) => void;
+  registerProducts: (products: Product[]) => void;
   adjustStock: (id: string, stock: number) => void;
   updateOrderStatus: (orderNumber: string, status: OrderStatus) => void;
   assignDeliveryStaff: (orderNumber: string, staff: string) => void;
@@ -206,6 +243,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 2600);
   }, []);
 
+  const registerProducts = useCallback((nextProducts: Product[]) => {
+    setProducts((items) => {
+      const byId = new Map(items.map((item) => [item.id, item]));
+      nextProducts.forEach((product) => byId.set(product.id, product));
+      return Array.from(byId.values());
+    });
+  }, []);
+
   const requireCustomerLogin = () => {
     if (customer) return true;
     if (!authReady) {
@@ -247,8 +292,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toast("Login successful", "success");
       return user;
     },
-    registerCustomer: async (input) => {
-      const user = await registerBackendCustomer(input);
+    requestSignupOtp: (input) => requestBackendSignupOtp(input),
+    verifySignupOtp: async (input) => {
+      const user = await verifyBackendSignupOtp(input);
       setCustomer(user);
       await loadCustomerData();
       toast("Account created", "success");
@@ -331,6 +377,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       addBackendCartItem(id, qty, selectedVariantId, custom).then((summary) => {
         applyBackendCart(summary);
+        playNotificationSound("cart");
         toast("Added to cart", "success");
       }).catch((error) => {
         setCart(previousCart);
@@ -369,6 +416,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setWishlist((items) => (exists ? items.filter((item) => item !== id) : [...items, id]));
       action.then((summary) => {
         applyBackendWishlist(summary);
+        playNotificationSound("wishlist");
         toast("Wishlist updated", "success");
       }).catch((error) => {
         setWishlist(previousWishlist);
@@ -447,6 +495,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setCart([]);
       setCouponCode("");
       rememberPlacedOrder(order);
+      playNotificationSound("order");
       toast("Order placed successfully", "success");
       return order;
     },
@@ -459,6 +508,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     updateProduct: (product) => setProducts((items) => items.map((item) => (item.id === product.id ? product : item))),
     deleteProduct: (id) => setProducts((items) => items.filter((item) => item.id !== id)),
     replaceProducts: (nextProducts) => setProducts(nextProducts),
+    registerProducts,
     adjustStock: (id, stock) => setProducts((items) => items.map((item) => (item.id === id ? { ...item, stock } : item))),
     updateOrderStatus: (orderNumber, status) => {
       setOrders((items) => items.map((item) => (item.orderNumber === orderNumber ? { ...item, status } : item)));
@@ -480,7 +530,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
     },
     replaceCoupons: (nextCoupons) => setCoupons(nextCoupons),
-  }), [products, cart, wishlist, orders, addresses, coupons, couponCode, customer, admin, authReady, adminReady, loadCustomerData, clearCustomerState, backendCommerce, applyBackendCart, applyBackendWishlist]);
+  }), [products, cart, wishlist, orders, addresses, coupons, couponCode, customer, admin, authReady, adminReady, loadCustomerData, clearCustomerState, backendCommerce, applyBackendCart, applyBackendWishlist, registerProducts]);
 
   return (
     <AppContext.Provider value={value}>

@@ -21,18 +21,9 @@ export const checkoutSelectionSchema = z.object({
   fulfillmentType: z.enum(["DELIVERY", "PICKUP"]).optional().default("DELIVERY"),
 });
 
-export const pincodeQuerySchema = z.object({
-  pincode: pincodeSchema,
-});
-
 export const slotQuerySchema = z.object({
   pincode: pincodeSchema,
   date: z.coerce.date(),
-});
-
-export const reverseGeocodeQuerySchema = z.object({
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
 });
 
 export const cancelOrderSchema = z.object({
@@ -67,6 +58,12 @@ export const deliverySlotAdminSchema = z.object({
   startTime: z.string().trim().min(2).max(20),
   endTime: z.string().trim().min(2).max(20),
   capacity: z.coerce.number().int().min(1).max(10000),
+  maxOrdersPerDate: z.coerce.number().int().min(1).max(10000).optional().nullable(),
+  minOrderAmount: z.coerce.number().min(0).optional().nullable(),
+  deliveryTypeEligibility: z.enum(["DELIVERY", "PICKUP", "ALL"]).optional(),
+  advanceBookingDays: z.coerce.number().int().min(0).max(30).optional().nullable(),
+  sameDayCutoffTime: z.string().trim().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  displayOrder: z.coerce.number().int().min(0).max(10000).optional(),
   zoneId: z.string().min(8).optional().nullable(),
   active: z.coerce.boolean().optional(),
 });
