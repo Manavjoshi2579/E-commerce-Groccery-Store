@@ -3,8 +3,8 @@ module.exports = {
     {
       name: "eagle-mart-backend",
       cwd: "./backend",
-      script: "npm",
-      args: "start",
+      script: "node_modules/tsx/dist/cli.mjs",
+      args: "app/server.ts",
       instances: 2,
       exec_mode: "cluster",
       env: {
