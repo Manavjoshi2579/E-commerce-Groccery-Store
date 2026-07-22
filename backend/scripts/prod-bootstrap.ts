@@ -95,6 +95,7 @@ async function main() {
   console.log(`Customers: ${customerCount}`);
   console.log(`Orders: ${orderCount}`);
   console.log("No demo customers, demo orders, or public credentials were created by this script.");
+  console.log("Catalog data is not changed by this script. Run `npm run db:prod-catalog -- ../products.xlsx` to import the current product/category catalog.");
 }
 
 main()

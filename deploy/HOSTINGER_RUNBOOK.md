@@ -4,10 +4,10 @@
 
 1. Pull the verified commit on the VPS.
 2. Copy `.env.production.example` to production env files and replace every placeholder with Hostinger, MySQL, Razorpay, and SMTP values.
-3. Run backend commands: `npm ci`, `npx prisma migrate deploy`, `npx prisma generate`, `npm run build`.
+3. Run backend commands: `npm ci`, `npx prisma migrate deploy`, `npx prisma generate`, `npm run db:prod-bootstrap`, `npm run db:prod-catalog -- ../products.xlsx`, `npm run build`.
 4. Run frontend commands: `npm ci`, `npm run build`.
 5. Start or reload: `pm2 startOrReload ecosystem.config.cjs --env production`.
-6. Check: `pm2 status`, `curl https://api.eaglesclub.in/api/ready`, `curl https://eaglesclub.in`.
+6. Check: `pm2 status`, `curl https://api.eaglesclub.in/api/ready`, `curl https://api.eaglesclub.in/api/catalog/home`, `curl https://eaglesclub.in`.
 
 ## SSL
 
