@@ -1,6 +1,14 @@
 "use client";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+function defaultApiBase() {
+  if (typeof window === "undefined") return "http://localhost:4000";
+  const { hostname, protocol } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return "http://localhost:4000";
+  if (hostname === "eaglesclub.in" || hostname === "www.eaglesclub.in") return `${protocol}//api.eaglesclub.in`;
+  return `${protocol}//api.${hostname.replace(/^www\./, "")}`;
+}
+
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || defaultApiBase();
 export const API_UNAVAILABLE_MESSAGE = "Database connection failed. Please check backend database configuration.";
 
 export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: { message: string; code?: string; retryAfterSeconds?: number } };
