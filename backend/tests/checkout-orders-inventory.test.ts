@@ -65,6 +65,8 @@ afterAll(async () => {
     const order = await db.order.findUnique({ where: { orderNumber } });
     if (!order) continue;
     await db.deliveryAssignment.deleteMany({ where: { orderId: order.id } });
+    await db.customerDeliveryConfirmation.deleteMany({ where: { orderId: order.id } });
+    await db.orderStatusHistory.deleteMany({ where: { orderId: order.id } });
     await db.stockMovement.deleteMany({ where: { orderId: order.id } });
     await db.couponUsage.deleteMany({ where: { orderId: order.id } });
     await db.payment.deleteMany({ where: { orderId: order.id } });
@@ -79,7 +81,7 @@ afterAll(async () => {
     await db.address.deleteMany({ where: { userId: cleanup.userId } });
     await db.user.delete({ where: { id: cleanup.userId } });
   }
-  await db.inventory.update({ where: { id: inventoryId }, data: { stock: startingStock } });
+  await db.inventory.update({ where: { id: inventoryId }, data: { stock: startingStock, reserved: 0 } });
   await db.$disconnect();
 });
 
@@ -124,7 +126,7 @@ describe("checkout and COD order flow", () => {
       .expect(400);
   });
 
-  it("places COD order, clears cart, decreases stock, and creates SALE movement", async () => {
+  it("places COD order, clears cart, reserves stock, and creates reservation movement", async () => {
     const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
     const order = await placeCod(2);
     expect(order.orderNumber).toBeTruthy();
@@ -134,8 +136,9 @@ describe("checkout and COD order flow", () => {
     expect(cart.body.data.cart.items).toHaveLength(0);
 
     const after = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
-    expect(after.stock).toBe(before.stock - 2);
-    const movement = await db.stockMovement.findFirst({ where: { orderId: order.id, type: StockMovementType.SALE } });
+    expect(after.stock).toBe(before.stock);
+    expect(after.reserved).toBe(before.reserved + 2);
+    const movement = await db.stockMovement.findFirst({ where: { orderId: order.id, type: StockMovementType.ONLINE_RESERVATION } });
     expect(movement).toBeTruthy();
   });
 
@@ -186,7 +189,7 @@ describe("razorpay payment flow", () => {
     expect(cart.body.data.cart.items).toHaveLength(1);
   });
 
-  it("verifies success, clears cart, reduces stock once, and duplicate verify is idempotent", async () => {
+  it("verifies success, clears cart, and keeps stock reserved until dispatch", async () => {
     await seedCart(1);
     const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
     const created = await customer.post("/api/payments/razorpay/create-order").send({ addressId: cleanup.addressId, deliverySlotId, deliveryDate: "2026-06-05" }).expect(201);
@@ -201,10 +204,11 @@ describe("razorpay payment flow", () => {
     await customer.post("/api/payments/razorpay/verify").send(payload).expect(200);
     await customer.post("/api/payments/razorpay/verify").send(payload).expect(200);
     const after = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
-    expect(after.stock).toBe(before.stock - 1);
+    expect(after.stock).toBe(before.stock);
+    expect(after.reserved).toBe(before.reserved + 1);
     const cart = await customer.get("/api/cart").expect(200);
     expect(cart.body.data.cart.items).toHaveLength(0);
-    const movements = await db.stockMovement.count({ where: { order: { orderNumber: created.body.data.orderNumber }, type: StockMovementType.SALE } });
+    const movements = await db.stockMovement.count({ where: { order: { orderNumber: created.body.data.orderNumber }, type: StockMovementType.ONLINE_RESERVATION } });
     expect(movements).toBe(1);
   });
 
@@ -246,8 +250,9 @@ describe("order APIs", () => {
     const cancel = await customer.post(`/api/orders/${order.orderNumber}/cancel`).send({ reason: "Test cancel" }).expect(200);
     expect(cancel.body.data.order.status).toBe("Cancelled");
     const afterCancel = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
-    expect(afterCancel.stock).toBe(beforeCancel.stock + 1);
-    expect(await db.stockMovement.findFirst({ where: { orderId: order.id, type: StockMovementType.CANCELLED_ORDER } })).toBeTruthy();
+    expect(afterCancel.stock).toBe(beforeCancel.stock);
+    expect(afterCancel.reserved).toBe(Math.max(0, beforeCancel.reserved - 1));
+    expect(await db.stockMovement.findFirst({ where: { orderId: order.id, type: StockMovementType.ORDER_CANCELLED } })).toBeTruthy();
   });
 });
 
@@ -264,7 +269,7 @@ describe("admin order and inventory APIs", () => {
   it("adjusts inventory and records movement", async () => {
     const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
     const adjusted = await admin.post(`/api/admin/inventory/${inventoryId}/adjust`).send({ quantity: 3, note: "Phase eight restock" }).expect(200);
-    expect(adjusted.body.data.inventory.stock).toBe(before.stock + 3);
+    expect(adjusted.body.data.inventory.stock).toBe(before.stock + 3 - before.reserved);
     const movement = await db.stockMovement.findFirst({ where: { inventoryId, type: StockMovementType.RESTOCK, note: "Phase eight restock" } });
     expect(movement).toBeTruthy();
   });

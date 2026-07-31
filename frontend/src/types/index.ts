@@ -162,7 +162,14 @@ export type Order = {
   deliveryAssignmentStatus?: string;
   deliveryAssignedAt?: string;
   deliveryPickedUpAt?: string;
+  deliveryOutForDeliveryAt?: string;
+  deliveryHandedOverAt?: string;
   deliveryDeliveredAt?: string;
+  deliveryFailedAt?: string;
+  deliveryFailureReason?: string;
+  deliveryFailureNote?: string;
+  customerConfirmedAt?: string;
+  customerConfirmationNote?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
   invoicePdfUrl?: string | null;

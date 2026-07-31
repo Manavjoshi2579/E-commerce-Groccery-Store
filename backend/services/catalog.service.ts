@@ -146,16 +146,17 @@ function primaryImageStatus(product: ProductWithCatalog) {
 function variantInventory(product: ProductWithCatalog, variantId: string) {
   const inventory = product.inventory.find((item) => item.variantId === variantId);
   const fallbackRows = product.inventory.filter((item) => item.variantId == null);
-  const fallbackStock = fallbackRows.length ? fallbackRows.reduce((sum, item) => sum + item.stock, 0) : product.inventory.reduce((sum, item) => sum + item.stock, 0);
+  const available = (item: any) => Math.max(0, Number(item.stock || 0) - Number(item.reserved || 0));
+  const fallbackStock = fallbackRows.length ? fallbackRows.reduce((sum, item) => sum + available(item), 0) : product.inventory.reduce((sum, item) => sum + available(item), 0);
   const fallbackLowStock = fallbackRows[0]?.lowStockThreshold ?? product.inventory[0]?.lowStockThreshold ?? 10;
   return {
-    stock: inventory?.stock ?? fallbackStock,
+    stock: inventory ? available(inventory) : fallbackStock,
     lowStockThreshold: inventory?.lowStockThreshold ?? fallbackLowStock,
   };
 }
 
 function stockSummary(product: ProductWithCatalog) {
-  const stock = product.inventory.reduce((sum, item) => sum + item.stock, 0);
+  const stock = product.inventory.reduce((sum, item: any) => sum + Math.max(0, Number(item.stock || 0) - Number(item.reserved || 0)), 0);
   const lowStock = product.inventory[0]?.lowStockThreshold ?? 10;
   const stockStatus = stock <= 0 ? "out_of_stock" : stock <= lowStock ? "low_stock" : "in_stock";
   return { stock, lowStock, stockStatus };

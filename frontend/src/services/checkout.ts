@@ -72,7 +72,14 @@ export function mapOrder(input: any): Order {
     deliveryAssignmentStatus: input.deliveryAssignmentStatus,
     deliveryAssignedAt: input.deliveryAssignedAt,
     deliveryPickedUpAt: input.deliveryPickedUpAt,
+    deliveryOutForDeliveryAt: input.deliveryOutForDeliveryAt,
+    deliveryHandedOverAt: input.deliveryHandedOverAt,
     deliveryDeliveredAt: input.deliveryDeliveredAt,
+    deliveryFailedAt: input.deliveryFailedAt,
+    deliveryFailureReason: input.deliveryFailureReason,
+    deliveryFailureNote: input.deliveryFailureNote,
+    customerConfirmedAt: input.customerConfirmedAt,
+    customerConfirmationNote: input.customerConfirmationNote,
     invoiceNumber: input.invoiceNumber,
     invoiceDate: input.invoiceDate,
     invoicePdfUrl: input.invoicePdfUrl,
@@ -150,6 +157,11 @@ export async function cancelBackendOrder(orderNumber: string) {
 
 export async function requestReturnBackend(orderNumber: string, input: { orderItemId?: string | null; reason: string; bankAccountHolder: string; bankName: string; bankAccountNumber: string; bankIfsc: string }) {
   const data = await requestApi<{ order: any }>(`/api/orders/${orderNumber}/return`, { method: "POST", body: JSON.stringify(input) });
+  return mapOrder(data.order);
+}
+
+export async function confirmReceivedBackend(orderNumber: string, note?: string) {
+  const data = await requestApi<{ order: any }>(`/api/orders/${orderNumber}/confirm-received`, { method: "POST", body: JSON.stringify({ note }) });
   return mapOrder(data.order);
 }
 

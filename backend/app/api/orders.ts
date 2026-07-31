@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { sendError, sendOk } from "../../lib/http.js";
 import { requireCustomer } from "../../middleware/auth.js";
-import { cancelOrder, getOrder, listOrders, reorder, requestReturn, tracking } from "../../services/order.service.js";
-import { returnRequestSchema } from "../../validators/checkout.js";
+import { cancelOrder, confirmOrderReceived, getOrder, listOrders, reorder, requestReturn, tracking } from "../../services/order.service.js";
+import { deliveryConfirmationSchema, returnRequestSchema } from "../../validators/checkout.js";
 
 export const orderRouter = Router();
 
@@ -45,6 +45,16 @@ orderRouter.post("/:orderNumber/return", async (req, res) => {
     return sendOk(res, { order: await requestReturn(req.customer!.id, param(req.params.orderNumber), parsed.data) });
   } catch (error) {
     return sendError(res, 400, error instanceof Error ? error.message : "Could not request return.");
+  }
+});
+
+orderRouter.post("/:orderNumber/confirm-received", async (req, res) => {
+  const parsed = deliveryConfirmationSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid confirmation.");
+  try {
+    return sendOk(res, { order: await confirmOrderReceived(req.customer!.id, param(req.params.orderNumber), parsed.data.note) });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not confirm delivery.");
   }
 });
 

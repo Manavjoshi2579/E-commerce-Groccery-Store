@@ -4,6 +4,7 @@ import type { RbacPrismaClient } from "../lib/prisma-rbac.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
 import { assertDeliverySlotAvailability, findZoneByPincode, listSlotsForPincode } from "./delivery.service.js";
 import { addCartItem } from "./cart.service.js";
+import { finalizeOrderSale, releaseOrderReservation, reserveInventory } from "./inventory.service.js";
 
 const orderInclude = {
   items: { include: { product: true, variant: true } },
@@ -11,6 +12,7 @@ const orderInclude = {
   address: true,
   deliverySlot: true,
   deliveryAssignment: { include: { deliveryStaff: true } },
+  deliveryConfirmation: true,
   coupon: true,
   invoice: true,
   returns: { include: { orderItem: true, refunds: true } },
@@ -102,6 +104,13 @@ export function mapOrder(order: any) {
     deliveryAssignedAt: order.deliveryAssignment?.assignedAt,
     deliveryPickedUpAt: order.deliveryAssignment?.pickedUpAt,
     deliveryDeliveredAt: order.deliveryAssignment?.deliveredAt,
+    deliveryOutForDeliveryAt: order.deliveryAssignment?.outForDeliveryAt,
+    deliveryHandedOverAt: order.deliveryAssignment?.handedOverAt,
+    deliveryFailedAt: order.deliveryAssignment?.failedAt,
+    deliveryFailureReason: order.deliveryAssignment?.failureReason,
+    deliveryFailureNote: order.deliveryAssignment?.failureNote,
+    customerConfirmedAt: order.deliveryConfirmation?.confirmedAt,
+    customerConfirmationNote: order.deliveryConfirmation?.note,
     invoiceNumber: order.invoice?.invoiceNumber,
     invoiceDate: order.invoice?.invoiceDate,
     invoicePdfUrl: order.invoice?.pdfUrl,
@@ -193,8 +202,15 @@ async function assertStock(tx: Prisma.TransactionClient, cart: Awaited<ReturnTyp
     if (item.product.status !== ProductStatus.ACTIVE || item.product.deletedAt) throw new Error(`${item.product.name} is not available.`);
     if (item.variant && item.variant.status !== ProductStatus.ACTIVE) throw new Error(`${item.product.name} variant is not available.`);
     const inventory = await tx.inventory.findFirst({ where: { productId: item.productId, variantId: item.variantId } });
-    if (!inventory || inventory.stock < item.quantity) throw new Error(`Insufficient stock for ${item.product.name}.`);
+    if (!inventory || inventory.stock - inventory.reserved < item.quantity) throw new Error(`Insufficient stock for ${item.product.name}.`);
   }
+}
+
+async function recordStatusHistory(tx: Prisma.TransactionClient, order: { id: string; status: OrderStatus }, status: OrderStatus, actorType: string, actorId?: string | null, reason?: string) {
+  if (order.status === status) return;
+  await tx.orderStatusHistory.create({
+    data: { orderId: order.id, previousStatus: order.status, newStatus: status, actorType, actorId, reason },
+  });
 }
 
 export async function checkoutSummary(userId: string, input?: { addressId?: string; deliverySlotId?: string; deliveryDate?: Date }) {
@@ -268,11 +284,7 @@ export async function placeCodOrder(userId: string, input: CheckoutSelection) {
     await createInvoiceForOrder(tx, order);
 
     for (const item of validated.cart.items) {
-      const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId } });
-      await tx.inventory.update({ where: { id: inventory.id }, data: { stock: { decrement: item.quantity } } });
-      await tx.stockMovement.create({
-        data: { inventoryId: inventory.id, productId: item.productId, variantId: item.variantId, type: StockMovementType.SALE, quantity: item.quantity, orderId: order.id, note: `Sale ${order.orderNumber}` },
-      });
+      await reserveInventory(tx, { productId: item.productId, variantId: item.variantId, quantity: item.quantity, orderId: order.id, actorId: userId, idempotencyKey: `ONLINE_RESERVATION:${order.id}:${item.id}` });
     }
 
     if (validated.cart.couponId) {
@@ -292,6 +304,7 @@ export async function placeOnlinePlaceholderOrder(userId: string, input: Checkou
   const validated = await validateCheckoutSelection(userId, input);
   return db.$transaction(async (tx) => {
     await assertDeliverySlotAvailability(tx, validated.slot?.id, input.deliveryDate, validated.summary.total, validated.fulfillmentType);
+    await assertStock(tx, validated.cart);
     const order = await tx.order.create({
       data: {
         orderNumber: await nextOrderNumber(tx),
@@ -338,6 +351,9 @@ export async function placeOnlinePlaceholderOrder(userId: string, input: Checkou
       include: orderInclude,
     });
     await createInvoiceForOrder(tx, order);
+    for (const item of validated.cart.items) {
+      await reserveInventory(tx, { productId: item.productId, variantId: item.variantId, quantity: item.quantity, orderId: order.id, actorId: userId, idempotencyKey: `ONLINE_RESERVATION:${order.id}:${item.id}` });
+    }
     const fresh = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
     return { order: mapOrder(fresh), orderNumber: order.orderNumber };
   });
@@ -363,6 +379,8 @@ export async function tracking(userId: string, orderNumber: string) {
 const cancelable: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PACKED];
 
 async function restoreStock(tx: Prisma.TransactionClient, order: any, adminUserId?: string) {
+  const saleMovement = await tx.stockMovement.findFirst({ where: { orderId: order.id, type: { in: [StockMovementType.SALE, StockMovementType.ONLINE_SALE] } } });
+  if (!saleMovement) return;
   const existingRestore = await tx.stockMovement.findFirst({ where: { orderId: order.id, type: StockMovementType.CANCELLED_ORDER } });
   if (existingRestore) return;
   for (const item of order.items) {
@@ -380,7 +398,9 @@ export async function cancelOrder(userId: string, orderNumber: string) {
     const order = await tx.order.findFirst({ where: { userId, orderNumber }, include: orderInclude });
     if (!order) throw new Error("Order not found.");
     if (!cancelable.includes(order.status)) throw new Error("Order cannot be cancelled now.");
+    await releaseOrderReservation(tx, order, { actorType: "CUSTOMER", actorId: userId, type: StockMovementType.ORDER_CANCELLED, note: `Cancel ${order.orderNumber}` });
     await restoreStock(tx, order);
+    await recordStatusHistory(tx, order, OrderStatus.CANCELLED, "CUSTOMER", userId);
     const updated = await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CANCELLED }, include: orderInclude });
     return mapOrder(updated);
   });
@@ -457,14 +477,23 @@ export async function updateAdminOrderStatus(idOrNumber: string, status: OrderSt
   return db.$transaction(async (tx) => {
     const order = await tx.order.findFirst({ where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] }, include: orderInclude });
     if (!order) throw new Error("Order not found.");
-    if (status === OrderStatus.CANCELLED) await restoreStock(tx, order, adminUserId);
+    await recordStatusHistory(tx, order, status, "ADMIN", adminUserId);
+    if (status === OrderStatus.CANCELLED) {
+      await releaseOrderReservation(tx, order, { actorType: "ADMIN", actorId: adminUserId, type: StockMovementType.ORDER_CANCELLED, note: `Admin cancel ${order.orderNumber}` });
+      await restoreStock(tx, order, adminUserId);
+    }
+    if (status === OrderStatus.OUT_FOR_DELIVERY) {
+      await finalizeOrderSale(tx, order, { actorType: "ADMIN", actorId: adminUserId, note: `Dispatch ${order.orderNumber}` });
+      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date() } });
+    }
+    if (status === OrderStatus.DELIVERED && !order.deliveryConfirmation) throw new Error("Customer receipt confirmation is required before completing delivery.");
     const updated = await tx.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
     return mapOrder(updated);
   });
 }
 
 export async function updateDeliveryOrderStatus(idOrNumber: string, status: OrderStatus, client: RbacPrismaClient) {
-  const allowed: OrderStatus[] = [OrderStatus.CONFIRMED, OrderStatus.PACKED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED];
+  const allowed: OrderStatus[] = [OrderStatus.PACKED, OrderStatus.OUT_FOR_DELIVERY];
   if (!allowed.includes(status)) throw new Error("Invalid delivery status.");
 
   const order = await client.order.findFirst({
@@ -476,8 +505,16 @@ export async function updateDeliveryOrderStatus(idOrNumber: string, status: Orde
   });
   if (!order) throw new Error("Order not found or not assigned to this delivery staff.");
 
-  const updated = await db.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
-  return mapOrder(updated);
+  return db.$transaction(async (tx) => {
+    await recordStatusHistory(tx, order, status, "DELIVERY", undefined);
+    if (status === OrderStatus.OUT_FOR_DELIVERY) {
+      await finalizeOrderSale(tx, order, { actorType: "DELIVERY", note: `Out for delivery ${order.orderNumber}` });
+      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date() } });
+    }
+    if (status === OrderStatus.PACKED) await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.PICKED_UP, pickedUpAt: new Date() } });
+    const updated = await tx.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
+    return mapOrder(updated);
+  });
 }
 
 export async function assignDelivery(idOrNumber: string, deliveryStaffId: string) {
@@ -491,4 +528,21 @@ export async function assignDelivery(idOrNumber: string, deliveryStaffId: string
     create: { orderId: order.id, deliveryStaffId, status: DeliveryStatus.ASSIGNED },
   });
   return getAdminOrder(order.id);
+}
+
+export async function confirmOrderReceived(userId: string, orderNumber: string, note?: string) {
+  return db.$transaction(async (tx) => {
+    const order = await tx.order.findFirst({ where: { userId, orderNumber }, include: orderInclude });
+    if (!order) throw new Error("Order not found.");
+    if (order.status !== OrderStatus.OUT_FOR_DELIVERY && order.status !== OrderStatus.PACKED) throw new Error("This order is not eligible for receipt confirmation.");
+    await tx.customerDeliveryConfirmation.upsert({
+      where: { orderId: order.id },
+      create: { orderId: order.id, customerId: userId, note },
+      update: { note },
+    });
+    await recordStatusHistory(tx, order, OrderStatus.DELIVERED, "CUSTOMER", userId, "Customer confirmed receipt");
+    await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.DELIVERED, deliveredAt: new Date() } });
+    const updated = await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.DELIVERED }, include: orderInclude });
+    return mapOrder(updated);
+  });
 }

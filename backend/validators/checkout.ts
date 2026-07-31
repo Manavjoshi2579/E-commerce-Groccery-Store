@@ -68,6 +68,10 @@ export const deliverySlotAdminSchema = z.object({
   active: z.coerce.boolean().optional(),
 });
 
+export const deliveryConfirmationSchema = z.object({
+  note: z.string().trim().max(240).optional(),
+});
+
 export const inventoryPatchSchema = z.object({
   stock: z.coerce.number().int().min(0).optional(),
   lowStockThreshold: z.coerce.number().int().min(0).optional(),

@@ -1,10 +1,11 @@
 import crypto from "crypto";
 import Razorpay from "razorpay";
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, SettingType, StockMovementType } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, SettingType } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
 import { findZoneByPincode } from "./delivery.service.js";
 import { mapOrder } from "./order.service.js";
+import { reserveInventory } from "./inventory.service.js";
 
 const orderInclude = {
   items: { include: { product: true, variant: true } },
@@ -93,7 +94,7 @@ async function validateSelection(userId: string, input: { addressId: string; del
     if (item.product.status !== ProductStatus.ACTIVE || item.product.deletedAt) throw new Error(`${item.product.name} is not available.`);
     if (item.variant && item.variant.status !== ProductStatus.ACTIVE) throw new Error(`${item.product.name} variant is not available.`);
     const inventory = await db.inventory.findFirst({ where: { productId: item.productId, variantId: item.variantId } });
-    if (!inventory || inventory.stock < item.quantity) throw new Error(`Insufficient stock for ${item.product.name}.`);
+    if (!inventory || inventory.stock - inventory.reserved < item.quantity) throw new Error(`Insufficient stock for ${item.product.name}.`);
   }
   return { cart: freshCart, address, slot, summary: mapCart(freshCart), deliveryDate: input.deliveryDate || tomorrow() };
 }
@@ -109,8 +110,9 @@ async function createProviderOrder(amountPaise: number, receipt: string, notes?:
 export async function createRazorpayOrder(userId: string, input: { addressId: string; deliverySlotId: string; deliveryDate?: Date; couponCode?: string; notes?: Record<string, string> }) {
   if (!razorpayAvailable()) throw new Error("Online payment is temporarily unavailable. Please use Cash on Delivery.");
   const selected = await validateSelection(userId, input);
-  const order = await db.$transaction(async (tx) => tx.order.create({
-    data: {
+  const order = await db.$transaction(async (tx) => {
+    const created = await tx.order.create({
+      data: {
       orderNumber: await nextOrderNumber(tx),
       userId,
       customerName: selected.address.name,
@@ -151,8 +153,13 @@ export async function createRazorpayOrder(userId: string, input: { addressId: st
       },
       payment: { create: { method: PaymentMethod.RAZORPAY, status: PaymentStatus.PENDING, amount: selected.summary.total } },
     },
-    include: orderInclude,
-  }));
+      include: orderInclude,
+    });
+    for (const item of selected.cart.items) {
+      await reserveInventory(tx, { productId: item.productId, variantId: item.variantId, quantity: item.quantity, orderId: created.id, actorId: userId, idempotencyKey: `ONLINE_RESERVATION:${created.id}:${item.id}` });
+    }
+    return created;
+  });
   const providerOrder = await createProviderOrder(Math.round(selected.summary.total * 100), order.orderNumber, input.notes);
   await db.payment.update({ where: { orderId: order.id }, data: { razorpayOrderId: providerOrder.id, rawPayload: { providerOrder: providerOrder as any } } });
   return {
@@ -174,14 +181,7 @@ async function finalizePaidOrder(tx: Prisma.TransactionClient, orderId: string, 
   if (order.payment?.status === PaymentStatus.PAID) return order;
   for (const item of order.items) {
     const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId } });
-    if (inventory.stock < item.quantity) throw new Error(`Insufficient stock for ${item.nameSnapshot}.`);
-  }
-  for (const item of order.items) {
-    const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId } });
-    await tx.inventory.update({ where: { id: inventory.id }, data: { stock: { decrement: item.quantity } } });
-    await tx.stockMovement.create({
-      data: { inventoryId: inventory.id, productId: item.productId, variantId: item.variantId, type: StockMovementType.SALE, quantity: item.quantity, orderId: order.id, note: `Razorpay sale ${order.orderNumber}` },
-    });
+    if (inventory.reserved < item.quantity) throw new Error(`Reserved stock is missing for ${item.nameSnapshot}.`);
   }
   await tx.payment.update({ where: { orderId }, data: { status: PaymentStatus.PAID, rawPayload } });
   const updated = await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.CONFIRMED, paymentStatus: PaymentStatus.PAID }, include: orderInclude });

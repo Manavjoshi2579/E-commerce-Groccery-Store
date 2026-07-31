@@ -11,8 +11,8 @@ import { adminOrderStatusSchema, assignDeliverySchema, deliveryStaffSchema, deli
 export const adminOrderRouter = Router();
 
 const orderViewRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER, RoleName.ORDER_MANAGER, RoleName.BILLING_STAFF, RoleName.DELIVERY_STAFF];
-const orderManageRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.ORDER_MANAGER, RoleName.DELIVERY_STAFF];
-const deliveryStaffManageRoles = [RoleName.SUPER_ADMIN, RoleName.DELIVERY_STAFF];
+const orderManageRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.ORDER_MANAGER];
+const deliveryStaffManageRoles = [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.ORDER_MANAGER];
 
 function param(value: string | string[]) {
   return Array.isArray(value) ? value[0] : value;

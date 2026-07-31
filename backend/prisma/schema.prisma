@@ -68,11 +68,29 @@ enum ImageStatus {
 }
 
 enum StockMovementType {
+  OPENING_STOCK
+  ONLINE_RESERVATION
+  ONLINE_SALE
+  OFFLINE_SALE
+  RESERVATION_RELEASE
+  ORDER_CANCELLED
+  DELIVERY_FAILED
+  RETURN_RECEIVED
+  DAMAGED
+  EXPIRED
+  CORRECTION
   SALE
   RETURN
   MANUAL_ADJUSTMENT
   RESTOCK
   CANCELLED_ORDER
+}
+
+enum StockMovementChannel {
+  ONLINE
+  OFFLINE
+  ADMIN
+  SYSTEM
 }
 
 enum CouponType {
@@ -196,6 +214,7 @@ model User {
   reviews      Review[]
   couponUsages CouponUsage[]
   returns      ReturnRequest[]
+  deliveryConfirmations CustomerDeliveryConfirmation[]
   supportTickets SupportTicket[]
   sessions     AuthSession[]
   passwordResetTokens PasswordResetToken[]
@@ -263,6 +282,7 @@ model AdminUser {
 
   role           Role            @relation(fields: [roleId], references: [id])
   stockMovements StockMovement[]
+  offlineSales   OfflineSale[]
   coupons        Coupon[]
   settings       Setting[]
   assignedSupportTickets SupportTicket[] @relation("AssignedSupportTickets")
@@ -486,6 +506,7 @@ model Product {
   variants    ProductVariant[]
   inventory   Inventory[]
   stockMoves  StockMovement[]
+  offlineSaleItems OfflineSaleItem[]
   cartItems   CartItem[]
   wishlistItems WishlistItem[]
   orderItems  OrderItem[]
@@ -533,6 +554,7 @@ model ProductVariant {
   inventory Inventory[]
   cartItems CartItem[]
   orderItems OrderItem[]
+  offlineSaleItems OfflineSaleItem[]
 
   @@index([productId])
   @@index([status])
@@ -543,6 +565,11 @@ model Inventory {
   productId         String
   variantId         String?
   stock             Int             @default(0)
+  reserved          Int             @default(0)
+  sold              Int             @default(0)
+  damaged           Int             @default(0)
+  returned          Int             @default(0)
+  adjustment        Int             @default(0)
   lowStockThreshold Int             @default(10)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -563,6 +590,15 @@ model StockMovement {
   variantId     String?
   type          StockMovementType
   quantity      Int
+  quantityBefore Int?
+  quantityAfter Int?
+  channel       StockMovementChannel @default(SYSTEM)
+  referenceType String?
+  referenceId   String?
+  actorType     String?
+  actorId       String?
+  idempotencyKey String?          @unique
+  metadata      Json?
   note          String?
   orderId       String?
   adminUserId   String?
@@ -577,6 +613,7 @@ model StockMovement {
   @@index([productId])
   @@index([orderId])
   @@index([type])
+  @@index([referenceType, referenceId])
   @@index([createdAt])
 }
 
@@ -726,6 +763,8 @@ model Order {
   payment             Payment?
   invoice             Invoice?
   deliveryAssignment  DeliveryAssignment?
+  statusHistory       OrderStatusHistory[]
+  deliveryConfirmation CustomerDeliveryConfirmation?
   stockMovements      StockMovement[]
   couponUsages        CouponUsage[]
   returns             ReturnRequest[]
@@ -877,14 +916,91 @@ model DeliveryAssignment {
   deliveryStaffId  String
   status           DeliveryStatus @default(ASSIGNED)
   assignedAt       DateTime       @default(now())
+  acceptedAt       DateTime?
   pickedUpAt       DateTime?
+  outForDeliveryAt DateTime?
+  handedOverAt     DateTime?
+  failedAt         DateTime?
   deliveredAt      DateTime?
+  failureReason    String?
+  failureNote      String?
+  metadata         Json?
 
   order            Order          @relation(fields: [orderId], references: [id])
   deliveryStaff    DeliveryStaff  @relation(fields: [deliveryStaffId], references: [id])
 
   @@index([deliveryStaffId])
+  @@index([status])
   @@index([assignedAt])
+}
+
+model CustomerDeliveryConfirmation {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  customerId  String
+  confirmedAt DateTime @default(now())
+  note        String?
+  metadata    Json?
+
+  order       Order    @relation(fields: [orderId], references: [id])
+  customer    User     @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([confirmedAt])
+}
+
+model OrderStatusHistory {
+  id             String      @id @default(cuid())
+  orderId         String
+  previousStatus  OrderStatus?
+  newStatus       OrderStatus
+  actorType       String
+  actorId         String?
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+
+  order           Order       @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([newStatus])
+  @@index([createdAt])
+}
+
+model OfflineSale {
+  id              String        @id @default(cuid())
+  referenceNumber String        @unique
+  actorId         String
+  total           Decimal       @db.Decimal(10, 2)
+  status          String        @default("RECORDED")
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  actor           AdminUser     @relation(fields: [actorId], references: [id])
+  items           OfflineSaleItem[]
+
+  @@index([actorId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OfflineSaleItem {
+  id            String          @id @default(cuid())
+  offlineSaleId String
+  productId     String
+  variantId     String?
+  quantity      Int
+  unitPrice     Decimal         @db.Decimal(10, 2)
+  total         Decimal         @db.Decimal(10, 2)
+
+  offlineSale   OfflineSale     @relation(fields: [offlineSaleId], references: [id])
+  product       Product         @relation(fields: [productId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([offlineSaleId])
+  @@index([productId])
+  @@index([variantId])
 }
 
 model Review {
