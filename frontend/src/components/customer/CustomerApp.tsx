@@ -246,14 +246,17 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
   const shopLinks = [
     ["/", Home, "Home"],
     ["/products", PackageCheck, "Products"],
-    ...serviceLinks,
     ["/wishlist", Heart, `Wishlist (${wishlistCount})`],
     ["/cart", ShoppingBag, `Cart (${cartCount})`],
     ["/orders", PackageCheck, "Orders"],
     ["/track-order", MapPin, "Track Order"],
+  ] as const;
+  const secondaryLinks = [
+    ...serviceLinks,
     ["/contact", MessageCircle, "Support"],
     ["/account", User, customer ? "My Account" : "Login"],
   ] as const;
+  const compactMenuCategories = menuCategories.slice(0, 6);
   const mobileTabs = [
     ["/", Home, "Home"],
     ["/track-order", MapPin, "Track"],
@@ -267,7 +270,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black text-white shadow-xl no-print">
         <div className="container-premium flex min-h-16 items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/15 text-white hover:bg-white/10 md:hidden" aria-expanded={mobileNavOpen} aria-label="Open navigation"><Menu size={22} /></button>
+            <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className={`inline-flex h-11 w-11 items-center justify-center rounded-md border text-white transition md:hidden ${mobileNavOpen ? "border-[#d4af37] bg-[#d4af37] text-black" : "border-white/15 hover:bg-white/10"}`} aria-expanded={mobileNavOpen} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}>{mobileNavOpen ? <X size={22} /> : <Menu size={22} />}</button>
             <Link href="/" onClick={closeMobileNav}><Logo invert /></Link>
           </div>
           <form onSubmit={(event) => { event.preventDefault(); submitSearch(); }} className="mx-4 hidden min-w-[260px] flex-1 items-center rounded-md bg-white px-3 py-2 text-black md:flex lg:mx-8">
@@ -306,43 +309,54 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         {mobileNavOpen && (
-          <div className="fixed inset-x-0 bottom-0 top-[121px] z-40 overflow-y-auto border-t border-white/10 bg-[#050505] pb-24 shadow-2xl md:hidden">
-            <div className="container-premium grid gap-4 py-4">
-              <div className="rounded-md border border-[#d4af37]/20 bg-[#141414] p-3">
-                <p className="px-1 pb-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#e7c766]">Quick shop</p>
+          <>
+          <button type="button" aria-label="Close navigation backdrop" className="fixed inset-0 top-[121px] z-30 bg-black/45 md:hidden" onClick={closeMobileNav} />
+          <div className="absolute inset-x-0 top-full z-40 border-t border-white/10 bg-[#080808]/98 shadow-2xl md:hidden">
+            <div className="container-premium max-h-[min(72vh,560px)] overflow-y-auto py-3 pb-4">
+              <div className="rounded-md border border-[#d4af37]/20 bg-[#151515] p-3 shadow-[0_18px_46px_rgba(0,0,0,0.35)]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#e7c766]">Explore Eagle Mart</p>
+                  <button type="button" onClick={closeMobileNav} className="grid h-8 w-8 place-items-center rounded-md border border-white/10 text-white/70" aria-label="Close menu"><X size={17} /></button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                 {shopLinks.map(([href, Icon, label]) => (
-                  <Link key={String(href)} href={String(href)} onClick={closeMobileNav} className={`flex min-h-12 items-center gap-3 rounded-md border px-3 py-3 text-sm font-bold transition ${isActiveTab(String(href)) ? "border-[#d4af37] bg-[#d4af37] text-black" : "border-white/8 bg-white/[0.07] text-white hover:border-[#d4af37]/35 hover:bg-white/12"}`}><Icon size={18} className={isActiveTab(String(href)) ? "text-black" : "text-[#d4af37]"} /><span className="min-w-0 leading-snug">{String(label)}</span></Link>
+                  <Link key={String(href)} href={String(href)} onClick={closeMobileNav} className={`flex min-h-11 items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-bold transition ${isActiveTab(String(href)) ? "border-[#d4af37] bg-[#d4af37] text-black" : "border-white/8 bg-white/[0.07] text-white hover:border-[#d4af37]/35 hover:bg-white/12"}`}><Icon size={17} className={isActiveTab(String(href)) ? "text-black" : "text-[#d4af37]"} /><span className="min-w-0 leading-snug">{String(label)}</span></Link>
                 ))}
                 </div>
-              </div>
-              <div className="rounded-md border border-white/10 bg-white/[0.04] p-3">
-                <div className="flex items-center justify-between gap-3 px-1 pb-3">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#e7c766]">Shop by category</p>
-                  <Link href="/products" onClick={closeMobileNav} className="text-xs font-black text-white/70">View all</Link>
-                </div>
-                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
-                  {menuCategories.map((category) => (
-                    <Link key={category.slug} href={`/category/${category.slug}`} onClick={closeMobileNav} className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-white/8 bg-black/25 px-3 py-2 text-sm font-semibold text-white/82 hover:border-[#d4af37]/35 hover:bg-white/10 hover:text-white"><span className="min-w-0 leading-snug">{category.name}</span><ChevronRight size={15} className="shrink-0 text-[#d4af37]" /></Link>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {secondaryLinks.map(([href, Icon, label]) => (
+                    <Link key={String(href)} href={String(href)} onClick={closeMobileNav} className="flex min-h-10 items-center gap-2 rounded-md border border-white/8 bg-black/25 px-3 py-2 text-xs font-bold text-white/78 hover:border-[#d4af37]/35 hover:bg-white/10 hover:text-white"><Icon size={16} className="text-[#e7c766]" /><span className="min-w-0 leading-snug">{String(label)}</span></Link>
                   ))}
+                </div>
+                <div className="mt-4 border-t border-white/10 pt-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#e7c766]">Popular categories</p>
+                    <Link href="/products" onClick={closeMobileNav} className="text-xs font-black text-white/70">View all</Link>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                  {compactMenuCategories.map((category) => (
+                    <Link key={category.slug} href={`/category/${category.slug}`} onClick={closeMobileNav} className="flex min-h-10 items-center justify-between gap-2 rounded-md border border-white/8 bg-black/30 px-3 py-2 text-xs font-semibold text-white/82 hover:border-[#d4af37]/35 hover:bg-white/10 hover:text-white"><span className="min-w-0 truncate">{category.name}</span><ChevronRight size={14} className="shrink-0 text-[#d4af37]" /></Link>
+                  ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          </>
         )}
       </header>
       <div className="flex-1 bg-[#f7f4ec]">{children}</div>
       <Footer />
-      {cartCount > 0 && <Link href="/cart" className="fixed bottom-24 left-4 right-4 z-40 flex items-center justify-between rounded-md bg-black px-4 py-3 text-white shadow-2xl md:hidden no-print"><span className="text-sm font-bold">{cartCount} items - {money(amount)}</span><span className="rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">Checkout</span></Link>}
-      <nav aria-label="Mobile quick navigation" className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#24426f] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 text-white shadow-[0_-14px_34px_rgba(0,0,0,0.28)] md:hidden no-print">
-        <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+      {cartCount > 0 && <Link href="/cart" className="fixed bottom-24 left-4 right-4 z-40 flex items-center justify-between rounded-md border border-[#d4af37]/35 bg-black/82 px-4 py-3 text-white shadow-2xl backdrop-blur-xl md:hidden no-print"><span className="text-sm font-bold">{cartCount} items - {money(amount)}</span><span className="rounded-md bg-[#d4af37] px-3 py-2 text-xs font-bold text-black">Checkout</span></Link>}
+      <nav aria-label="Mobile quick navigation" className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 md:hidden no-print">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 rounded-md border border-[#d4af37]/25 bg-black/72 p-1.5 text-white shadow-[0_-16px_42px_rgba(0,0,0,0.38)] backdrop-blur-xl supports-[backdrop-filter]:bg-black/58">
           {mobileTabs.map(([href, Icon, label]) => {
             const active = isActiveTab(String(href));
             return (
-              <Link key={String(href)} href={String(href)} className={`flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[10px] font-bold transition ${active ? "text-[#ffb21a]" : "text-white/86 hover:bg-white/10 hover:text-white"}`} aria-current={active ? "page" : undefined}>
+              <Link key={String(href)} href={String(href)} className={`flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[10px] font-bold transition ${active ? "bg-[#d4af37] text-black shadow-[0_8px_20px_rgba(212,175,55,0.24)]" : "text-white/82 hover:bg-white/10 hover:text-white"}`} aria-current={active ? "page" : undefined}>
                 <span className="relative">
                   <Icon size={21} fill={active ? "currentColor" : "none"} strokeWidth={active ? 2.8 : 2.3} />
-                  {label === "Orders" && cartCount > 0 && <span className="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full bg-[#ffb21a] ring-2 ring-[#24426f]" />}
+                  {label === "Orders" && cartCount > 0 && <span className={`absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full ${active ? "bg-black ring-[#d4af37]" : "bg-[#d4af37] ring-black/70"} ring-2`} />}
                 </span>
                 <span className="mt-1 leading-none">{label}</span>
               </Link>
@@ -628,7 +642,7 @@ function HomePage() {
       <section className="relative min-h-[620px] overflow-hidden bg-black text-white">
         <img src="/assets/banners/fresh-produce-banner.png" alt="Eagle Mart fresh grocery produce banner" className="absolute inset-0 h-full w-full object-cover object-bottom opacity-50" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/42 to-black/12" />
-        <div className="container-premium relative grid min-h-[620px] items-center gap-8 py-16 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="container-premium relative grid min-h-[620px] items-center gap-6 py-10 sm:gap-8 sm:py-16 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="max-w-2xl">
             <h1 aria-label="India's Finest Grocery Experience" className="display-font text-4xl font-black leading-tight md:text-6xl">
               <span className="hero-line hero-line-top block">India&apos;s Finest</span>
@@ -641,32 +655,6 @@ function HomePage() {
             <div className="hero-action mt-8 flex flex-wrap gap-3"><Link href="/products"><Button variant="gold">Shop Now <ChevronRight size={18} /></Button></Link></div>
             <div className="hero-chips mt-6 flex flex-wrap gap-2 text-xs font-bold">{["Premium Quality", "Fresh Everyday", "Fast Delivery"].map((chip) => <span key={chip} className="rounded-full border border-white/20 bg-white/10 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-sm">{chip}</span>)}</div>
           </div>
-          <aside className="hero-plus-panel relative w-full overflow-hidden rounded-md border border-[#d4af37]/70 bg-[#060606]/90 shadow-[0_30px_90px_rgba(0,0,0,0.5)] backdrop-blur-md">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f5d86c] to-transparent" />
-            <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#d4af37]/16 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 left-8 h-40 w-40 rounded-full bg-white/8 blur-3xl" />
-            <div className="relative p-6 sm:p-7">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f1cf55]">Eagle Club preview</p>
-                <div className="rounded-full bg-[#d4af37] px-4 py-1.5 text-[10px] font-black uppercase text-black shadow-[0_0_28px_rgba(212,175,55,0.36)]">Soon</div>
-              </div>
-              <h2 className="display-font max-w-[340px] text-2xl font-black leading-tight sm:text-4xl">Two premium worlds are landing soon.</h2>
-              <p className="mt-4 max-w-[350px] text-sm font-semibold leading-6 text-white/72">Eagle Mart stays your trusted shopping home. Education and Entertainment are being prepared as upcoming Eagle Club experiences.</p>
-              <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase text-white/70">
-                <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5">Customer awareness</span>
-                <span className="rounded-full border border-[#d4af37]/35 bg-[#d4af37]/12 px-3 py-1.5 text-[#f1cf55]">Launching next</span>
-              </div>
-              <div className="mt-7 grid grid-cols-2 gap-3">
-                {[["/education", GraduationCap, "Eagle Education", "Learn soon", "Courses, skills and useful learning."], ["/entertainment", PlayCircle, "Eagle Entertainment", "Enjoy soon", "Fun, shows and digital experiences."]].map(([href, Icon, title, action, text]) => {
-                  const CardIcon = Icon as LucideIcon;
-                  return <Link key={String(href)} href={String(href)} className="group relative min-h-[154px] overflow-hidden rounded-md border border-white/10 bg-gradient-to-br from-white/[0.13] via-white/[0.06] to-[#d4af37]/[0.08] p-3 transition hover:-translate-y-0.5 hover:border-[#d4af37] hover:bg-white/[0.1] motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:min-h-[172px] sm:p-4"><span className="absolute right-2 top-2 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-[8px] font-black uppercase text-[#f1cf55] sm:right-3 sm:top-3 sm:text-[9px]">Soon</span><span className="grid h-10 w-10 place-items-center rounded-md bg-[#d4af37]/20 text-[#f1cf55] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] sm:h-12 sm:w-12"><CardIcon size={21} /></span><b className="mt-4 block pr-2 text-base leading-tight text-white group-hover:text-[#f1cf55] sm:mt-5 sm:pr-6 sm:text-lg">{String(title)}</b><span className="mt-2 hidden text-xs font-semibold leading-5 text-white/58 sm:block">{String(text)}</span><span className="mt-4 inline-flex items-center gap-1 text-[11px] font-black uppercase text-[#f1cf55] sm:text-xs">{String(action)} <ChevronRight size={14} /></span></Link>;
-                })}
-              </div>
-            </div>
-            <div className="relative border-t border-white/10 bg-white/[0.055] px-6 py-4 sm:px-7">
-              <p className="text-xs font-semibold leading-5 text-white/62">Preview pages are live for awareness only. Shopping, cart, checkout and delivery remain focused on Eagle Mart.</p>
-            </div>
-          </aside>
         </div>
       </section>
       <section className="container-premium py-10">
