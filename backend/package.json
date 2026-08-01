@@ -11,6 +11,8 @@
     "db:demo-reset": "tsx scripts/real-catalog-reset.ts",
     "db:real-catalog-reset": "tsx scripts/real-catalog-reset.ts",
     "db:ensure-gujarat-delivery": "tsx scripts/ensure-gujarat-delivery.ts",
+    "db:ensure-delivery-admin": "tsx scripts/ensure-delivery-admin.ts",
+    "db:reconcile-delivered-cod-payments": "tsx scripts/reconcile-delivered-cod-payments.ts",
     "db:prod-catalog": "tsx scripts/prod-catalog.ts",
     "catalog:replace-client": "tsx scripts/catalog-replace-client.ts",
     "catalog:import-existing-images": "tsx scripts/import-existing-product-images.ts",

@@ -10,6 +10,7 @@ type Options = {
   max: number;
   keyPrefix: string;
   message?: string;
+  skipMethods?: string[];
 };
 
 function clientKey(req: Request) {
@@ -18,8 +19,10 @@ function clientKey(req: Request) {
 }
 
 export function rateLimit(options: Options) {
+  const skippedMethods = new Set((options.skipMethods || []).map((method) => method.toUpperCase()));
   return (req: Request, res: Response, next: NextFunction) => {
     if (process.env.NODE_ENV === "test") return next();
+    if (skippedMethods.has(req.method.toUpperCase())) return next();
     const now = Date.now();
     const key = `${options.keyPrefix}:${clientKey(req)}`;
     const bucket = buckets.get(key);
@@ -38,4 +41,4 @@ export function rateLimit(options: Options) {
 export const strictAuthRateLimit = rateLimit({ keyPrefix: "auth", windowMs: 15 * 60 * 1000, max: 10 });
 export const otpRateLimit = rateLimit({ keyPrefix: "otp", windowMs: 15 * 60 * 1000, max: 5 });
 export const paymentRateLimit = rateLimit({ keyPrefix: "payment", windowMs: 60 * 1000, max: 20 });
-export const adminMutationRateLimit = rateLimit({ keyPrefix: "admin-mutation", windowMs: 60 * 1000, max: 120 });
+export const adminMutationRateLimit = rateLimit({ keyPrefix: "admin-mutation", windowMs: 60 * 1000, max: 120, skipMethods: ["GET", "HEAD", "OPTIONS"] });

@@ -9,11 +9,11 @@ import { requireAdmin } from "./auth.js";
 async function resolveDeliveryStaffId(req: Request) {
   if (req.admin?.role.name !== RoleName.DELIVERY_STAFF) return null;
 
-  const directNameMatch = await db.deliveryStaff.findFirst({
-    where: { active: true, name: req.admin.name },
+  const linkedStaff = await db.deliveryStaff.findFirst({
+    where: { active: true, adminUserId: req.admin.id },
     select: { id: true },
   });
-  if (directNameMatch) return directNameMatch.id;
+  if (linkedStaff) return linkedStaff.id;
 
   return null;
 }

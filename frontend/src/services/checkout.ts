@@ -6,17 +6,18 @@ import { mapCoupon } from "./commerce";
 import { requestApi } from "./api";
 
 export function mapAddress(input: any): Address {
+  const address = input || {};
   return {
-    id: input.id,
-    label: input.label || "Home",
-    name: input.name,
-    phone: input.phone,
-    line: input.line,
-    city: input.city,
-    state: input.state,
-    pincode: input.pincode,
-    landmark: input.landmark,
-    isDefault: Boolean(input.isDefault),
+    id: address.id || "",
+    label: address.label || "Home",
+    name: address.name || "Customer",
+    phone: address.phone || "",
+    line: address.line || "Address not available",
+    city: address.city || "",
+    state: address.state || "",
+    pincode: address.pincode || "",
+    landmark: address.landmark,
+    isDefault: Boolean(address.isDefault),
   };
 }
 
@@ -170,6 +171,36 @@ export async function fetchAdminOrders() {
   return data.orders.map(mapOrder);
 }
 
+export async function fetchAdminDeliveryOrders() {
+  const mergeOrders = (groups: Order[][]) => {
+    const rows = new Map<string, Order>();
+    groups.flat().forEach((order) => rows.set(order.orderNumber, order));
+    return Array.from(rows.values()).sort((a, b) => {
+      const aTime = new Date(a.deliveryDate || a.createdAt).getTime();
+      const bTime = new Date(b.deliveryDate || b.createdAt).getTime();
+      if (aTime !== bTime) return aTime - bTime;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+  try {
+    const [deliveryResult, ordersResult] = await Promise.allSettled([
+      requestApi<{ orders: any[] }>("/api/admin/delivery-orders"),
+      requestApi<{ orders: any[] }>("/api/admin/orders"),
+    ]);
+    const errors = [deliveryResult, ordersResult].filter((result) => result.status === "rejected") as PromiseRejectedResult[];
+    const rows = [
+      deliveryResult.status === "fulfilled" ? deliveryResult.value.orders.map(mapOrder) : [],
+      ordersResult.status === "fulfilled" ? ordersResult.value.orders.map(mapOrder) : [],
+    ];
+    const merged = mergeOrders(rows).filter((order) => Boolean(order.deliveryAssignmentId || order.deliveryStaff));
+    if (merged.length || errors.length < 2) return merged;
+    throw errors[0].reason;
+  } catch (error) {
+    if (!(error instanceof Error) || !/404|not found/i.test(error.message)) throw error;
+    return fetchAdminOrders();
+  }
+}
+
 export async function fetchAdminOrder(orderNumber: string) {
   const data = await requestApi<{ order: any }>(`/api/admin/orders/${encodeURIComponent(orderNumber)}`);
   return mapOrder(data.order);
@@ -180,8 +211,34 @@ export async function updateAdminOrderStatus(orderNumber: string, status: string
   return mapOrder(data.order);
 }
 
+export async function updateAdminPaymentStatus(orderNumber: string, status: string, note?: string) {
+  const body = JSON.stringify({ status, note });
+  const paths = [
+    `/api/admin/orders/${encodeURIComponent(orderNumber)}/payment-status`,
+    `/api/admin/orders/${encodeURIComponent(orderNumber)}/payment`,
+    `/api/admin/payments/${encodeURIComponent(orderNumber)}/status`,
+    `/api/admin/payments/${encodeURIComponent(orderNumber)}/payment-status`,
+  ];
+  let lastError: unknown;
+  for (const path of paths) {
+    try {
+      const data = await requestApi<{ order: any }>(path, { method: "PATCH", body });
+      return mapOrder(data.order);
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof Error) || !/404|not found/i.test(error.message)) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not update payment.");
+}
+
 export async function updateDeliveryOrderStatus(orderNumber: string, status: string) {
   const data = await requestApi<{ order: any }>(`/api/admin/orders/${orderNumber}/delivery-status`, { method: "PATCH", body: JSON.stringify({ status }) });
+  return mapOrder(data.order);
+}
+
+export async function markDeliveryAttemptFailed(orderNumber: string, input: { reason: string; note?: string }) {
+  const data = await requestApi<{ order: any }>(`/api/admin/orders/${orderNumber}/delivery-failure`, { method: "POST", body: JSON.stringify(input) });
   return mapOrder(data.order);
 }
 
@@ -241,8 +298,11 @@ export async function adjustAdminInventory(id: string, quantity: number) {
   return {
     id: data.inventory.id,
     productId: data.inventory.productId,
+    variantId: data.inventory.variantId,
     stock: data.inventory.stock,
+    lowStockThreshold: data.inventory.lowStockThreshold,
     product: mapApiProduct(data.inventory.product),
+    status: data.inventory.status,
   };
 }
 

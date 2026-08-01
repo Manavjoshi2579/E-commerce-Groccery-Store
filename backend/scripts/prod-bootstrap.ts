@@ -21,9 +21,9 @@ function requiredEnv(name: string) {
 }
 
 function validatePassword(password: string) {
-  if (password.length < 12) throw new Error("PRODUCTION_SUPER_ADMIN_PASSWORD must be at least 12 characters.");
+  if (password.length < 12) throw new Error("Production admin passwords must be at least 12 characters.");
   if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-    throw new Error("PRODUCTION_SUPER_ADMIN_PASSWORD must include uppercase, lowercase, and number characters.");
+    throw new Error("Production admin passwords must include uppercase, lowercase, and number characters.");
   }
 }
 
@@ -32,6 +32,14 @@ async function main() {
   const email = requiredEnv("PRODUCTION_SUPER_ADMIN_EMAIL").toLowerCase();
   const password = requiredEnv("PRODUCTION_SUPER_ADMIN_PASSWORD");
   validatePassword(password);
+  const deliveryEmail = process.env.PRODUCTION_DELIVERY_ADMIN_EMAIL?.trim().toLowerCase();
+  const deliveryPassword = process.env.PRODUCTION_DELIVERY_ADMIN_PASSWORD?.trim();
+  const deliveryName = process.env.PRODUCTION_DELIVERY_ADMIN_NAME?.trim() || "Eagle Mart Delivery";
+  const deliveryPhone = process.env.PRODUCTION_DELIVERY_STAFF_PHONE?.trim() || "9999999999";
+  if (deliveryEmail || deliveryPassword) {
+    if (!deliveryEmail || !deliveryPassword) throw new Error("Set both PRODUCTION_DELIVERY_ADMIN_EMAIL and PRODUCTION_DELIVERY_ADMIN_PASSWORD, or neither.");
+    validatePassword(deliveryPassword);
+  }
 
   const roles = new Map<RoleName, { id: string }>();
   for (const roleName of Object.values(RoleName)) {
@@ -67,6 +75,25 @@ async function main() {
     select: { id: true, email: true, name: true },
   });
 
+  let deliveryAdminEmail = "";
+  if (deliveryEmail && deliveryPassword) {
+    const deliveryRole = roles.get(RoleName.DELIVERY_STAFF);
+    if (!deliveryRole) throw new Error("DELIVERY_STAFF role was not created.");
+    const deliveryPasswordHash = await bcrypt.hash(deliveryPassword, 12);
+    const deliveryAdmin = await prisma.adminUser.upsert({
+      where: { email: deliveryEmail },
+      update: { name: deliveryName, passwordHash: deliveryPasswordHash, roleId: deliveryRole.id, status: AdminStatus.ACTIVE },
+      create: { name: deliveryName, email: deliveryEmail, passwordHash: deliveryPasswordHash, roleId: deliveryRole.id, status: AdminStatus.ACTIVE },
+      select: { id: true, email: true },
+    });
+    await prisma.deliveryStaff.upsert({
+      where: { phone: deliveryPhone },
+      update: { name: deliveryName, adminUserId: deliveryAdmin.id, active: true },
+      create: { name: deliveryName, phone: deliveryPhone, adminUserId: deliveryAdmin.id, active: true },
+    });
+    deliveryAdminEmail = deliveryAdmin.email;
+  }
+
   const settings = [
     ["storeName", "Eagle Mart Grocery & Essentials"],
     ["supportEmail", email],
@@ -91,6 +118,7 @@ async function main() {
 
   console.log("Production bootstrap completed.");
   console.log(`SUPER_ADMIN: ${admin.email}`);
+  if (deliveryAdminEmail) console.log(`DELIVERY_STAFF: ${deliveryAdminEmail}`);
   console.log(`Admin users: ${adminCount}`);
   console.log(`Customers: ${customerCount}`);
   console.log(`Orders: ${orderCount}`);

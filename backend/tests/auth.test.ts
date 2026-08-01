@@ -6,6 +6,7 @@ import { AdminStatus, RoleName, UserStatus } from "@prisma/client";
 import { createApp } from "../app/app.js";
 import { db } from "../lib/db.js";
 import { canAccessAdminArea, hasRole } from "../lib/roles.js";
+import { ensureDeliveryAdminAccount } from "../services/delivery-admin-maintenance.service.js";
 import { ensureTestPrincipals } from "./test-fixtures.js";
 
 const app = createApp();
@@ -193,5 +194,49 @@ describe("role helpers", () => {
     expect(canAccessAdminArea(RoleName.INVENTORY_MANAGER, "payments")).toBe(false);
     expect(canAccessAdminArea(RoleName.BILLING_STAFF, "invoices")).toBe(true);
     expect(canAccessAdminArea(RoleName.DELIVERY_STAFF, "delivery")).toBe(true);
+    expect(canAccessAdminArea(RoleName.DELIVERY_STAFF, "orders")).toBe(false);
+  });
+});
+
+describe("delivery admin maintenance", () => {
+  it("repairs locked delivery admin credentials and staff link", async () => {
+    const account = await db.adminUser.findFirstOrThrow({ where: { normalizedEmail: "delivery@eagleclub.in" } });
+    await db.adminUser.update({
+      where: { id: account.id },
+      data: {
+        passwordHash: await bcrypt.hash("WrongDelivery@12345", 12),
+        failedLoginAttempts: 3,
+        lockedUntil: new Date(Date.now() + 60_000),
+        status: AdminStatus.INACTIVE,
+      },
+    });
+
+    await ensureDeliveryAdminAccount();
+
+    const login = await request(app).post("/api/admin/auth/login").send({ email: "delivery@eagleclub.in", password: "Delivery@12345" }).expect(200);
+    expect(login.body.data.admin.role.name).toBe("DELIVERY_STAFF");
+    const repaired = await db.adminUser.findFirstOrThrow({ where: { normalizedEmail: "delivery@eagleclub.in" }, include: { deliveryStaffProfile: true } });
+    expect(repaired.failedLoginAttempts).toBe(0);
+    expect(repaired.lockedUntil).toBeNull();
+    expect(repaired.status).toBe(AdminStatus.ACTIVE);
+    expect(repaired.deliveryStaffProfile).toBeTruthy();
+  });
+
+  it("self-repairs the default delivery login when the account is locked", async () => {
+    const account = await db.adminUser.findFirstOrThrow({ where: { normalizedEmail: "delivery@eagleclub.in" } });
+    await db.adminUser.update({
+      where: { id: account.id },
+      data: {
+        passwordHash: await bcrypt.hash("WrongDelivery@12345", 12),
+        failedLoginAttempts: 3,
+        lockedUntil: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const login = await request(app).post("/api/admin/auth/login").send({ email: "delivery@eagleclub.in", password: "Delivery@12345" }).expect(200);
+    expect(login.body.data.admin.role.name).toBe("DELIVERY_STAFF");
+    const repaired = await db.adminUser.findFirstOrThrow({ where: { normalizedEmail: "delivery@eagleclub.in" } });
+    expect(repaired.failedLoginAttempts).toBe(0);
+    expect(repaired.lockedUntil).toBeNull();
   });
 });

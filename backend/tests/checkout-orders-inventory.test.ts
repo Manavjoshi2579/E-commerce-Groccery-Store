@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { OrderStatus, StockMovementType, UserStatus } from "@prisma/client";
+import { DeliveryStatus, OrderStatus, StockMovementType, UserStatus } from "@prisma/client";
 import { createApp } from "../app/app.js";
 import { db } from "../lib/db.js";
 import { ensureTestPrincipals } from "./test-fixtures.js";
@@ -10,8 +10,9 @@ import { ensureTestPrincipals } from "./test-fixtures.js";
 const app = createApp();
 const customer = request.agent(app);
 const admin = request.agent(app);
+const deliveryAdmin = request.agent(app);
 const adminPassword = "Eagle" + "club@12345";
-const cleanup = { userId: "", addressId: "", orderNumbers: [] as string[] };
+const cleanup = { userId: "", addressId: "", orderNumbers: [] as string[], offlineSaleIds: [] as string[], deliveryStaffIds: [] as string[] };
 let productId = "";
 let variantId = "";
 let inventoryId = "";
@@ -36,6 +37,7 @@ beforeAll(async () => {
   cleanup.userId = user.id;
   await customer.post("/api/auth/login").send({ email: user.email, password: "Customer@12345" }).expect(200);
   await admin.post("/api/admin/auth/login").send({ email: "superadmin@eagleclub.in", password: adminPassword }).expect(200);
+  await deliveryAdmin.post("/api/admin/auth/login").send({ email: "delivery@eagleclub.in", password: "Delivery@12345" }).expect(200);
 
   const inventory = await db.inventory.findFirstOrThrow({
     where: { stock: { gte: 20 }, variantId: { not: null }, product: { status: "ACTIVE", deletedAt: null } },
@@ -74,6 +76,14 @@ afterAll(async () => {
     await db.orderItem.deleteMany({ where: { orderId: order.id } });
     await db.order.delete({ where: { id: order.id } });
   }
+  for (const offlineSaleId of cleanup.offlineSaleIds) {
+    await db.stockMovement.deleteMany({ where: { referenceType: "OFFLINE_SALE", referenceId: offlineSaleId } });
+    await db.offlineSaleItem.deleteMany({ where: { offlineSaleId } });
+    await db.offlineSale.deleteMany({ where: { id: offlineSaleId } });
+  }
+  if (cleanup.deliveryStaffIds.length) {
+    await db.deliveryStaff.deleteMany({ where: { id: { in: cleanup.deliveryStaffIds } } });
+  }
   if (cleanup.userId) {
     const cart = await db.cart.findUnique({ where: { userId: cleanup.userId } });
     if (cart) await db.cartItem.deleteMany({ where: { cartId: cart.id } });
@@ -81,7 +91,9 @@ afterAll(async () => {
     await db.address.deleteMany({ where: { userId: cleanup.userId } });
     await db.user.delete({ where: { id: cleanup.userId } });
   }
-  await db.inventory.update({ where: { id: inventoryId }, data: { stock: startingStock, reserved: 0 } });
+  if (inventoryId) {
+    await db.inventory.update({ where: { id: inventoryId }, data: { stock: startingStock, reserved: 0 } });
+  }
   await db.$disconnect();
 });
 
@@ -261,9 +273,126 @@ describe("admin order and inventory APIs", () => {
     const order = await placeCod(1);
     const status = await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.CONFIRMED }).expect(200);
     expect(status.body.data.order.status).toBe("Confirmed");
+    await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.DELIVERED }).expect(400);
 
     const assigned = await admin.post(`/api/admin/orders/${order.orderNumber}/assign-delivery`).send({ deliveryStaffId }).expect(200);
     expect(assigned.body.data.order.deliveryStaff).toBeTruthy();
+  });
+
+  it("auto-assigns packed delivery orders to the linked delivery login queue", async () => {
+    const order = await placeCod(1);
+    const packed = await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.PACKED }).expect(200);
+    expect(packed.body.data.order.status).toBe("Packed");
+    expect(packed.body.data.order.deliveryStaffId).toBe(deliveryStaffId);
+
+    const queue = await deliveryAdmin.get("/api/admin/orders").expect(200);
+    const orderNumbers = queue.body.data.orders.map((item: { orderNumber: string }) => item.orderNumber);
+    expect(orderNumbers).toContain(order.orderNumber);
+  });
+
+  it("keeps delivery staff scoped to assigned orders and blocks manager lists", async () => {
+    const assignedOrder = await placeCod(1);
+    const unassignedOrder = await placeCod(1);
+    await admin.post(`/api/admin/orders/${assignedOrder.orderNumber}/assign-delivery`).send({ deliveryStaffId }).expect(200);
+
+    await deliveryAdmin.get("/api/admin/delivery-staff").expect(403);
+    await deliveryAdmin.get("/api/admin/delivery-slots").expect(403);
+
+    const response = await deliveryAdmin.get("/api/admin/orders").expect(200);
+    const orderNumbers = response.body.data.orders.map((order: { orderNumber: string }) => order.orderNumber);
+    expect(orderNumbers).toContain(assignedOrder.orderNumber);
+    expect(orderNumbers).not.toContain(unassignedOrder.orderNumber);
+  });
+
+  it("shows all active assigned delivery orders in the delivery operations portal", async () => {
+    const order = await placeCod(1);
+    const otherStaff = await db.deliveryStaff.create({
+      data: { name: `Route Staff ${Date.now()}`, phone: `8${String(Date.now()).slice(-9)}`, active: true },
+    });
+    cleanup.deliveryStaffIds.push(otherStaff.id);
+    await admin.post(`/api/admin/orders/${order.orderNumber}/assign-delivery`).send({ deliveryStaffId: otherStaff.id }).expect(200);
+    await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.OUT_FOR_DELIVERY }).expect(200);
+
+    const response = await deliveryAdmin.get("/api/admin/delivery-orders").expect(200);
+    const visibleOrder = response.body.data.orders.find((item: { orderNumber: string }) => item.orderNumber === order.orderNumber);
+    expect(visibleOrder).toBeTruthy();
+    expect(visibleOrder.deliveryStaff).toBe(otherStaff.name);
+
+    const compatibleResponse = await deliveryAdmin.get("/api/admin/orders").expect(200);
+    const compatibleVisibleOrder = compatibleResponse.body.data.orders.find((item: { orderNumber: string }) => item.orderNumber === order.orderNumber);
+    expect(compatibleVisibleOrder).toBeTruthy();
+    expect(compatibleVisibleOrder.deliveryStaff).toBe(otherStaff.name);
+  });
+
+  it("requires customer receipt confirmation before delivery staff can complete delivery", async () => {
+    const order = await placeCod(1);
+    await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.CONFIRMED }).expect(200);
+    await admin.post(`/api/admin/orders/${order.orderNumber}/assign-delivery`).send({ deliveryStaffId }).expect(200);
+    await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.OUT_FOR_DELIVERY }).expect(200);
+    await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.DELIVERED }).expect(400);
+
+    const confirmed = await customer.post(`/api/orders/${order.orderNumber}/confirm-received`).send({ note: "Received by customer" }).expect(200);
+    expect(confirmed.body.data.order.status).toBe("Out for Delivery");
+    expect(confirmed.body.data.order.customerConfirmedAt).toBeTruthy();
+
+    await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.DELIVERED }).expect(400);
+    const paid = await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/payment-status`).send({ status: "PAID", note: "COD collected at doorstep" }).expect(200);
+    expect(paid.body.data.order.paymentStatus).toBe("Paid");
+
+    const delivered = await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.DELIVERED }).expect(200);
+    expect(delivered.body.data.order.status).toBe("Delivered");
+    expect(delivered.body.data.order.deliveryAssignmentStatus).toBe(DeliveryStatus.DELIVERED);
+  });
+
+  it("starts delivery even when an older order is missing reserved stock", async () => {
+    const order = await placeCod(1);
+    await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.CONFIRMED }).expect(200);
+    await admin.post(`/api/admin/orders/${order.orderNumber}/assign-delivery`).send({ deliveryStaffId }).expect(200);
+    await db.inventory.update({ where: { id: inventoryId }, data: { reserved: 0 } });
+
+    const started = await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.OUT_FOR_DELIVERY }).expect(200);
+    expect(started.body.data.order.status).toBe("Out for Delivery");
+    expect(started.body.data.order.deliveryAssignmentStatus).toBe(DeliveryStatus.OUT_FOR_DELIVERY);
+    await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.OUT_FOR_DELIVERY }).expect(200);
+    const movement = await db.stockMovement.findFirstOrThrow({ where: { orderId: order.id, type: StockMovementType.ONLINE_SALE } });
+    expect(movement.note || "").toContain("reconciled missing reservation");
+  });
+
+  it("lets payment staff reconcile COD payment status", async () => {
+    const order = await placeCod(1);
+    const paid = await admin.patch(`/api/admin/orders/${order.orderNumber}/payment-status`).send({ status: "PAID", note: "Counter payment collected" }).expect(200);
+    expect(paid.body.data.order.paymentStatus).toBe("Paid");
+
+    const retry = await admin.patch(`/api/admin/orders/${order.orderNumber}/payment-status`).send({ status: "COD_PENDING", note: "Correction for payment retry" }).expect(200);
+    expect(retry.body.data.order.paymentStatus).toBe("COD Pending");
+
+    const failed = await admin.patch(`/api/admin/orders/${order.orderNumber}/payment-status`).send({ status: "FAILED", note: "Customer did not pay" }).expect(200);
+    expect(failed.body.data.order.paymentStatus).toBe("Failed");
+  });
+
+  it("supports compatible admin payment update routes", async () => {
+    const order = await placeCod(1);
+    const paid = await admin.patch(`/api/admin/payments/${order.orderNumber}/status`).send({ status: "PAID", note: "Counter alias collected" }).expect(200);
+    expect(paid.body.data.order.paymentStatus).toBe("Paid");
+
+    const retry = await admin.patch(`/api/admin/orders/${order.orderNumber}/payment`).send({ status: "COD_PENDING", note: "Alias retry" }).expect(200);
+    expect(retry.body.data.order.paymentStatus).toBe("COD Pending");
+  });
+
+  it("records failed delivery attempts without completing the order", async () => {
+    const order = await placeCod(1);
+    await admin.patch(`/api/admin/orders/${order.orderNumber}/status`).send({ status: OrderStatus.CONFIRMED }).expect(200);
+    await admin.post(`/api/admin/orders/${order.orderNumber}/assign-delivery`).send({ deliveryStaffId }).expect(200);
+    await deliveryAdmin.patch(`/api/admin/orders/${order.orderNumber}/delivery-status`).send({ status: OrderStatus.OUT_FOR_DELIVERY }).expect(200);
+
+    const failed = await deliveryAdmin.post(`/api/admin/orders/${order.orderNumber}/delivery-failure`).send({
+      reason: "CUSTOMER_NOT_AVAILABLE",
+      note: "Customer relative was not available at address",
+    }).expect(200);
+
+    expect(failed.body.data.order.status).toBe("Out for Delivery");
+    expect(failed.body.data.order.deliveryAssignmentStatus).toBe(DeliveryStatus.FAILED);
+    expect(failed.body.data.order.deliveryFailureReason).toBe("CUSTOMER_NOT_AVAILABLE");
   });
 
   it("adjusts inventory and records movement", async () => {
@@ -271,6 +400,21 @@ describe("admin order and inventory APIs", () => {
     const adjusted = await admin.post(`/api/admin/inventory/${inventoryId}/adjust`).send({ quantity: 3, note: "Phase eight restock" }).expect(200);
     expect(adjusted.body.data.inventory.stock).toBe(before.stock + 3 - before.reserved);
     const movement = await db.stockMovement.findFirst({ where: { inventoryId, type: StockMovementType.RESTOCK, note: "Phase eight restock" } });
+    expect(movement).toBeTruthy();
+  });
+
+  it("records offline store purchases in inventory movements for superadmin", async () => {
+    const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
+    const response = await admin.post("/api/admin/inventory/offline-sales").send({
+      note: "Walk-in store sale",
+      items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+    }).expect(201);
+    cleanup.offlineSaleIds.push(response.body.data.sale.id);
+
+    const after = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
+    expect(after.stock).toBe(before.stock - 1);
+    expect(after.sold).toBe(before.sold + 1);
+    const movement = await db.stockMovement.findFirst({ where: { referenceType: "OFFLINE_SALE", referenceId: response.body.data.sale.id, type: StockMovementType.OFFLINE_SALE } });
     expect(movement).toBeTruthy();
   });
 });

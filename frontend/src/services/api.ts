@@ -19,33 +19,57 @@ export class ApiError extends Error {
   }
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
+function requestMethod(init?: RequestInit) {
+  return (init?.method || "GET").toUpperCase();
+}
+
+function canRetryRequest(init?: RequestInit) {
+  return ["GET", "HEAD", "OPTIONS"].includes(requestMethod(init));
+}
+
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers || {}),
-      },
-    });
-  } catch {
-    throw new Error(API_UNAVAILABLE_MESSAGE);
+  let lastRateLimitError: ApiError | null = null;
+  const attempts = canRetryRequest(init) ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(init?.headers || {}),
+        },
+      });
+    } catch {
+      throw new Error(API_UNAVAILABLE_MESSAGE);
+    }
+
+    let body: ApiEnvelope<T> | null = null;
+    try {
+      body = (await response.json()) as ApiEnvelope<T>;
+    } catch {
+      throw new Error(`API ${response.status}: ${response.statusText || "Invalid response"}`);
+    }
+
+    if (response.ok && body.ok) return body.data;
+
+    const error = body.ok ? new ApiError(`API ${response.status}: request failed`) : new ApiError(body.error.message, body.error.code, body.error.retryAfterSeconds);
+    if (response.status === 429 && canRetryRequest(init) && attempt + 1 < attempts) {
+      lastRateLimitError = error;
+      const retryAfterSeconds = Math.max(1, Math.min(error.retryAfterSeconds || Number(response.headers.get("Retry-After")) || 1, 5));
+      await delay(retryAfterSeconds * 1000);
+      continue;
+    }
+    throw error;
   }
 
-  let body: ApiEnvelope<T> | null = null;
-  try {
-    body = (await response.json()) as ApiEnvelope<T>;
-  } catch {
-    throw new Error(`API ${response.status}: ${response.statusText || "Invalid response"}`);
-  }
-
-  if (!response.ok || !body.ok) {
-    throw body.ok ? new ApiError(`API ${response.status}: request failed`) : new ApiError(body.error.message, body.error.code, body.error.retryAfterSeconds);
-  }
-
-  return body.data;
+  if (lastRateLimitError) throw lastRateLimitError;
+  throw new Error(API_UNAVAILABLE_MESSAGE);
 }
 
 export function isUnauthorized(error: unknown) {

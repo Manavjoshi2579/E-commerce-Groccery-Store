@@ -1,4 +1,4 @@
-import { DeliveryStatus, FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, ReturnStatus, SettingType, StockMovementType } from "@prisma/client";
+import { DeliveryStatus, FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, ReturnStatus, RoleName, SettingType, StockMovementType } from "@prisma/client";
 import { db } from "../lib/db.js";
 import type { RbacPrismaClient } from "../lib/prisma-rbac.js";
 import { getOrCreateCart, mapCart, validateCouponForCart } from "./cart.service.js";
@@ -462,8 +462,61 @@ export async function reorder(userId: string, orderNumber: string) {
 
 type OrderClient = typeof db | RbacPrismaClient;
 
+async function findDefaultDeliveryStaff(tx: Prisma.TransactionClient, zoneId?: string | null) {
+  const linkedLoginStaff = await tx.deliveryStaff.findFirst({
+    where: { active: true, adminUser: { role: { name: RoleName.DELIVERY_STAFF }, status: "ACTIVE" } },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+  });
+  if (linkedLoginStaff) return linkedLoginStaff;
+
+  const zonedStaff = zoneId
+    ? await tx.deliveryStaff.findFirst({
+        where: { active: true, zoneId },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+      })
+    : null;
+  if (zonedStaff) return zonedStaff;
+
+  return tx.deliveryStaff.findFirst({
+    where: { active: true },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+  });
+}
+
+async function ensureDeliveryAssignmentForDispatch(tx: Prisma.TransactionClient, order: { id: string; deliverySlot?: { zoneId?: string | null } | null }) {
+  const existing = await tx.deliveryAssignment.findUnique({ where: { orderId: order.id } });
+  if (existing) return existing;
+
+  const staff = await findDefaultDeliveryStaff(tx, order.deliverySlot?.zoneId);
+  if (!staff) return null;
+
+  return tx.deliveryAssignment.create({
+    data: {
+      orderId: order.id,
+      deliveryStaffId: staff.id,
+      status: DeliveryStatus.ASSIGNED,
+      metadata: { autoAssigned: true, reason: "Order moved to packed/dispatch queue" },
+    },
+  });
+}
+
 export async function listAdminOrders(client: OrderClient = db) {
   const orders = await client.order.findMany({ include: orderInclude, orderBy: { createdAt: "desc" } });
+  return orders.map(mapOrder);
+}
+
+export async function listDeliveryOperationsOrders() {
+  const orders = await db.order.findMany({
+    where: {
+      deliveryAssignment: { isNot: null },
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED] },
+    },
+    include: orderInclude,
+    orderBy: [
+      { deliveryDate: "asc" },
+      { createdAt: "desc" },
+    ],
+  });
   return orders.map(mapOrder);
 }
 
@@ -474,26 +527,30 @@ export async function getAdminOrder(idOrNumber: string, client: OrderClient = db
 }
 
 export async function updateAdminOrderStatus(idOrNumber: string, status: OrderStatus, adminUserId: string) {
+  if (status === OrderStatus.DELIVERED) throw new Error("Delivered status is completed by delivery staff after customer receipt confirmation.");
   return db.$transaction(async (tx) => {
     const order = await tx.order.findFirst({ where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] }, include: orderInclude });
     if (!order) throw new Error("Order not found.");
+    if (order.status === status) return mapOrder(order);
     await recordStatusHistory(tx, order, status, "ADMIN", adminUserId);
+    if (status === OrderStatus.PACKED || status === OrderStatus.OUT_FOR_DELIVERY) {
+      await ensureDeliveryAssignmentForDispatch(tx, order);
+    }
     if (status === OrderStatus.CANCELLED) {
       await releaseOrderReservation(tx, order, { actorType: "ADMIN", actorId: adminUserId, type: StockMovementType.ORDER_CANCELLED, note: `Admin cancel ${order.orderNumber}` });
       await restoreStock(tx, order, adminUserId);
     }
     if (status === OrderStatus.OUT_FOR_DELIVERY) {
       await finalizeOrderSale(tx, order, { actorType: "ADMIN", actorId: adminUserId, note: `Dispatch ${order.orderNumber}` });
-      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date() } });
+      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date(), failedAt: null, failureReason: null, failureNote: null } });
     }
-    if (status === OrderStatus.DELIVERED && !order.deliveryConfirmation) throw new Error("Customer receipt confirmation is required before completing delivery.");
     const updated = await tx.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
     return mapOrder(updated);
   });
 }
 
 export async function updateDeliveryOrderStatus(idOrNumber: string, status: OrderStatus, client: RbacPrismaClient) {
-  const allowed: OrderStatus[] = [OrderStatus.PACKED, OrderStatus.OUT_FOR_DELIVERY];
+  const allowed: OrderStatus[] = [OrderStatus.PACKED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED];
   if (!allowed.includes(status)) throw new Error("Invalid delivery status.");
 
   const order = await client.order.findFirst({
@@ -504,17 +561,92 @@ export async function updateDeliveryOrderStatus(idOrNumber: string, status: Orde
     include: orderInclude,
   });
   if (!order) throw new Error("Order not found or not assigned to this delivery staff.");
+  if (order.status === status) return mapOrder(order);
 
   return db.$transaction(async (tx) => {
     await recordStatusHistory(tx, order, status, "DELIVERY", undefined);
     if (status === OrderStatus.OUT_FOR_DELIVERY) {
       await finalizeOrderSale(tx, order, { actorType: "DELIVERY", note: `Out for delivery ${order.orderNumber}` });
-      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date() } });
+      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.OUT_FOR_DELIVERY, outForDeliveryAt: new Date(), failedAt: null, failureReason: null, failureNote: null } });
     }
-    if (status === OrderStatus.PACKED) await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.PICKED_UP, pickedUpAt: new Date() } });
+    if (status === OrderStatus.PACKED) await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.PICKED_UP, pickedUpAt: new Date(), failedAt: null, failureReason: null, failureNote: null } });
+    if (status === OrderStatus.DELIVERED) {
+      if (!order.deliveryConfirmation) throw new Error("Customer receipt confirmation is required before completing delivery.");
+      if (order.payment?.method === PaymentMethod.COD && order.payment.status !== PaymentStatus.PAID) throw new Error("COD payment must be collected before completing delivery.");
+      await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.DELIVERED, deliveredAt: new Date() } });
+    }
     const updated = await tx.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
     return mapOrder(updated);
   });
+}
+
+export async function updateAdminPaymentStatus(idOrNumber: string, status: PaymentStatus, input: { note?: string; actorRole?: string; actorId?: string }, client: OrderClient = db) {
+  const order = await client.order.findFirst({
+    where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] },
+    include: orderInclude,
+  });
+  if (!order) throw new Error("Order not found or not assigned to this staff.");
+  if (!order.payment) throw new Error("Payment record not found for this order.");
+  if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) throw new Error("Payment cannot be changed for a closed order.");
+  if (input.actorRole === "DELIVERY_STAFF" && order.payment.method !== PaymentMethod.COD) {
+    throw new Error("Delivery staff can only confirm COD collection.");
+  }
+  if (input.actorRole === "DELIVERY_STAFF" && status !== PaymentStatus.PAID && status !== PaymentStatus.FAILED) {
+    throw new Error("Delivery staff can mark COD as collected or not collected only.");
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { orderId: order.id },
+      data: {
+        status,
+        rawPayload: {
+          ...(typeof order.payment?.rawPayload === "object" && order.payment.rawPayload ? order.payment.rawPayload as Record<string, unknown> : {}),
+          manualPaymentUpdate: {
+            status,
+            note: input.note || null,
+            actorRole: input.actorRole || null,
+            actorId: input.actorId || null,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      },
+    });
+    const nextOrderStatus = status === PaymentStatus.PAID && order.status === OrderStatus.PENDING ? OrderStatus.CONFIRMED : order.status;
+    return tx.order.update({
+      where: { id: order.id },
+      data: { paymentStatus: status, status: nextOrderStatus },
+      include: orderInclude,
+    });
+  });
+  return mapOrder(updated);
+}
+
+export async function markDeliveryAttemptFailed(idOrNumber: string, input: { reason: string; note?: string }, client: RbacPrismaClient) {
+  const order = await client.order.findFirst({
+    where: {
+      OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }],
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED] },
+    },
+    include: orderInclude,
+  });
+  if (!order) throw new Error("Order not found or not assigned to this delivery staff.");
+
+  const now = new Date();
+  const updated = await db.$transaction(async (tx) => {
+    await tx.deliveryAssignment.updateMany({
+      where: { orderId: order.id },
+      data: {
+        status: DeliveryStatus.FAILED,
+        failedAt: now,
+        failureReason: input.reason,
+        failureNote: input.note,
+        metadata: { failedReason: input.reason, failedNote: input.note || null },
+      },
+    });
+    return tx.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
+  });
+  return mapOrder(updated);
 }
 
 export async function assignDelivery(idOrNumber: string, deliveryStaffId: string) {
@@ -524,7 +656,7 @@ export async function assignDelivery(idOrNumber: string, deliveryStaffId: string
   if (!staff) throw new Error("Delivery staff not found.");
   await db.deliveryAssignment.upsert({
     where: { orderId: order.id },
-    update: { deliveryStaffId, status: DeliveryStatus.ASSIGNED, assignedAt: new Date() },
+    update: { deliveryStaffId, status: DeliveryStatus.ASSIGNED, assignedAt: new Date(), failedAt: null, failureReason: null, failureNote: null },
     create: { orderId: order.id, deliveryStaffId, status: DeliveryStatus.ASSIGNED },
   });
   return getAdminOrder(order.id);
@@ -540,9 +672,8 @@ export async function confirmOrderReceived(userId: string, orderNumber: string, 
       create: { orderId: order.id, customerId: userId, note },
       update: { note },
     });
-    await recordStatusHistory(tx, order, OrderStatus.DELIVERED, "CUSTOMER", userId, "Customer confirmed receipt");
-    await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { status: DeliveryStatus.DELIVERED, deliveredAt: new Date() } });
-    const updated = await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.DELIVERED }, include: orderInclude });
+    await tx.deliveryAssignment.updateMany({ where: { orderId: order.id }, data: { handedOverAt: new Date(), metadata: { customerConfirmed: true } } });
+    const updated = await tx.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
     return mapOrder(updated);
   });
 }

@@ -1,4 +1,4 @@
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, PaymentStatus } from "@prisma/client";
 import { z } from "zod";
 import { phoneSchema, pincodeSchema } from "./common.js";
 
@@ -43,6 +43,11 @@ export const adminOrderStatusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
 });
 
+export const adminPaymentStatusSchema = z.object({
+  status: z.nativeEnum(PaymentStatus),
+  note: z.string().trim().max(240).optional(),
+});
+
 export const assignDeliverySchema = z.object({
   deliveryStaffId: z.string().min(8),
 });
@@ -72,6 +77,11 @@ export const deliveryConfirmationSchema = z.object({
   note: z.string().trim().max(240).optional(),
 });
 
+export const deliveryFailureSchema = z.object({
+  reason: z.enum(["CUSTOMER_NOT_AVAILABLE", "CUSTOMER_REFUSED", "ADDRESS_ISSUE", "PAYMENT_NOT_COLLECTED", "OTHER"]),
+  note: z.string().trim().max(240).optional(),
+});
+
 export const inventoryPatchSchema = z.object({
   stock: z.coerce.number().int().min(0).optional(),
   lowStockThreshold: z.coerce.number().int().min(0).optional(),
@@ -80,4 +90,14 @@ export const inventoryPatchSchema = z.object({
 export const inventoryAdjustSchema = z.object({
   quantity: z.coerce.number().int(),
   note: z.string().trim().max(180).optional(),
+});
+
+export const offlineSaleSchema = z.object({
+  note: z.string().trim().max(180).optional(),
+  items: z.array(z.object({
+    productId: z.string().min(8),
+    variantId: z.string().min(8).optional().nullable(),
+    quantity: z.coerce.number().int().min(1).max(10000),
+    unitPrice: z.coerce.number().min(0),
+  })).min(1).max(100),
 });

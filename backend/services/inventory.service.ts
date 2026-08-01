@@ -109,12 +109,14 @@ export async function finalizeOrderSale(tx: Tx, order: any, input: { actorType: 
     const key = `${StockMovementType.ONLINE_SALE}:${order.id}:${item.id}`;
     if (await movementExists(tx, key)) continue;
     const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId } });
-    if (inventory.reserved < item.quantity) throw new Error(`Reserved stock is missing for ${item.nameSnapshot}.`);
     const before = inventory.stock - inventory.reserved;
+    const reservedToConsume = Math.min(inventory.reserved, item.quantity);
+    if (inventory.stock < item.quantity) throw new Error(`Insufficient physical stock for ${item.nameSnapshot}.`);
     const updated = await tx.inventory.update({
       where: { id: inventory.id },
-      data: { stock: { decrement: item.quantity }, reserved: { decrement: item.quantity }, sold: { increment: item.quantity } },
+      data: { stock: { decrement: item.quantity }, reserved: { decrement: reservedToConsume }, sold: { increment: item.quantity } },
     });
+    const reconciledMissingReservation = reservedToConsume < item.quantity;
     await tx.stockMovement.create({
       data: {
         inventoryId: inventory.id,
@@ -131,7 +133,9 @@ export async function finalizeOrderSale(tx: Tx, order: any, input: { actorType: 
         actorType: input.actorType,
         actorId: input.actorId ?? null,
         idempotencyKey: key,
-        note: input.note ?? `Finalize sale ${order.orderNumber}`,
+        note: reconciledMissingReservation
+          ? `${input.note ?? `Finalize sale ${order.orderNumber}`} (reconciled missing reservation: ${item.quantity - reservedToConsume})`
+          : input.note ?? `Finalize sale ${order.orderNumber}`,
       },
     });
   }
@@ -161,4 +165,57 @@ export async function adjustInventory(id: string, quantity: number, adminUserId:
 
 export async function listStockMovements() {
   return db.stockMovement.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { product: true, adminUser: { select: { name: true, email: true } }, order: { select: { orderNumber: true } } } });
+}
+
+export async function recordOfflineSale(adminUserId: string, input: { note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number }[] }) {
+  return db.$transaction(async (tx) => {
+    const referenceNumber = `OFF-${new Date().getFullYear()}-${Date.now()}`;
+    const total = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const sale = await tx.offlineSale.create({
+      data: {
+        referenceNumber,
+        actorId: adminUserId,
+        total,
+        note: input.note,
+        items: {
+          create: input.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId ?? null,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.quantity * item.unitPrice,
+          })),
+        },
+      },
+      include: { items: true, actor: { select: { name: true, email: true } } },
+    });
+
+    for (const item of input.items) {
+      const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId ?? null } });
+      const available = inventory.stock - inventory.reserved;
+      if (available < item.quantity) throw new Error("Insufficient stock for offline sale.");
+      const updated = await tx.inventory.update({ where: { id: inventory.id }, data: { stock: { decrement: item.quantity }, sold: { increment: item.quantity } } });
+      await tx.stockMovement.create({
+        data: {
+          inventoryId: inventory.id,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          type: StockMovementType.OFFLINE_SALE,
+          channel: StockMovementChannel.OFFLINE,
+          quantity: item.quantity,
+          quantityBefore: available,
+          quantityAfter: updated.stock - updated.reserved,
+          referenceType: "OFFLINE_SALE",
+          referenceId: sale.id,
+          actorType: "ADMIN",
+          actorId: adminUserId,
+          adminUserId,
+          idempotencyKey: `OFFLINE_SALE:${sale.id}:${item.productId}:${item.variantId ?? "base"}`,
+          note: input.note ?? `Offline sale ${referenceNumber}`,
+        },
+      });
+    }
+
+    return sale;
+  });
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3, Bell, Boxes, ClipboardList, CreditCard, Eye, EyeOff, LayoutDashboard, LogOut, Package, Plus, Search,
+  BarChart3, Bell, Boxes, ClipboardList, CreditCard, Eye, EyeOff, LayoutDashboard, LogOut, Package, Plus, RotateCcw, Search,
   Hash, Layers3, Menu, MessageCircle, Pencil, Save, Settings, ShieldCheck, Tags, Trash2, Truck, Users, WalletCards, X,
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
@@ -36,7 +36,7 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminOrders, updateAdminDeliverySlot, updateAdminOrderStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -47,20 +47,20 @@ import type { AdminCustomer, Category, Coupon, FAQ, Order, OrderStatus, Product,
 
 const nav = [
   ["", LayoutDashboard, "Dashboard"],
+  ["orders", WalletCards, "Orders"],
+  ["delivery", Truck, "Delivery"],
+  ["payments", CreditCard, "Payments"],
+  ["invoices", ClipboardList, "Invoices"],
+  ["returns", RotateCcw, "Returns"],
+  ["customers", Users, "Customers"],
+  ["support", MessageCircle, "Support"],
+  ["reviews", MessageCircle, "Reviews"],
+  ["inventory", ClipboardList, "Inventory"],
   ["products", Package, "Products"],
   ["categories", Boxes, "Categories"],
   ["brands", ShieldCheck, "Brands"],
-  ["inventory", ClipboardList, "Inventory"],
-  ["orders", WalletCards, "Orders"],
-  ["customers", Users, "Customers"],
-  ["support", MessageCircle, "Support"],
-  ["faqs", MessageCircle, "FAQs"],
   ["coupons", CreditCard, "Coupons"],
-  ["payments", CreditCard, "Payments"],
-  ["invoices", ClipboardList, "Invoices"],
-  ["delivery", Truck, "Delivery"],
-  ["returns", LogOut, "Returns"],
-  ["reviews", MessageCircle, "Reviews"],
+  ["faqs", MessageCircle, "FAQs"],
   ["reports", BarChart3, "Reports"],
   ["users", Users, "Admin Users"],
   ["settings", Settings, "Settings"],
@@ -68,11 +68,11 @@ const nav = [
 
 const roleSections: Record<string, string[]> = {
   SUPER_ADMIN: nav.map(([href]) => href),
-  STORE_MANAGER: ["products", "categories", "brands", "inventory", "orders", "customers", "support", "faqs", "coupons", "reports"],
+  STORE_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
   INVENTORY_MANAGER: ["products", "inventory", "reports"],
-  ORDER_MANAGER: ["orders", "customers", "support", "delivery", "reports"],
-  DELIVERY_STAFF: ["delivery", "orders"],
-  SUPPORT_STAFF: ["customers", "support", "faqs", "orders", "returns"],
+  ORDER_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "reports"],
+  DELIVERY_STAFF: ["delivery"],
+  SUPPORT_STAFF: ["orders", "returns", "customers", "support", "faqs"],
   BILLING_STAFF: ["payments", "invoices", "reports"],
 };
 
@@ -91,7 +91,7 @@ function canManageCoupons(role: string | undefined) {
 
 function roleLandingPath(role: string | undefined) {
   if (role === "SUPER_ADMIN") return "/admin";
-  if (role === "STORE_MANAGER") return "/admin/products";
+  if (role === "STORE_MANAGER") return "/admin/orders";
   if (role === "INVENTORY_MANAGER") return "/admin/inventory";
   if (role === "DELIVERY_STAFF") return "/admin/delivery";
   if (role === "BILLING_STAFF") return "/admin/payments";
@@ -155,15 +155,15 @@ function AdminShell({ section, children }: { section: string; children: React.Re
     return () => { stopped = true; window.clearInterval(timer); };
   }, [admin, role]);
   useEffect(() => {
-    if (adminReady && admin && !canViewSection) router.replace("/admin");
-  }, [adminReady, admin, canViewSection, router]);
+    if (adminReady && admin && !canViewSection) router.replace(roleLandingPath(role));
+  }, [adminReady, admin, canViewSection, role, router]);
   if (adminReady && !admin) return <div className="flex min-h-screen items-center justify-center bg-black text-white">Redirecting to admin login...</div>;
   if (adminReady && admin && !canViewSection) return <div className="flex min-h-screen items-center justify-center bg-[#f7f4ec] p-6 text-center font-bold text-black/70">Redirecting to your dashboard...</div>;
   return (
     <div className="min-h-screen bg-[#f7f4ec] text-black lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
       <aside className="sticky top-0 z-40 flex h-auto flex-col bg-black px-3 py-2 text-white shadow-xl lg:h-screen lg:p-4">
         <div className="flex min-h-14 items-center justify-between gap-3 lg:mb-6">
-          <Link href="/admin" className="shrink-0" onClick={() => setMobileNavOpen(false)}><Logo invert /></Link>
+          <Link href={roleLandingPath(role)} className="shrink-0" onClick={() => setMobileNavOpen(false)}><Logo invert /></Link>
           <button type="button" onClick={() => setMobileNavOpen((open) => !open)} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/15 text-white hover:bg-white/10 lg:hidden" aria-expanded={mobileNavOpen} aria-label="Open admin navigation"><Menu size={21} /></button>
         </div>
         <nav className={`${mobileNavOpen ? "grid" : "hidden"} fixed inset-x-0 bottom-0 top-[72px] z-40 content-start gap-1 overflow-y-auto border-t border-white/10 bg-[#080808] px-3 py-3 pb-8 lg:static lg:mt-0 lg:grid lg:gap-1 lg:overflow-visible lg:border-0 lg:bg-transparent lg:p-0`}>
@@ -318,7 +318,7 @@ function Dashboard() {
       ["Today", String(deliveryRows.filter((order) => new Date(order.deliveryDate || order.createdAt) >= today).length), "Scheduled today"],
       ["Cancelled", String(dashboardOrders.filter((order) => order.status === "Cancelled").length), "Stopped"],
     ];
-    return <AdminShell section=""><div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions.map(([href, label, _allowed, variant]) => <Link key={String(href)} href={String(href)} className="min-w-0"><Button className="w-full sm:w-auto" variant={variant === "outline" ? "outline" : "gold"}>{String(label)}</Button></Link>)}</div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{deliveryCards.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}</div><div className="mt-5 grid gap-4 xl:grid-cols-[1fr_380px]"><Panel title="Delivery Queue"><DataTable headers={["Order", "Customer", "Area", "Slot", "Status", "Staff"]} minWidth="min-w-[860px]">{deliveryRows.slice(0, 10).map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link><div className="text-xs font-normal text-black/50">{new Date(order.deliveryDate || order.createdAt).toLocaleDateString("en-IN")}</div></td><td className="p-3">{order.customerName}<div className="text-xs text-black/50">{order.address.phone}</div></td><td className="p-3">{order.address.city}<div className="text-xs text-black/50">{order.address.pincode}</div></td><td className="p-3">{order.deliverySlot || "-"}</td><td className="p-3"><StatusBadge value={order.status} /></td><td className="p-3 font-bold">{order.deliveryStaff || "Unassigned"}</td></tr>)}</DataTable>{!deliveryRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No delivery orders found in database.</p>}</Panel><Panel title="Delivery Summary"><DashboardSplit stats={[["Assigned", deliveryRows.filter((order) => order.deliveryStaff).length], ["Unassigned", deliveryRows.filter((order) => !order.deliveryStaff && !["Delivered", "Cancelled"].includes(order.status)).length], ["Out", deliveryRows.filter((order) => order.status === "Out for Delivery").length], ["Delivered", deliveryRows.filter((order) => order.status === "Delivered").length]]} /><Link href="/admin/delivery" className="mt-5 inline-block"><Button variant="gold">Open Delivery</Button></Link></Panel></div></AdminShell>;
+    return <AdminShell section=""><div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions.map(([href, label, _allowed, variant]) => <Link key={String(href)} href={String(href)} className="min-w-0"><Button className="w-full sm:w-auto" variant={variant === "outline" ? "outline" : "gold"}>{String(label)}</Button></Link>)}</div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{deliveryCards.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}</div><div className="mt-5 grid gap-4 xl:grid-cols-[1fr_380px]"><Panel title="Delivery Queue"><DataTable headers={["Order", "Customer", "Area", "Slot", "Status", "Staff"]} minWidth="min-w-[860px]">{deliveryRows.slice(0, 10).map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.orderNumber}<div className="text-xs font-normal text-black/50">{new Date(order.deliveryDate || order.createdAt).toLocaleDateString("en-IN")}</div></td><td className="p-3">{order.customerName}<div className="text-xs text-black/50">{order.address.phone}</div></td><td className="p-3">{order.address.city}<div className="text-xs text-black/50">{order.address.pincode}</div></td><td className="p-3">{order.deliverySlot || "-"}</td><td className="p-3"><StatusBadge value={order.status} /></td><td className="p-3 font-bold">{order.deliveryStaff || "Unassigned"}</td></tr>)}</DataTable>{!deliveryRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No delivery orders found in database.</p>}</Panel><Panel title="Delivery Summary"><DashboardSplit stats={[["Assigned", deliveryRows.filter((order) => order.deliveryStaff).length], ["Unassigned", deliveryRows.filter((order) => !order.deliveryStaff && !["Delivered", "Cancelled"].includes(order.status)).length], ["Out", deliveryRows.filter((order) => order.status === "Out for Delivery").length], ["Delivered", deliveryRows.filter((order) => order.status === "Delivered").length]]} /><Link href="/admin/delivery" className="mt-5 inline-block"><Button variant="gold">Open Delivery</Button></Link></Panel></div></AdminShell>;
   }
   return <AdminShell section=""><div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{actions.map(([href, label, _allowed, variant]) => <Link key={String(href)} href={String(href)} className="min-w-0"><Button className="w-full sm:w-auto" variant={variant === "outline" ? "outline" : "gold"}>{String(label)}</Button></Link>)}</div><div className="grid gap-3 xl:grid-cols-3">{kpiGroups.map((group) => <KpiGroup key={group.title} title={group.title} items={group.items} />)}</div><div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]"><Panel title="Revenue trend"><MetricBars data={salesByDay} unit="currency" /></Panel><Panel title="Order status analytics"><ProgressRows rows={statusRows} total={Math.max(1, dashboardOrders.length)} /></Panel></div><div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_0.9fr_1.2fr]"><Panel title="Payment monitoring"><ProgressRows rows={paymentRows} total={Math.max(1, dashboardOrders.length)} /></Panel><Panel title="Inventory health"><DonutMetric rows={inventoryRows} /></Panel><Panel title="Category sales"><CategorySalesPanel rows={categoryRows} /></Panel></div><div className="mt-5 grid gap-4 xl:grid-cols-3"><Panel title="Recent Orders"><div className="responsive-scroll overflow-x-auto"><table className="w-full min-w-[360px] text-left text-sm"><thead className="bg-black text-white"><tr><th className="p-3">Order</th><th>Customer</th><th>Amount</th></tr></thead><tbody>{recentOrders.map((order) => <tr key={order.orderNumber} className="border-b"><td className="p-3 font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link></td><td>{order.customerName}</td><td>{money(order.grandTotal || calc(order.items, dashboardProducts))}</td></tr>)}</tbody></table></div></Panel><Panel title="Best-selling products">{bestProducts.map((p) => <div key={p.name} className="flex items-center justify-between gap-3 border-b py-3"><div><b>{p.name}</b><p className="text-xs text-black/55">{p.units} units sold</p></div><span className="font-bold">{money(p.amount)}</span></div>)}</Panel><Panel title="Delivery summary"><DashboardSplit stats={[["Assigned", dashboardOrders.filter((o) => o.deliveryStaff).length], ["Unassigned", dashboardOrders.filter((o) => !o.deliveryStaff && !["Delivered", "Cancelled"].includes(o.status)).length], ["Out", dashboardOrders.filter((o) => o.status === "Out for Delivery").length], ["Delivered", deliveredOrders.length]]} /></Panel><Panel title="Customer insights"><DashboardSplit stats={[["Customers", customers.length], ["Repeat", repeatCustomers], ["Returning %", returningRate], ["Support", customers.reduce((sum, customer) => sum + customer.supportTicketCount, 0)]]} /></Panel><Panel title="Coupon performance"><DashboardSplit stats={[["Active", activeCoupons.length], ["Used", dashboardOrders.filter((o) => o.couponCode).length], ["Total", dashboardCoupons.length], ["Discounted", dashboardOrders.filter((o) => (o.couponDiscount || 0) > 0).length]]} /></Panel></div></AdminShell>;
 }
@@ -432,8 +432,10 @@ function usePagedItems<T>(items: T[], pageSize = adminPageSize) {
   };
 }
 
-function PaginationControls({ page, totalPages, total, onPageChange }: { page: number; totalPages: number; total: number; onPageChange: (page: number) => void }) {
-  return <div className="mt-4 flex flex-col gap-3 border-t pt-4 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="font-bold text-black/60">Showing page {page} of {totalPages} ({total} records)</span><div className="grid grid-cols-2 gap-2 sm:flex"><Button variant="outline" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>Previous</Button><Button variant="gold" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>Next</Button></div></div>;
+function PaginationControls({ page, totalPages, total, onPageChange, pageSize = adminPageSize }: { page: number; totalPages: number; total: number; onPageChange: (page: number) => void; pageSize?: number }) {
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  return <div className="mt-4 flex flex-col gap-3 border-t pt-4 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="font-bold text-black/60">Showing {start}-{end} of {total} records</span><div className="grid grid-cols-2 gap-2 sm:flex"><Button variant="outline" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>Previous</Button><Button variant="gold" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))}>Next</Button></div></div>;
 }
 
 function CustomerActions({ customer, onStatus, onDelete }: { customer: AdminCustomer; onStatus: (customer: AdminCustomer, status: AdminCustomer["status"]) => void; onDelete: (customer: AdminCustomer) => void }) {
@@ -849,10 +851,26 @@ function Inventory({ productId }: { productId?: string }) {
   const { products, adjustStock } = useStore();
   const [remoteInventory, setRemoteInventory] = useState<{ id: string; productId: string; variantId?: string; stock: number; lowStockThreshold?: number; product: Product; status?: string }[]>([]);
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
+  const [inventorySearch, setInventorySearch] = useState("");
   const { toast } = useStore();
   useEffect(() => { fetchAdminInventory().then(setRemoteInventory).catch((error) => toast(error instanceof Error ? error.message : "Unable to load inventory. Database connection is unavailable.", "error")); }, [toast]);
-  const rows = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => ({ ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock: item.stock, lowStock: item.lowStockThreshold ?? item.product.lowStock, statusText: item.status }));
-  const pagedRows = usePagedItems(rows);
+  const inventoryStatus = (stock: number, lowStock: number) => stock <= 0 ? "Out of stock" : stock <= lowStock ? "Low stock" : "In stock";
+  const rows = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
+    const lowStock = item.lowStockThreshold ?? item.product.lowStock;
+    const stock = Number(item.stock || 0);
+    return { ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock, lowStock, statusText: inventoryStatus(stock, lowStock) };
+  });
+  const filteredRows = rows.filter((row) => {
+    const needle = inventorySearch.trim().toLowerCase();
+    if (!needle) return true;
+    const status = inventoryStatus(row.stock, row.lowStock);
+    return [row.name, row.slug, row.sku, row.category, row.categorySlug, row.brand, row.brandSlug, row.variantId, status, row.stock, row.lowStock]
+      .some((value) => String(value || "").toLowerCase().includes(needle));
+  });
+  const pagedRows = usePagedItems(filteredRows);
+  useEffect(() => {
+    pagedRows.resetPage();
+  }, [inventorySearch]);
   const adjust = (row: Product & { inventoryId: string }, quantity: number) => {
     if (!Number.isInteger(quantity) || quantity === 0) {
       toast("Enter a non-zero whole number adjustment.", "error");
@@ -860,7 +878,7 @@ function Inventory({ productId }: { productId?: string }) {
     }
     adjustAdminInventory(row.inventoryId, quantity).then((updated) => {
       adjustStock(row.id, updated.stock);
-      setRemoteInventory((items) => items.map((item) => item.id === updated.id ? { ...item, stock: updated.stock, product: updated.product } : item));
+      setRemoteInventory((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated, product: updated.product } : item));
       setAdjustments((items) => ({ ...items, [row.inventoryId]: "" }));
       toast("Inventory updated", "success");
     }).catch((error) => toast(error instanceof Error ? error.message : "Could not adjust inventory.", "error"));
@@ -871,35 +889,42 @@ function Inventory({ productId }: { productId?: string }) {
     adjust(row, Number(value));
   };
   const selectedProduct = rows[0];
-  return <AdminShell section="inventory"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label={productId ? "Product SKUs" : "Total SKUs"} value={String(rows.length)} sub={productId ? selectedProduct?.name || "Selected product" : "Tracked"} /><Stat label="Low Stock" value={String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length)} sub="Needs restock" /><Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub="Critical" /><Stat label="Recently Restocked" value={String(rows.filter((p) => p.stock > p.lowStock * 2).length)} sub="Healthy" /></div><div className="mt-6"><Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>{productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}<DataTable headers={["Product", "Current stock", "Low threshold", "Status", "Adjust"]}>{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}{p.variantId && <div className="text-xs font-normal text-black/50">Variant {p.variantId.slice(-8).toUpperCase()}</div>}</td><td>{p.stock}</td><td>{p.lowStock}</td><td><StatusBadge value={p.statusText || (p.stock <= 0 ? "Out of stock" : p.stock <= p.lowStock ? "Low stock" : "In stock")} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-11 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></div></AdminShell>;
+  return <AdminShell section="inventory"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label={productId ? "Product SKUs" : "Total SKUs"} value={String(rows.length)} sub={productId ? selectedProduct?.name || "Selected product" : "Tracked"} /><Stat label="Low Stock" value={String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length)} sub="Needs restock" /><Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub="Critical" /><Stat label="Recently Restocked" value={String(rows.filter((p) => p.stock > p.lowStock * 2).length)} sub="Healthy" /></div><div className="mt-6"><Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>{productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}<div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><label className="relative min-w-0"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search inventory" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder="Search product, SKU, brand, category, variant, status" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} /></label><span className="text-sm font-bold text-black/55">{filteredRows.length} of {rows.length} SKUs</span></div><DataTable headers={["Product", "Current stock", "Low threshold", "Status", "Adjust"]}>{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}{p.variantId && <div className="text-xs font-normal text-black/50">Variant {p.variantId.slice(-8).toUpperCase()}</div>}<div className="mt-1 text-xs font-normal text-black/45">{[p.sku, p.category, p.brand].filter(Boolean).join(" | ")}</div></td><td>{p.stock}</td><td>{p.lowStock}</td><td><StatusBadge value={inventoryStatus(p.stock, p.lowStock)} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-11 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}{rows.length > 0 && !filteredRows.length && <p className="rounded-md bg-white p-4 text-sm font-bold text-black/55">No inventory matches this search.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></div></AdminShell>;
 }
 
 function OrderTable({ compact = false, ordersOverride }: { compact?: boolean; ordersOverride?: Order[] }) {
   const { admin, orders, products, updateOrderStatus } = useStore();
   const { toast } = useStore();
   const [remoteOrders, setRemoteOrders] = useState<Order[]>([]);
+  const [updatedRows, setUpdatedRows] = useState<Record<string, Order>>({});
+  const [savingOrder, setSavingOrder] = useState("");
   useEffect(() => { fetchAdminOrders().then(setRemoteOrders).catch((error) => toast(error instanceof Error ? error.message : "Unable to load orders. Database connection is unavailable.", "error")); }, [toast]);
   const role = admin?.role?.name;
-  const statuses: OrderStatus[] = role === "DELIVERY_STAFF" ? ["Confirmed", "Packed", "Out for Delivery", "Delivered"] : ["Confirmed", "Packed", "Out for Delivery", "Delivered", "Cancelled"];
+  const statuses: OrderStatus[] = role === "DELIVERY_STAFF" ? ["Confirmed", "Packed", "Out for Delivery", "Delivered"] : ["Confirmed", "Packed", "Out for Delivery", "Cancelled"];
   const finalStatuses: OrderStatus[] = ["Delivered", "Cancelled", "Return Requested", "Refunded"];
-  const list = ordersOverride ?? (remoteOrders.length ? remoteOrders : orders);
+  const baseList = ordersOverride ?? (remoteOrders.length ? remoteOrders : orders);
+  const list = baseList.map((order) => updatedRows[order.orderNumber] || order);
   const toApiStatus = (status: string) => status.toUpperCase().replaceAll(" ", "_");
   const changeStatus = (order: Order, status: OrderStatus) => {
     if (status === order.status) return;
+    if (savingOrder) return;
     if (role === "DELIVERY_STAFF" && finalStatuses.includes(order.status)) {
       toast("This order is closed and cannot be updated by delivery staff.", "error");
       return;
     }
     const updateStatus = role === "DELIVERY_STAFF" ? updateDeliveryOrderStatus : updateAdminOrderStatus;
+    setSavingOrder(order.orderNumber);
     updateStatus(order.orderNumber, toApiStatus(status)).then((updated) => {
+      setUpdatedRows((items) => ({ ...items, [updated.orderNumber]: updated }));
       setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
       updateOrderStatus(updated.orderNumber, updated.status);
       toast("Order status saved", "success");
-    }).catch((error) => toast(error instanceof Error ? error.message : "Could not update order status.", "error"));
+    }).catch((error) => toast(error instanceof Error ? error.message : "Could not update order status.", "error"))
+      .finally(() => setSavingOrder(""));
   };
   const pagedList = usePagedItems(list);
   if (compact) return <DataTable headers={["Order", "Customer", "Amount", "Status"]}>{list.map((o) => <tr key={o.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${o.orderNumber}`}>{o.orderNumber}</Link></td><td className="p-3">{o.customerName}</td><td className="p-3">{money(o.grandTotal || calc(o.items, products))}</td><td className="p-3"><StatusBadge value={o.status} /></td></tr>)}</DataTable>;
-  return <><DataTable headers={["Order ID", "Customer", "Amount", "Payment Status", "Order Status", "Assigned Staff", "Action"]} minWidth="min-w-[960px]">{pagedList.items.map((o) => { const closedForDelivery = role === "DELIVERY_STAFF" && finalStatuses.includes(o.status); const statusChoices = statuses.includes(o.status) ? statuses : [o.status, ...statuses]; return <tr key={o.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${o.orderNumber}`}>{o.orderNumber}</Link></td><td className="p-3 align-middle">{o.customerName}</td><td className="p-3 align-middle">{money(o.grandTotal || calc(o.items, products))}</td><td className="p-3 align-middle"><StatusBadge value={o.paymentStatus} /></td><td className="p-3 align-middle"><StatusBadge value={o.status} /></td><td className="p-3 align-middle">{o.deliveryStaff || "Unassigned"}</td><td className="p-3 align-middle"><select aria-label={`Status for ${o.orderNumber}`} value={o.status} disabled={closedForDelivery} onChange={(e) => changeStatus(o, e.target.value as OrderStatus)} className="w-44 rounded-md border px-2 py-2 text-sm">{statusChoices.map((s) => <option key={s}>{s}</option>)}</select></td></tr>; })}</DataTable><PaginationControls page={pagedList.page} totalPages={pagedList.totalPages} total={pagedList.total} onPageChange={pagedList.setPage} /></>;
+  return <><DataTable headers={["Order ID", "Customer", "Amount", "Payment Status", "Order Status", "Assigned Staff", "Action"]} minWidth="min-w-[960px]">{pagedList.items.map((o) => { const closedForDelivery = role === "DELIVERY_STAFF" && finalStatuses.includes(o.status); const statusChoices = statuses.includes(o.status) ? statuses : [o.status, ...statuses]; const busy = savingOrder === o.orderNumber; return <tr key={o.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${o.orderNumber}`}>{o.orderNumber}</Link></td><td className="p-3 align-middle">{o.customerName}</td><td className="p-3 align-middle">{money(o.grandTotal || calc(o.items, products))}</td><td className="p-3 align-middle"><StatusBadge value={o.paymentStatus} /></td><td className="p-3 align-middle"><StatusBadge value={o.status} />{busy && <div className="mt-1 text-xs font-bold text-[#8a6500]">Saving...</div>}</td><td className="p-3 align-middle">{o.deliveryStaff || "Unassigned"}</td><td className="p-3 align-middle"><select aria-label={`Status for ${o.orderNumber}`} value={o.status} disabled={busy || closedForDelivery} onChange={(e) => changeStatus(o, e.target.value as OrderStatus)} className="w-44 rounded-md border px-2 py-2 text-sm">{statusChoices.map((s) => <option key={s}>{s}</option>)}</select></td></tr>; })}</DataTable><PaginationControls page={pagedList.page} totalPages={pagedList.totalPages} total={pagedList.total} onPageChange={pagedList.setPage} /></>;
 }
 
 function Orders({ detail }: { detail?: string }) {
@@ -917,7 +942,7 @@ function Orders({ detail }: { detail?: string }) {
   const order = remoteOrders.find((o) => o.orderNumber === detail) || orders.find((o) => o.orderNumber === detail);
   const role = admin?.role?.name;
   const deliveryStaffStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery", "Delivered"];
-  const managerStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery", "Delivered", "Cancelled"];
+  const managerStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery", "Cancelled"];
   const detailStatusOptions = role === "DELIVERY_STAFF" ? deliveryStaffStatusOptions : managerStatusOptions;
   const closedForDelivery = role === "DELIVERY_STAFF" && order ? (["Delivered", "Cancelled", "Return Requested", "Refunded"] as OrderStatus[]).includes(order.status) : false;
   const toApiStatus = (status: string) => status.toUpperCase().replaceAll(" ", "_");
@@ -946,7 +971,7 @@ function Orders({ detail }: { detail?: string }) {
       toast(error instanceof Error ? error.message : "Could not assign delivery staff", "error");
     }
   };
-  if (order) return <AdminShell section="orders"><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><Panel title={`Order ${order.orderNumber}`}><div className="grid gap-4 md:grid-cols-3"><Stat label="Amount" value={money(order.grandTotal || calc(order.items, products))} sub={order.paymentStatus} /><Stat label="Status" value={order.status} sub={order.deliverySlot} /><Stat label="Delivery staff" value={order.deliveryStaff || "Unassigned"} sub="Assigned" /></div><div className="mt-6 grid gap-4 md:grid-cols-2"><div className="rounded-md border border-[#eadfca] bg-white p-4"><h3 className="font-bold">Customer details</h3><p className="mt-2 text-sm">{order.customerName}</p><p className="text-sm text-black/55">{order.address.phone}</p></div><div className="rounded-md border border-[#eadfca] bg-white p-4"><h3 className="font-bold">Delivery address</h3><p className="mt-2 text-sm">{order.address.line}, {order.address.city} - {order.address.pincode}</p></div></div><div className="responsive-scroll mt-6 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-black text-white"><tr><th className="p-3">Product</th><th>Qty</th><th>Price</th></tr></thead><tbody>{order.items.map((item) => { const product = products.find((p) => p.id === item.productId); return <tr key={item.productId} className="border-b"><td className="p-3 font-bold">{product?.name || item.productId}</td><td>{item.qty}</td><td>{money((product?.price || 0) * item.qty)}</td></tr>; })}</tbody></table></div><div className="mt-5 flex flex-wrap gap-2">{detailStatusOptions.map((status) => <Button key={status} variant={order.status === status ? "gold" : "outline"} disabled={closedForDelivery || order.status === status} onClick={() => changeDetailStatus(status)}>{status}</Button>)}{role !== "DELIVERY_STAFF" && <Button variant="outline" onClick={() => toast("Refund action will be enabled in the next backend phase.", "info")}>Refund</Button>}<Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">Print Invoice</Button></Link></div></Panel><Panel title="Delivery assignment"><div className="grid gap-2">{staffRows.map((s) => <Button key={s.id} variant={order.deliveryStaff === s.name ? "gold" : "outline"} disabled={role === "DELIVERY_STAFF" || closedForDelivery} onClick={() => assignDetailStaff(s)}>{s.name}</Button>)}</div><div className="mt-5 rounded-md bg-[#faf7ef] p-4"><h3 className="font-bold">Admin notes</h3><p className="mt-2 text-sm text-black/60">Notes API will be enabled in the next backend phase.</p></div></Panel></div></AdminShell>;
+  if (order) return <AdminShell section="orders"><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><Panel title={`Order ${order.orderNumber}`}><div className="grid gap-4 md:grid-cols-3"><Stat label="Amount" value={money(order.grandTotal || calc(order.items, products))} sub={order.paymentStatus} /><Stat label="Status" value={order.status} sub={order.deliverySlot} /><Stat label="Delivery staff" value={order.deliveryStaff || "Unassigned"} sub="Assigned" /></div><div className="mt-6 grid gap-4 md:grid-cols-2"><div className="rounded-md border border-[#eadfca] bg-white p-4"><h3 className="font-bold">Customer details</h3><p className="mt-2 text-sm">{order.customerName}</p><p className="text-sm text-black/55">{order.address.phone}</p></div><div className="rounded-md border border-[#eadfca] bg-white p-4"><h3 className="font-bold">Delivery address</h3><p className="mt-2 text-sm">{order.address.line}, {order.address.city} - {order.address.pincode}</p></div></div><div className="responsive-scroll mt-6 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-black text-white"><tr><th className="p-3">Product</th><th>Qty</th><th>Price</th></tr></thead><tbody>{order.items.map((item) => { const product = products.find((p) => p.id === item.productId); return <tr key={item.productId} className="border-b"><td className="p-3 font-bold">{product?.name || item.productId}</td><td>{item.qty}</td><td>{money((product?.price || 0) * item.qty)}</td></tr>; })}</tbody></table></div><div className="mt-5 flex flex-wrap gap-2">{detailStatusOptions.map((status) => <Button key={status} variant={order.status === status ? "gold" : "outline"} disabled={closedForDelivery || order.status === status} onClick={() => changeDetailStatus(status)}>{status}</Button>)}<Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">Print Invoice</Button></Link></div></Panel><Panel title="Delivery assignment"><div className="grid gap-2">{staffRows.map((s) => <Button key={s.id} variant={order.deliveryStaff === s.name ? "gold" : "outline"} disabled={role === "DELIVERY_STAFF" || closedForDelivery} onClick={() => assignDetailStaff(s)}>{s.name}</Button>)}</div></Panel></div></AdminShell>;
   const list = remoteOrders.length ? remoteOrders : orders;
   const startForPreset = (preset: string) => {
     const start = new Date();
@@ -1219,15 +1244,51 @@ function BillingInvoices() {
 function AdminPayments() {
   const { orders, products, toast } = useStore();
   const [remoteOrders, setRemoteOrders] = useState<Order[]>([]);
+  const [query, setQuery] = useState("");
+  const [method, setMethod] = useState("");
+  const [status, setStatus] = useState("");
+  const [savingOrder, setSavingOrder] = useState("");
   useEffect(() => { fetchAdminOrders().then(setRemoteOrders).catch((error) => toast(error instanceof Error ? error.message : "Unable to load payments. Database connection is unavailable.", "error")); }, [toast]);
   const rows = remoteOrders.length ? remoteOrders : orders;
   const amount = (order: Order) => order.grandTotal || calc(order.items, products);
-  const paid = rows.filter((order) => order.paymentStatus === "Paid");
+  const filteredRows = rows.filter((order) => {
+    const term = query.trim().toLowerCase();
+    return (!term || order.orderNumber.toLowerCase().includes(term) || order.customerName.toLowerCase().includes(term) || order.address.phone.includes(term) || (order.paymentId || "").toLowerCase().includes(term) || (order.razorpayPaymentId || "").toLowerCase().includes(term))
+      && (!method || order.paymentMethod === method)
+      && (!status || order.paymentStatus === status);
+  });
+  const paid = filteredRows.filter((order) => order.paymentStatus === "Paid");
   const razorpayPaid = paid.filter((order) => order.paymentMethod === "Razorpay");
-  const codPending = rows.filter((order) => order.paymentStatus === "COD Pending");
-  const failed = rows.filter((order) => order.paymentStatus === "Failed");
-  const pagedRows = usePagedItems(rows);
-  return <AdminShell section="payments"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Total Paid" value={money(paid.reduce((sum, order) => sum + amount(order), 0))} sub="Settled" /><Stat label="Razorpay Paid" value={money(razorpayPaid.reduce((sum, order) => sum + amount(order), 0))} sub="Online" /><Stat label="COD Pending" value={money(codPending.reduce((sum, order) => sum + amount(order), 0))} sub="Collectable" /><Stat label="Failed Payments" value={String(failed.length)} sub="Needs retry" /><Stat label="Refund Pending" value="0" sub="Placeholder" /></div><Panel title="Payments"><DataTable headers={["Payment ID", "Order Number", "Customer", "Method", "Razorpay Order ID", "Razorpay Payment ID", "Amount", "Status", "Date", "Actions"]} minWidth="min-w-[1180px]">{pagedRows.items.map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.paymentId || "-"}</td><td className="p-3"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link></td><td className="p-3">{order.customerName}</td><td className="p-3">{order.paymentMethod}</td><td className="p-3 break-all">{order.razorpayOrderId || "-"}</td><td className="p-3 break-all">{order.razorpayPaymentId || "-"}</td><td className="p-3">{money(amount(order))}</td><td className="p-3"><StatusBadge value={order.paymentStatus} /></td><td className="p-3">{new Date(order.createdAt).toLocaleDateString("en-IN")}</td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/orders/${order.orderNumber}`}>View</Link></div></td></tr>)}</DataTable><PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></AdminShell>;
+  const codPending = filteredRows.filter((order) => order.paymentStatus === "COD Pending");
+  const failed = filteredRows.filter((order) => order.paymentStatus === "Failed");
+  const collectable = filteredRows.filter((order) => order.paymentMethod === "COD" && order.paymentStatus !== "Paid" && !["Cancelled", "Refunded"].includes(order.status));
+  const pagedRows = usePagedItems(filteredRows, 12);
+  useEffect(() => {
+    pagedRows.resetPage();
+  }, [query, method, status]);
+  const setPayment = async (order: Order, nextStatus: "PAID" | "FAILED" | "COD_PENDING", note: string) => {
+    setSavingOrder(order.orderNumber);
+    try {
+      const updated = await updateAdminPaymentStatus(order.orderNumber, nextStatus, note);
+      setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
+      toast(nextStatus === "PAID" ? "Payment marked as received" : nextStatus === "FAILED" ? "Payment marked not collected" : "Payment moved to COD pending", nextStatus === "FAILED" ? "error" : "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not update payment.", "error");
+    } finally {
+      setSavingOrder("");
+    }
+  };
+  const actionButton = "inline-flex h-9 items-center justify-center rounded-md border px-3 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50";
+  const printButton = `${actionButton} border-black bg-white text-black hover:bg-black hover:text-white`;
+  const mutedAction = "rounded-full bg-black/5 px-3 py-1 text-xs font-bold text-black/45";
+  return <AdminShell section="payments"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Total Paid" value={money(paid.reduce((sum, order) => sum + amount(order), 0))} sub={`${paid.length} settled`} /><Stat label="Razorpay Paid" value={money(razorpayPaid.reduce((sum, order) => sum + amount(order), 0))} sub="Gateway verified" /><Stat label="COD Pending" value={money(codPending.reduce((sum, order) => sum + amount(order), 0))} sub={`${codPending.length} collectable`} /><Stat label="Collection Queue" value={String(collectable.length)} sub="Needs action" /><Stat label="Failed Payments" value={String(failed.length)} sub="Needs retry/follow-up" /></div><Panel title="Payment Operations"><div className="mb-4 grid gap-3 md:grid-cols-[1fr_180px_180px_auto]"><input aria-label="Search payments" value={query} onChange={(event) => setQuery(event.target.value)} className="rounded-md border px-3 py-2" placeholder="Search order, customer, phone, payment ID" /><select aria-label="Payment method filter" value={method} onChange={(event) => setMethod(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All methods</option><option value="COD">COD</option><option value="Razorpay">Razorpay</option></select><select aria-label="Payment status filter" value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All statuses</option><option value="COD Pending">COD Pending</option><option value="Paid">Paid</option><option value="Failed">Failed</option><option value="Refunded">Refunded</option></select><Button variant="outline" onClick={() => { setQuery(""); setMethod(""); setStatus(""); }}>Reset</Button></div><DataTable headers={["Order", "Customer", "Method", "Amount", "Payment", "Order", "Date", "Actions"]} minWidth="min-w-[1280px]">{pagedRows.items.map((order) => {
+          const isClosed = ["Cancelled", "Refunded"].includes(order.status);
+          const canCollect = order.paymentMethod === "COD" && order.paymentStatus !== "Paid" && !isClosed;
+          const canMarkFailed = order.paymentMethod === "COD" && order.paymentStatus === "COD Pending" && !isClosed;
+          const canRetryCod = order.paymentMethod === "COD" && order.paymentStatus === "Failed" && !isClosed;
+          const busy = savingOrder === order.orderNumber;
+          return <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link><div className="max-w-[180px] truncate text-xs font-normal text-black/50">{order.paymentId || "Payment row"}</div></td><td className="p-3 align-middle">{order.customerName}<div className="text-xs text-black/50">{order.address.phone}</div></td><td className="p-3 align-middle font-bold">{order.paymentMethod}<div className="max-w-[220px] truncate text-xs font-normal text-black/45">{order.razorpayPaymentId || order.razorpayOrderId || "Manual collection"}</div></td><td className="p-3 align-middle font-black">{money(amount(order))}</td><td className="p-3 align-middle"><StatusBadge value={order.paymentStatus} /></td><td className="p-3 align-middle"><StatusBadge value={order.status} /></td><td className="p-3 align-middle whitespace-nowrap">{new Date(order.createdAt).toLocaleDateString("en-IN")}</td><td className="p-3 align-middle"><div className="grid min-w-[260px] max-w-[300px] grid-cols-2 gap-2">{canCollect && <button type="button" className={`${actionButton} border-[#d4af37] bg-[#d4af37] text-black hover:brightness-105`} disabled={busy} onClick={() => setPayment(order, "PAID", "Payment collected manually")}>{busy ? "Saving..." : "Mark paid"}</button>}{canMarkFailed && <button type="button" className={`${actionButton} border-red-200 bg-red-50 text-red-700 hover:bg-red-600 hover:text-white`} disabled={busy} onClick={() => setPayment(order, "FAILED", "Payment not collected")}>Not collected</button>}{canRetryCod && <button type="button" className={`${actionButton} border-[#d4af37] bg-[#fff8df] text-[#8a6500] hover:bg-[#d4af37] hover:text-black`} disabled={busy} onClick={() => setPayment(order, "COD_PENDING", "Retry COD collection")}>Retry COD</button>}{!canCollect && !canMarkFailed && !canRetryCod && <span className={mutedAction}>{order.paymentStatus === "Paid" ? "Settled" : isClosed ? "Closed" : "Gateway managed"}</span>}<Link href={`/invoice/${order.orderNumber}?print=1`} target="_blank" className={printButton}>Print</Link></div></td></tr>;
+        })}</DataTable>{!filteredRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No payment records match the current filters.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} pageSize={12} /></Panel></AdminShell>;
 }
 
 function DeliveryAdmin() {
@@ -1245,17 +1306,67 @@ function DeliveryAdmin() {
   const [slots, setSlots] = useState<any[]>([]);
   const [slotDraft, setSlotDraft] = useState({ label: "", startTime: "", endTime: "", capacity: "40" });
   const [savingSlot, setSavingSlot] = useState(false);
+  const [deliveryLoading, setDeliveryLoading] = useState(true);
+  const [deliveryLoadError, setDeliveryLoadError] = useState("");
+  const [lastDeliverySync, setLastDeliverySync] = useState("");
   const returnWorkflowStatuses: OrderStatus[] = ["Return Requested", "Refunded"];
-  const deliveryStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery", "Delivered"];
+  const deliveryStatusOptions: OrderStatus[] = ["Confirmed", "Packed", "Out for Delivery"];
   const returnStatusOptions: OrderStatus[] = ["Return Requested", "Refunded", "Cancelled"];
-  const canManageDeliveryStaff = admin?.role?.name === "SUPER_ADMIN" || admin?.role?.name === "DELIVERY_STAFF";
+  const isDeliveryStaff = admin?.role?.name === "DELIVERY_STAFF";
+  const canManageDeliveryStaff = admin?.role?.name === "SUPER_ADMIN" || admin?.role?.name === "STORE_MANAGER" || admin?.role?.name === "ORDER_MANAGER";
   const isReturnWorkflowOrder = (order: Order) => returnWorkflowStatuses.includes(order.status);
   const statusOptionsForOrder = (order: Order) => isReturnWorkflowOrder(order) ? returnStatusOptions : deliveryStatusOptions;
+  const loadDeliveryOrders = async (showLoading = false) => {
+    if (showLoading) setDeliveryLoading(true);
+    try {
+      const rows = await fetchAdminDeliveryOrders();
+      setRemoteOrders(rows);
+      setLastDeliverySync(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setDeliveryLoadError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load delivery orders.";
+      setDeliveryLoadError(message);
+      toast(message, "error");
+    } finally {
+      if (showLoading) setDeliveryLoading(false);
+    }
+  };
   useEffect(() => {
-    fetchAdminOrders().then(setRemoteOrders).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery orders.", "error"));
-    fetchAdminDeliveryStaff().then(setStaffRows).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery staff.", "error"));
-    fetchAdminDeliverySlots().then(setSlots).catch((error) => toast(error instanceof Error ? error.message : "Unable to load delivery slots.", "error"));
-  }, [toast]);
+    let cancelled = false;
+    setDeliveryLoading(true);
+    Promise.allSettled([
+      fetchAdminDeliveryOrders(),
+      canManageDeliveryStaff ? fetchAdminDeliveryStaff() : Promise.resolve([]),
+      canManageDeliveryStaff ? fetchAdminDeliverySlots() : Promise.resolve([]),
+    ])
+      .then(([ordersResult, staffResult, slotsResult]) => {
+        if (cancelled) return;
+        const failures: string[] = [];
+        if (ordersResult.status === "fulfilled") {
+          setRemoteOrders(ordersResult.value);
+          setLastDeliverySync(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        }
+        else failures.push(ordersResult.reason instanceof Error ? ordersResult.reason.message : "Unable to load delivery orders.");
+        if (staffResult.status === "fulfilled") setStaffRows(staffResult.value);
+        else failures.push(staffResult.reason instanceof Error ? staffResult.reason.message : "Unable to load delivery staff.");
+        if (slotsResult.status === "fulfilled") setSlots(slotsResult.value);
+        else failures.push(slotsResult.reason instanceof Error ? slotsResult.reason.message : "Unable to load delivery slots.");
+        const uniqueFailures = Array.from(new Set(failures));
+        setDeliveryLoadError(uniqueFailures[0] || "");
+        if (uniqueFailures.length) toast(uniqueFailures[0], "error");
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageDeliveryStaff, toast]);
+  useEffect(() => {
+    if (!admin) return;
+    const timer = window.setInterval(() => { void loadDeliveryOrders(false); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [admin, toast]);
   const saveSlot = async () => {
     if (!slotDraft.label.trim() || !slotDraft.startTime.trim() || !slotDraft.endTime.trim()) return toast("Slot label and timing are required.", "error");
     setSavingSlot(true);
@@ -1271,14 +1382,24 @@ function DeliveryAdmin() {
     }
   };
   const toggleSlot = async (slot: any) => {
-    const saved = await updateAdminDeliverySlot(slot.id, { active: !slot.active });
-    setSlots((items) => items.map((item) => item.id === slot.id ? { ...item, ...saved } : item));
+    try {
+      const saved = await updateAdminDeliverySlot(slot.id, { active: !slot.active });
+      setSlots((items) => items.map((item) => item.id === slot.id ? { ...item, ...saved } : item));
+      toast(saved.active ? "Delivery slot enabled" : "Delivery slot disabled", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not update delivery slot.", "error");
+    }
   };
   const removeSlot = async (slot: any) => {
-    await deleteAdminDeliverySlot(slot.id);
-    setSlots((items) => items.filter((item) => item.id !== slot.id));
+    try {
+      const result = await deleteAdminDeliverySlot(slot.id);
+      setSlots((items) => result.deactivated ? items.map((item) => item.id === slot.id ? { ...item, active: false } : item) : items.filter((item) => item.id !== slot.id));
+      toast(result.deactivated ? "Delivery slot deactivated because orders use it." : "Delivery slot deleted", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not delete delivery slot.", "error");
+    }
   };
-  const deliveryOrders = remoteOrders.filter((order) => !["Cancelled", "Delivered"].includes(order.status) || order.deliveryStaff);
+  const deliveryOrders = remoteOrders.filter((order) => !["Cancelled", "Delivered", "Return Requested", "Refunded"].includes(order.status));
   const filteredOrders = deliveryOrders.filter((order) => {
     const term = query.trim().toLowerCase();
     const date = dateFilter ? new Date(dateFilter) : null;
@@ -1287,8 +1408,8 @@ function DeliveryAdmin() {
     dateEnd?.setHours(23, 59, 59, 999);
     const createdAt = new Date(order.deliveryDate || order.createdAt);
     return (!term || order.orderNumber.toLowerCase().includes(term) || order.customerName.toLowerCase().includes(term) || order.address.pincode.includes(term) || order.address.city.toLowerCase().includes(term))
-      && (!staffFilter || order.deliveryStaff === staffFilter || (staffFilter === "unassigned" && !order.deliveryStaff))
-      && (!statusFilter || order.status === statusFilter)
+      && (!canManageDeliveryStaff || !staffFilter || order.deliveryStaff === staffFilter || (staffFilter === "unassigned" && !order.deliveryStaff))
+      && (!canManageDeliveryStaff || !statusFilter || order.status === statusFilter)
       && (!date || (createdAt >= date && dateEnd != null && createdAt <= dateEnd));
   });
   const assign = async (order: Order, staffId: string) => {
@@ -1298,6 +1419,7 @@ function DeliveryAdmin() {
     try {
       const updated = await assignAdminDelivery(order.orderNumber, staffId);
       setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
+      void loadDeliveryOrders(false);
       if (staff) assignDeliveryStaff(order.orderNumber, staff.name);
       toast("Delivery staff assigned", "success");
     } catch (error) {
@@ -1313,9 +1435,44 @@ function DeliveryAdmin() {
       const updated = await updateStatus(order.orderNumber, status.toUpperCase().replaceAll(" ", "_"));
       setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
       updateOrderStatus(updated.orderNumber, updated.status);
+      void loadDeliveryOrders(false);
       toast("Delivery status updated", "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not update delivery status.", "error");
+    } finally {
+      setSavingOrder("");
+    }
+  };
+  const failDelivery = async (order: Order) => {
+    const reasonLabel = window.prompt("Reason for failed delivery attempt: customer not available, refused, address issue, payment not collected, or other", "customer not available");
+    if (!reasonLabel) return;
+    const normalized = reasonLabel.trim().toLowerCase();
+    const reason = normalized.includes("refus") ? "CUSTOMER_REFUSED"
+      : normalized.includes("address") ? "ADDRESS_ISSUE"
+        : normalized.includes("payment") ? "PAYMENT_NOT_COLLECTED"
+          : normalized.includes("other") ? "OTHER"
+            : "CUSTOMER_NOT_AVAILABLE";
+    setSavingOrder(order.orderNumber);
+    try {
+      const updated = await markDeliveryAttemptFailed(order.orderNumber, { reason, note: reasonLabel.trim() });
+      setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
+      void loadDeliveryOrders(false);
+      toast("Delivery attempt recorded for admin follow-up", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not record delivery attempt.", "error");
+    } finally {
+      setSavingOrder("");
+    }
+  };
+  const collectDeliveryPayment = async (order: Order) => {
+    setSavingOrder(order.orderNumber);
+    try {
+      const updated = await updateAdminPaymentStatus(order.orderNumber, "PAID", "COD collected by delivery staff");
+      setRemoteOrders((items) => items.map((item) => item.orderNumber === updated.orderNumber ? updated : item));
+      void loadDeliveryOrders(false);
+      toast("COD payment received", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not confirm COD payment.", "error");
     } finally {
       setSavingOrder("");
     }
@@ -1353,11 +1510,27 @@ function DeliveryAdmin() {
       setDeletingStaff("");
     }
   };
-  const pagedOrders = usePagedItems(filteredOrders);
+  const pagedOrders = usePagedItems(filteredOrders, 12);
+  useEffect(() => {
+    pagedOrders.resetPage();
+  }, [query, staffFilter, statusFilter, dateFilter]);
   const assigned = deliveryOrders.filter((order) => order.deliveryStaff);
   const unassigned = deliveryOrders.filter((order) => !order.deliveryStaff && !["Delivered", "Cancelled"].includes(order.status));
   const outForDelivery = deliveryOrders.filter((order) => order.status === "Out for Delivery");
   const delivered = remoteOrders.filter((order) => order.status === "Delivered");
+  const deliveryHeaders = canManageDeliveryStaff
+    ? ["Order", "Customer", "Address", "Slot", "Status", "Receipt", "Staff", "Assign", "Update"]
+    : ["Order", "Customer", "Address", "Slot", "Status", "Receipt", "Action"];
+  const deliveryMinWidth = canManageDeliveryStaff ? "min-w-[1260px]" : "min-w-[980px]";
+  const deliveryAction = (order: Order) => {
+    if (!isDeliveryStaff) {
+      return <select aria-label={`${isReturnWorkflowOrder(order) ? "Return" : "Delivery"} status for ${order.orderNumber}`} value={order.status} disabled={savingOrder === order.orderNumber || order.status === "Cancelled" || order.status === "Refunded"} onChange={(event) => changeStatus(order, event.target.value as OrderStatus)} className="w-44 rounded-md border px-2 py-2 text-sm">{statusOptionsForOrder(order).map((status) => <option key={status} value={status}>{status}</option>)}</select>;
+    }
+    if (order.status === "Delivered") return <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">Completed</span>;
+    if (order.status === "Packed") return <Button variant="gold" disabled={savingOrder === order.orderNumber} onClick={() => changeStatus(order, "Out for Delivery")}>{savingOrder === order.orderNumber ? "Saving..." : "Start delivery"}</Button>;
+    if (order.status === "Out for Delivery") return <div className="grid gap-2">{order.paymentMethod === "COD" && order.paymentStatus !== "Paid" && <Button variant="gold" disabled={savingOrder === order.orderNumber} onClick={() => collectDeliveryPayment(order)}>{savingOrder === order.orderNumber ? "Saving..." : "Confirm COD received"}</Button>}<Button variant={order.customerConfirmedAt ? "gold" : "outline"} disabled={savingOrder === order.orderNumber || !order.customerConfirmedAt || (order.paymentMethod === "COD" && order.paymentStatus !== "Paid")} onClick={() => changeStatus(order, "Delivered")}>{order.customerConfirmedAt ? order.paymentMethod === "COD" && order.paymentStatus !== "Paid" ? "Collect COD first" : savingOrder === order.orderNumber ? "Saving..." : "Confirm delivered" : "Awaiting customer"}</Button><Button variant="ghost" disabled={savingOrder === order.orderNumber} onClick={() => failDelivery(order)}>Customer unavailable</Button></div>;
+    return <div className="grid gap-2"><Button variant="outline" disabled={savingOrder === order.orderNumber} onClick={() => changeStatus(order, "Packed")}>{savingOrder === order.orderNumber ? "Saving..." : "Mark picked up"}</Button>{order.deliveryAssignmentStatus === "FAILED" && <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Attempt failed</span>}</div>;
+  };
   return (
     <AdminShell section="delivery">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1366,7 +1539,13 @@ function DeliveryAdmin() {
         <Stat label="Unassigned" value={String(unassigned.length)} sub="Needs action" />
         <Stat label="Out for delivery" value={String(outForDelivery.length)} sub={`${delivered.length} delivered`} />
       </div>
-      <Panel title="Delivery Slot Management">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3 text-sm">
+        <span className="font-bold text-black/65">{deliveryLoading ? "Syncing delivery queue..." : `Last sync ${lastDeliverySync || "-"}`}</span>
+        <Button variant="outline" disabled={deliveryLoading} onClick={() => loadDeliveryOrders(true)}>{deliveryLoading ? "Refreshing..." : "Refresh delivery queue"}</Button>
+      </div>
+      {deliveryLoading && <p className="mt-4 rounded-md border border-[#eadfca] bg-white p-4 text-sm font-semibold text-black/60">Loading live delivery data from database...</p>}
+      {deliveryLoadError && <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{deliveryLoadError}</p>}
+      {canManageDeliveryStaff && <Panel title="Delivery Slot Management">
         <div className="mb-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr_120px_auto]">
           <input aria-label="Slot label" value={slotDraft.label} onChange={(event) => setSlotDraft((current) => ({ ...current, label: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="Slot label" />
           <input aria-label="Slot start time" value={slotDraft.startTime} onChange={(event) => setSlotDraft((current) => ({ ...current, startTime: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="Start time" />
@@ -1377,30 +1556,31 @@ function DeliveryAdmin() {
         <DataTable headers={["Label", "Timing", "Capacity", "Status", "Actions"]} minWidth="min-w-[760px]">
           {slots.map((slot) => <tr key={slot.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{slot.label}</td><td className="p-3">{slot.startTime} - {slot.endTime}</td><td className="p-3">{slot.capacity}</td><td className="p-3"><StatusBadge value={slot.active ? "Active" : "Inactive"} /></td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Button variant="outline" onClick={() => toggleSlot(slot)}>{slot.active ? "Disable" : "Enable"}</Button><Button variant="ghost" onClick={() => removeSlot(slot)}>Delete</Button></div></td></tr>)}
         </DataTable>
-        {!slots.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No delivery slots found in database.</p>}
-      </Panel>
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_380px]">
+        {!slots.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">{deliveryLoading ? "Loading delivery slots..." : "No delivery slots found in database."}</p>}
+      </Panel>}
+      <div className={`mt-6 grid gap-6 ${canManageDeliveryStaff ? "xl:grid-cols-[1fr_380px]" : ""}`}>
         <Panel title="Delivery Management">
-          <div className="mb-4 grid gap-3 md:grid-cols-5">
+          <div className={`mb-4 grid gap-3 ${canManageDeliveryStaff ? "md:grid-cols-5" : "md:grid-cols-[1fr_220px]"}`}>
             <input aria-label="Search delivery orders" value={query} onChange={(event) => setQuery(event.target.value)} className="rounded-md border px-3 py-2 md:col-span-2" placeholder="Search order, customer, city, pincode" />
-            <select aria-label="Delivery staff filter" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="rounded-md border px-3 py-2">
-              <option value="">All staff</option>
-              <option value="unassigned">Unassigned</option>
-              {staffRows.map((staff) => <option key={staff.id} value={staff.name}>{staff.name}</option>)}
-            </select>
-            <select aria-label="Delivery status filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-md border px-3 py-2">
-              <option value="">All statuses</option>
-              {(["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered", "Return Requested", "Refunded"] as OrderStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
+            {canManageDeliveryStaff && <select aria-label="Delivery staff filter" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)} className="rounded-md border px-3 py-2">
+                <option value="">All staff</option>
+                <option value="unassigned">Unassigned</option>
+                {staffRows.map((staff) => <option key={staff.id} value={staff.name}>{staff.name}</option>)}
+              </select>}
+            {canManageDeliveryStaff && <select aria-label="Delivery status filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-md border px-3 py-2">
+                <option value="">All statuses</option>
+                {(["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered", "Return Requested", "Refunded"] as OrderStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>}
             <input aria-label="Delivery date filter" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="rounded-md border px-3 py-2" />
           </div>
-          <DataTable headers={["Order", "Customer", "Address", "Slot", "Status", "Staff", "Assign", "Update"]} minWidth="min-w-[1180px]">
-            {pagedOrders.items.map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold"><Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link><div className="text-xs font-normal text-black/50">{new Date(order.deliveryDate || order.createdAt).toLocaleDateString("en-IN")}</div></td><td className="p-3">{order.customerName}<div className="text-xs text-black/50">{order.address.phone}</div></td><td className="p-3 text-sm">{order.address.line}<div className="text-xs text-black/50">{order.address.city} - {order.address.pincode}</div></td><td className="p-3">{order.deliverySlot || "-"}</td><td className="p-3"><StatusBadge value={order.status} /></td><td className="p-3 font-bold">{order.deliveryStaff || "Unassigned"}{order.deliveryAssignedAt && <div className="text-xs font-normal text-black/45">Assigned {new Date(order.deliveryAssignedAt).toLocaleDateString("en-IN")}</div>}</td><td className="p-3"><select aria-label={`Assign staff for ${order.orderNumber}`} value={order.deliveryStaffId || ""} disabled={savingOrder === order.orderNumber || order.status === "Delivered" || order.status === "Cancelled" || isReturnWorkflowOrder(order)} onChange={(event) => assign(order, event.target.value)} className="w-44 rounded-md border px-2 py-2 text-sm"><option value="">Choose staff</option>{staffRows.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></td><td className="p-3"><select aria-label={`${isReturnWorkflowOrder(order) ? "Return" : "Delivery"} status for ${order.orderNumber}`} value={order.status} disabled={savingOrder === order.orderNumber || order.status === "Cancelled" || order.status === "Refunded"} onChange={(event) => changeStatus(order, event.target.value as OrderStatus)} className="w-44 rounded-md border px-2 py-2 text-sm">{statusOptionsForOrder(order).map((status) => <option key={status} value={status}>{status}</option>)}</select>{isReturnWorkflowOrder(order) && <Link href="/admin/returns" className="mt-2 block text-xs font-bold text-[#8a6500] underline underline-offset-4">Manage return/refund</Link>}</td></tr>)}
+          {isDeliveryStaff && <div className="mb-4 rounded-md border border-[#eadfca] bg-[#fffaf0] p-3 text-sm font-semibold text-black/65">Complete delivery only after the customer receipt shows confirmed.</div>}
+          <DataTable headers={deliveryHeaders} minWidth={deliveryMinWidth}>
+            {pagedOrders.items.map((order) => <tr key={order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{canManageDeliveryStaff ? <Link className="underline decoration-[#d4af37] underline-offset-4" href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link> : order.orderNumber}<div className="text-xs font-normal text-black/50">{new Date(order.deliveryDate || order.createdAt).toLocaleDateString("en-IN")}</div></td><td className="p-3">{order.customerName}<div className="text-xs text-black/50">{order.address.phone}</div></td><td className="p-3 text-sm">{order.address.line}<div className="text-xs text-black/50">{order.address.city} - {order.address.pincode}</div></td><td className="p-3">{order.deliverySlot || "-"}</td><td className="p-3"><StatusBadge value={order.deliveryAssignmentStatus === "FAILED" ? "Attempt failed" : order.status} /></td><td className="p-3">{order.customerConfirmedAt ? <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">Customer confirmed</span> : <span className="rounded-full bg-[#fff8df] px-2 py-1 text-xs font-bold text-[#8a6500]">Waiting</span>}</td>{canManageDeliveryStaff && <td className="p-3 font-bold">{order.deliveryStaff || "Unassigned"}{order.deliveryAssignedAt && <div className="text-xs font-normal text-black/45">Assigned {new Date(order.deliveryAssignedAt).toLocaleDateString("en-IN")}</div>}{order.deliveryAssignmentStatus === "FAILED" && <div className="text-xs font-normal text-red-700">{order.deliveryFailureNote || order.deliveryFailureReason || "Attempt failed"}</div>}</td>}{canManageDeliveryStaff && <td className="p-3"><select aria-label={`Assign staff for ${order.orderNumber}`} value={order.deliveryStaffId || ""} disabled={savingOrder === order.orderNumber || order.status === "Delivered" || order.status === "Cancelled" || isReturnWorkflowOrder(order)} onChange={(event) => assign(order, event.target.value)} className="w-44 rounded-md border px-2 py-2 text-sm"><option value="">Choose staff</option>{staffRows.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></td>}<td className="p-3">{deliveryAction(order)}{canManageDeliveryStaff && isReturnWorkflowOrder(order) && <Link href="/admin/returns" className="mt-2 block text-xs font-bold text-[#8a6500] underline underline-offset-4">Manage return/refund</Link>}</td></tr>)}
           </DataTable>
-          {!filteredOrders.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No delivery orders match the current filters.</p>}
-          <PaginationControls page={pagedOrders.page} totalPages={pagedOrders.totalPages} total={pagedOrders.total} onPageChange={pagedOrders.setPage} />
+          {!filteredOrders.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">{deliveryLoading ? "Loading delivery orders..." : "No delivery orders match the current filters."}</p>}
+          <PaginationControls page={pagedOrders.page} totalPages={pagedOrders.totalPages} total={pagedOrders.total} onPageChange={pagedOrders.setPage} pageSize={12} />
         </Panel>
-        <Panel title="Delivery Staff">
+        {canManageDeliveryStaff && <Panel title="Delivery Staff">
           {canManageDeliveryStaff && (
             <form onSubmit={addStaff} className="mb-4 grid gap-3 rounded-md border border-[#eadfca] bg-white p-3">
               <input aria-label="Delivery staff name" value={staffForm.name} onChange={(event) => setStaffForm((current) => ({ ...current, name: event.target.value }))} className="rounded-md border px-3 py-2" placeholder="Staff name" />
@@ -1415,8 +1595,8 @@ function DeliveryAdmin() {
               return <div key={staff.id} className="rounded-md border border-[#eadfca] bg-white p-3"><div className="flex items-start justify-between gap-3"><div><b>{staff.name}</b>{staff.phone && <p className="mt-1 text-xs text-black/55">{staff.phone}</p>}</div><span className="rounded-full bg-[#fff8df] px-2 py-1 text-xs font-bold text-[#8a6500]">{liveCount} active</span></div><div className="mt-3 flex items-center justify-between gap-3 border-t pt-3"><span className="text-xs font-bold text-black/45">{totalCount} total assignments</span>{canManageDeliveryStaff && <Button variant="ghost" disabled={deletingStaff === staff.id} onClick={() => removeStaff(staff)}>{deletingStaff === staff.id ? "Deleting..." : "Delete"}</Button>}</div></div>;
             })}
           </div>
-          {!staffRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/55">No active delivery staff found in database. Add your first staff member above.</p>}
-        </Panel>
+          {!staffRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/55">{deliveryLoading ? "Loading delivery staff..." : "No active delivery staff found in database. Add your first staff member above."}</p>}
+        </Panel>}
       </div>
     </AdminShell>
   );
@@ -1427,6 +1607,7 @@ function CatalogManager({ section }: { section: "brands" | "categories" }) {
   const [rows, setRows] = useState<(Category | BrandRow)[]>([]);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const isBrand = section === "brands";
   useEffect(() => {
@@ -1467,7 +1648,26 @@ function CatalogManager({ section }: { section: "brands" | "categories" }) {
       toast(error instanceof Error ? error.message : `${isBrand ? "Brand" : "Category"} is linked to products and cannot be deleted.`, "error");
     }
   };
-  const pagedRows = usePagedItems(rows);
+  const filteredRows = rows.filter((row) => {
+    const needle = catalogSearch.trim().toLowerCase();
+    if (!needle) return true;
+    const category = row as Category;
+    return [
+      row.name,
+      row.slug,
+      category.description,
+      category.parentCategory?.name,
+      category.parentCategory?.slug,
+      category.productCount,
+      category.activeProductCount,
+      category.homepageVisible === true ? "homepage visible" : category.homepageVisible === false ? "homepage hidden" : "",
+      "active" in row ? row.active === false ? "inactive disabled" : "active enabled" : "",
+    ].some((value) => String(value || "").toLowerCase().includes(needle));
+  });
+  const pagedRows = usePagedItems(filteredRows);
+  useEffect(() => {
+    pagedRows.resetPage();
+  }, [catalogSearch, section]);
   const activeRow = rows.find((row) => row.id === editingId);
   const catalogLabel = isBrand ? "brand" : "category";
   const catalogTitle = isBrand ? "Brand" : "Category";
@@ -1505,7 +1705,13 @@ function CatalogManager({ section }: { section: "brands" | "categories" }) {
               <h2 className="display-font text-xl font-black">{title(section)} Directory</h2>
               <p className="mt-1 text-sm text-black/55">Manage names shown across products, inventory, and store filters.</p>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-md bg-[#faf7ef] px-3 py-2 text-xs font-black uppercase text-black/55"><Layers3 size={15} /> {rows.length} total</span>
+            <span className="inline-flex items-center gap-2 rounded-md bg-[#faf7ef] px-3 py-2 text-xs font-black uppercase text-black/55"><Layers3 size={15} /> {filteredRows.length} of {rows.length}</span>
+          </div>
+          <div className="border-b border-[#eadfca] bg-[#faf7ef] px-4 py-3 sm:px-5">
+            <label className="relative block">
+              <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" />
+              <input aria-label={`Search ${catalogLabel}s`} className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder={`Search ${catalogLabel}s by name, slug, status, product count`} value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} />
+            </label>
           </div>
           <div className="grid gap-3 p-4 sm:p-5">
             {pagedRows.items.map((row, index) => {
@@ -1530,7 +1736,7 @@ function CatalogManager({ section }: { section: "brands" | "categories" }) {
                 </div>
               );
             })}
-            {!pagedRows.items.length && <p className="rounded-md border border-dashed border-[#d8d1c2] bg-white p-6 text-center text-sm font-bold text-black/50">No {catalogLabel}s found. Add the first one from the panel.</p>}
+            {!pagedRows.items.length && <p className="rounded-md border border-dashed border-[#d8d1c2] bg-white p-6 text-center text-sm font-bold text-black/50">{rows.length ? `No ${catalogLabel}s match this search.` : `No ${catalogLabel}s found. Add the first one from the panel.`}</p>}
           </div>
           <PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} />
         </section>
@@ -1719,9 +1925,6 @@ function GenericAdmin({ section }: { section: string }) {
   };
   const pagedCatalogRows = usePagedItems(catalogRows);
   const pagedCustomers = usePagedItems(customers);
-  const rows = section === "customers" ? ["Manav Shah", "Priya Sharma", "Arjun Mehta", "Riya Patel"] : section === "delivery" ? deliveryStaff : section === "payments" ? orders.map((o) => `${o.orderNumber} - ${o.paymentStatus}`) : products.slice(0, 6).map((p) => p.name);
-  const pagedRows = usePagedItems(rows);
-  if (section === "settings") return <AdminShell section={section}><Panel title="Settings"><div className="grid gap-4 md:grid-cols-3">{Object.entries(settings).map(([key, value]) => <label key={key} className="text-sm font-bold">{title(key)}<input value={value} onChange={(e) => setSettings({ ...settings, [key]: e.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label>)}</div><Button variant="gold" className="mt-5" onClick={() => toast("Settings API will be enabled in the next backend phase", "info")}>Save settings</Button></Panel></AdminShell>;
   if (section === "categories") return <AdminShell section={section}><Panel title="Categories"><div className="mb-4 flex justify-end"><Button variant="gold" onClick={addCatalogRow}><Plus size={16} /> Add</Button></div><div className="grid gap-4">{(pagedCatalogRows.items as Category[]).map((c) => <div key={c.id} className="grid gap-4 rounded-md bg-white p-4 shadow-sm lg:grid-cols-[220px_1fr_auto]"><img src={c.bannerImageUrl || c.image || "/assets/categories/category-placeholder.webp"} alt={`${c.name} category banner`} onError={(event) => { event.currentTarget.src = "/assets/categories/category-placeholder.webp"; }} className="aspect-video w-full rounded-md border border-[#eadfca] bg-[#faf7ef] object-cover" /><div className="grid gap-3 md:grid-cols-2"><label className="text-sm font-bold">Category name<input defaultValue={c.name} onBlur={(event) => event.currentTarget.value !== c.name && updateCatalogCategory(c, { name: event.currentTarget.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Slug<input defaultValue={c.slug} onBlur={(event) => event.currentTarget.value !== c.slug && updateCatalogCategory(c, { slug: event.currentTarget.value })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold md:col-span-2">Banner URL<input defaultValue={c.bannerImageUrl || c.image || ""} onBlur={(event) => updateCatalogCategory(c, { image: event.currentTarget.value || "/assets/categories/category-placeholder.webp", bannerImageUrl: event.currentTarget.value || "/assets/categories/category-placeholder.webp" })} placeholder="/assets/categories/category-placeholder.webp or https://..." className="mt-1 w-full rounded-md border px-3 py-2" /></label><label className="text-sm font-bold">Display order<input type="number" defaultValue={c.displayOrder ?? c.sortOrder ?? 0} onBlur={(event) => updateCatalogCategory(c, { sortOrder: Number(event.currentTarget.value || 0), displayOrder: Number(event.currentTarget.value || 0) })} className="mt-1 w-full rounded-md border px-3 py-2" /></label><div className="grid content-end gap-2 text-sm"><span><b>Products:</b> {c.productCount ?? 0}</span><span><b>Active:</b> {c.activeProductCount ?? 0}</span><span><b>Homepage:</b> {c.homepageVisible ? "Visible" : "Hidden"}</span></div></div><div className="flex flex-wrap items-start gap-2 lg:flex-col"><Button variant="outline" onClick={() => updateCatalogCategory(c, { active: !c.active })}>{c.active === false ? "Enable" : "Disable"}</Button><Button variant="outline" onClick={() => updateCatalogCategory(c, { image: "/assets/categories/category-placeholder.webp", bannerImageUrl: "/assets/categories/category-placeholder.webp" })}>Revert to placeholder</Button><Button variant="ghost" onClick={() => removeCatalogRow(c.id)}>Delete</Button></div></div>)}</div><PaginationControls page={pagedCatalogRows.page} totalPages={pagedCatalogRows.totalPages} total={pagedCatalogRows.total} onPageChange={pagedCatalogRows.setPage} /></Panel></AdminShell>;
   if (section === "brands") return <AdminShell section={section}><Panel title={title(section)}><div className="mb-4 flex justify-end"><Button variant="gold" onClick={addCatalogRow}><Plus size={16} /> Add</Button></div>{pagedCatalogRows.items.map((c) => <div key={c.id} className="mb-3 flex items-center justify-between rounded-md bg-white p-3"><span className="font-bold">{c.name}</span><div className="flex gap-2"><Button variant="outline">Edit</Button><Button variant="ghost" onClick={() => removeCatalogRow(c.id)}>Delete</Button></div></div>)}<PaginationControls page={pagedCatalogRows.page} totalPages={pagedCatalogRows.totalPages} total={pagedCatalogRows.total} onPageChange={pagedCatalogRows.setPage} /></Panel></AdminShell>;
   if (section === "customers") {
@@ -1731,7 +1934,7 @@ function GenericAdmin({ section }: { section: string }) {
     const headers = canManageCustomers ? ["Customer", "Contact", "Status", "Orders", "Lifetime Spend", "Addresses", "Support", "Last Order", "Joined", "Actions"] : ["Customer", "Contact", "Status", "Orders", "Lifetime Spend", "Addresses", "Support", "Last Order", "Joined"];
     return <AdminShell section="customers"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label="Total customers" value={String(customers.length)} sub="Live database" /><Stat label="Active customers" value={String(customers.filter((customer) => customer.status === "ACTIVE").length)} sub="Can login" /><Stat label="Repeat customers" value={String(repeatCustomers)} sub="2+ orders" /><Stat label="Customer revenue" value={money(totalSpent)} sub="Lifetime" /></div><Panel title="Customers"><div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]"><input aria-label="Search customers" value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") searchCustomers(); }} className="rounded-md border px-3 py-2" placeholder="Search by name, email, or phone" /><Button variant="gold" onClick={searchCustomers}>Search</Button></div><DataTable headers={headers} minWidth={canManageCustomers ? "min-w-[1380px]" : "min-w-[1180px]"}>{pagedCustomers.items.map((customer) => <tr key={customer.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle font-bold">{customer.name}</td><td className="p-3 align-middle"><div>{customer.email || "-"}</div><div className="text-xs text-black/55">{customer.phone || "-"}</div></td><td className="p-3 align-middle"><StatusBadge value={customer.status === "ACTIVE" ? "Active" : customer.status === "INACTIVE" ? "Inactive" : "Blocked"} /></td><td className="p-3 align-middle">{customer.orderCount}</td><td className="p-3 align-middle">{money(customer.totalSpent)}</td><td className="p-3 align-middle">{customer.addressCount}</td><td className="p-3 align-middle">{customer.supportTicketCount}</td><td className="p-3 align-middle">{customer.lastOrderAt ? new Date(customer.lastOrderAt).toLocaleDateString("en-IN") : "-"}</td><td className="p-3 align-middle">{new Date(customer.createdAt).toLocaleDateString("en-IN")}</td>{canManageCustomers && <td className="w-[200px] p-3 align-middle"><CustomerActions customer={customer} onStatus={changeCustomerStatus} onDelete={removeCustomer} /></td>}</tr>)}</DataTable>{!customers.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No customers found in the database.</p>}<PaginationControls page={pagedCustomers.page} totalPages={pagedCustomers.totalPages} total={pagedCustomers.total} onPageChange={pagedCustomers.setPage} /></Panel></AdminShell>;
   }
-  return <AdminShell section={section}><div className="grid gap-6 lg:grid-cols-3"><Panel title={title(section)}><div className="grid gap-3">{pagedRows.items.map((r) => <div key={r} className="rounded-md bg-white p-3 font-semibold">{r}</div>)}</div><PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /><Button className="mt-4" variant="gold" onClick={() => toast(`${title(section)} action will be enabled in the next backend phase`, "info")}>Primary action</Button></Panel><Panel title="Filters"><input className="w-full rounded-md border px-3 py-2" placeholder="Date range / search" /><Button className="mt-3" variant="outline" onClick={() => toast("Export will be enabled in the next backend phase", "info")}>Export placeholder</Button></Panel><Panel title="Insights"><Stat label="Records" value={String(rows.length)} sub="Mock state" /></Panel></div></AdminShell>;
+  return <AdminShell section={section}><Panel title={title(section)}><p className="rounded-md bg-white p-4 text-sm text-black/60">This admin section is not available for your current role or route.</p></Panel></AdminShell>;
 }
 
 function SupportAdmin() {
@@ -2072,7 +2275,7 @@ function Login() {
 }
 
 function DataTable({ headers, children, minWidth = "min-w-[760px]" }: { headers: string[]; children: React.ReactNode; minWidth?: string }) {
-  return <div className="responsive-scroll -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0"><table className={`w-full ${minWidth} border-collapse text-left text-sm`}><thead className="bg-black text-white"><tr>{headers.map((h) => <th key={h} className="whitespace-nowrap p-3 align-middle">{h}</th>)}</tr></thead><tbody>{children}</tbody></table><p className="scroll-hint mt-2 sm:hidden">Swipe or drag sideways to view all columns.</p></div>;
+  return <div className="responsive-scroll -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0"><table className={`w-full ${minWidth} border-collapse text-left text-sm`}><thead className="bg-black text-white"><tr>{headers.map((h, index) => <th key={`${h}-${index}`} className="whitespace-nowrap p-3 align-middle">{h}</th>)}</tr></thead><tbody>{children}</tbody></table><p className="scroll-hint mt-2 sm:hidden">Swipe or drag sideways to view all columns.</p></div>;
 }
 
 function AdminPageSwitch({ slug }: { slug: string[] }) {

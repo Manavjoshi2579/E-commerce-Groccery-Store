@@ -25,6 +25,7 @@ import { money } from "@/lib/money";
 import type { Address, CartItem, Category, FAQ, Order, Product, SupportTicket } from "@/types";
 
 const imageFallback = "/assets/products/product-placeholder.svg";
+const storeAddress = "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama, Vadodara, Gujarat - 390024";
 
 type StoreCoupons = ReturnType<typeof useStore>["coupons"];
 type ComingSoonVariant = "education" | "entertainment";
@@ -276,7 +277,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
           <div className="group relative hidden xl:block">
             <button type="button" className="flex h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-sm font-black text-white/86 transition hover:border-[#d4af37]/45 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#d4af37]" aria-haspopup="true">
               <Sparkles size={17} className="text-[#e7c766]" aria-hidden="true" />
-              <span>Eagle Plus</span>
+              <span>Eagle Club</span>
               <span className="rounded-full bg-[#d4af37] px-2 py-0.5 text-[10px] font-black uppercase text-black">Soon</span>
             </button>
             <div className="invisible absolute right-0 top-full z-50 mt-3 w-72 translate-y-1 rounded-md border border-[#d4af37]/25 bg-[#111] p-2 text-white opacity-0 shadow-2xl transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -385,7 +386,6 @@ function AccountMenu() {
 }
 
 function Footer() {
-  const storeAddress = "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama, Vadodara, Gujarat - 390024";
   const footerGroups = [
     ["Shop", [["Products", "/products"], ["Categories", "/products"], ["Offers", "/products?sort=discount"], ["Organic", "/category/organic-store"]]],
     ["Coming Soon", [["Education", "/education"], ["Entertainment", "/entertainment"]]],
@@ -626,10 +626,10 @@ function HomePage() {
   return (
     <CustomerShell>
       <section className="relative min-h-[620px] overflow-hidden bg-black text-white">
-        <img src="/assets/banners/fresh-produce-banner.png" alt="Eagle Mart fresh grocery produce banner" className="absolute inset-0 h-full w-full object-cover opacity-50" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-black/5" />
-        <div className="container-premium relative flex min-h-[620px] items-center">
-          <div className="max-w-2xl py-20">
+        <img src="/assets/banners/fresh-produce-banner.png" alt="Eagle Mart fresh grocery produce banner" className="absolute inset-0 h-full w-full object-cover object-bottom opacity-50" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/42 to-black/12" />
+        <div className="container-premium relative grid min-h-[620px] items-center gap-8 py-16 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="max-w-2xl">
             <h1 aria-label="India's Finest Grocery Experience" className="display-font text-4xl font-black leading-tight md:text-6xl">
               <span className="hero-line hero-line-top block">India&apos;s Finest</span>
               <span className="hero-line hero-line-bottom mt-1 block">
@@ -641,6 +641,32 @@ function HomePage() {
             <div className="hero-action mt-8 flex flex-wrap gap-3"><Link href="/products"><Button variant="gold">Shop Now <ChevronRight size={18} /></Button></Link></div>
             <div className="hero-chips mt-6 flex flex-wrap gap-2 text-xs font-bold">{["Premium Quality", "Fresh Everyday", "Fast Delivery"].map((chip) => <span key={chip} className="rounded-full border border-white/20 bg-white/10 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-sm">{chip}</span>)}</div>
           </div>
+          <aside className="hero-plus-panel relative w-full overflow-hidden rounded-md border border-[#d4af37]/70 bg-[#060606]/90 shadow-[0_30px_90px_rgba(0,0,0,0.5)] backdrop-blur-md">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f5d86c] to-transparent" />
+            <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#d4af37]/16 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 left-8 h-40 w-40 rounded-full bg-white/8 blur-3xl" />
+            <div className="relative p-6 sm:p-7">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f1cf55]">Eagle Club preview</p>
+                <div className="rounded-full bg-[#d4af37] px-4 py-1.5 text-[10px] font-black uppercase text-black shadow-[0_0_28px_rgba(212,175,55,0.36)]">Soon</div>
+              </div>
+              <h2 className="display-font max-w-[340px] text-2xl font-black leading-tight sm:text-4xl">Two premium worlds are landing soon.</h2>
+              <p className="mt-4 max-w-[350px] text-sm font-semibold leading-6 text-white/72">Eagle Mart stays your trusted shopping home. Education and Entertainment are being prepared as upcoming Eagle Club experiences.</p>
+              <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase text-white/70">
+                <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5">Customer awareness</span>
+                <span className="rounded-full border border-[#d4af37]/35 bg-[#d4af37]/12 px-3 py-1.5 text-[#f1cf55]">Launching next</span>
+              </div>
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                {[["/education", GraduationCap, "Eagle Education", "Learn soon", "Courses, skills and useful learning."], ["/entertainment", PlayCircle, "Eagle Entertainment", "Enjoy soon", "Fun, shows and digital experiences."]].map(([href, Icon, title, action, text]) => {
+                  const CardIcon = Icon as LucideIcon;
+                  return <Link key={String(href)} href={String(href)} className="group relative min-h-[154px] overflow-hidden rounded-md border border-white/10 bg-gradient-to-br from-white/[0.13] via-white/[0.06] to-[#d4af37]/[0.08] p-3 transition hover:-translate-y-0.5 hover:border-[#d4af37] hover:bg-white/[0.1] motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:min-h-[172px] sm:p-4"><span className="absolute right-2 top-2 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-[8px] font-black uppercase text-[#f1cf55] sm:right-3 sm:top-3 sm:text-[9px]">Soon</span><span className="grid h-10 w-10 place-items-center rounded-md bg-[#d4af37]/20 text-[#f1cf55] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] sm:h-12 sm:w-12"><CardIcon size={21} /></span><b className="mt-4 block pr-2 text-base leading-tight text-white group-hover:text-[#f1cf55] sm:mt-5 sm:pr-6 sm:text-lg">{String(title)}</b><span className="mt-2 hidden text-xs font-semibold leading-5 text-white/58 sm:block">{String(text)}</span><span className="mt-4 inline-flex items-center gap-1 text-[11px] font-black uppercase text-[#f1cf55] sm:text-xs">{String(action)} <ChevronRight size={14} /></span></Link>;
+                })}
+              </div>
+            </div>
+            <div className="relative border-t border-white/10 bg-white/[0.055] px-6 py-4 sm:px-7">
+              <p className="text-xs font-semibold leading-5 text-white/62">Preview pages are live for awareness only. Shopping, cart, checkout and delivery remain focused on Eagle Mart.</p>
+            </div>
+          </aside>
         </div>
       </section>
       <section className="container-premium py-10">
@@ -670,25 +696,30 @@ function HomePage() {
         </div>
       </section>
       <ProductSection title="Best Sellers" products={bestSellerProducts} />
-      <section className="container-premium py-10">
-        <div className="mb-5">
-          <p className="text-xs font-black uppercase text-[#8a6500]">Coming soon</p>
-          <h2 className="display-font text-2xl font-black md:text-3xl">More from Eagle Mart</h2>
+      <section className="container-premium py-12">
+        <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-black uppercase text-[#8a6500]">Coming soon</p>
+            <h2 className="display-font text-2xl font-black md:text-3xl">Eagle Club is expanding</h2>
+          </div>
+          <p className="max-w-xl text-sm font-semibold leading-6 text-black/58">Two new customer destinations are being prepared while Eagle Mart continues handling every grocery order.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {[
-            ["/education", GraduationCap, "Education", "Useful learning experiences are coming soon."],
-            ["/entertainment", PlayCircle, "Entertainment", "New ways to enjoy and discover are on the way."],
+            ["/education", GraduationCap, "Eagle Education", "Premium learning experiences, practical resources and guided content are coming soon."],
+            ["/entertainment", PlayCircle, "Eagle Entertainment", "Family-friendly digital entertainment and fresh experiences are getting ready to launch."],
           ].map(([href, Icon, title, text]) => {
             const CardIcon = Icon as LucideIcon;
             return (
-              <Link key={String(href)} href={String(href)} className="group rounded-md border border-[#eadfca] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#d4af37] hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+              <Link key={String(href)} href={String(href)} className="group relative overflow-hidden rounded-md border border-[#d4af37]/45 bg-[#111] p-5 text-white shadow-[0_18px_45px_rgba(17,17,17,0.16)] transition hover:-translate-y-0.5 hover:border-[#d4af37] hover:shadow-[0_24px_62px_rgba(17,17,17,0.24)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f1cf55] to-transparent" />
                 <div className="flex items-start justify-between gap-4">
-                  <div className="grid h-12 w-12 place-items-center rounded-md bg-[#fff8df] text-[#8a6500]"><CardIcon size={24} aria-hidden="true" /></div>
-                  <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase text-[#e7c766]">Coming Soon</span>
+                  <div className="grid h-12 w-12 place-items-center rounded-md bg-[#d4af37]/18 text-[#f1cf55]"><CardIcon size={24} aria-hidden="true" /></div>
+                  <span className="rounded-full bg-[#d4af37] px-3 py-1 text-[10px] font-black uppercase text-black">Coming Soon</span>
                 </div>
-                <h3 className="display-font mt-4 text-xl font-black group-hover:text-[#8a6500]">{String(title)}</h3>
-                <p className="mt-2 text-sm leading-6 text-black/62">{String(text)}</p>
+                <h3 className="display-font mt-5 text-xl font-black group-hover:text-[#f1cf55]">{String(title)}</h3>
+                <p className="mt-2 text-sm leading-6 text-white/66">{String(text)}</p>
+                <span className="mt-5 inline-flex items-center gap-1 text-xs font-black uppercase text-[#f1cf55]">Preview now <ChevronRight size={14} /></span>
               </Link>
             );
           })}
@@ -716,7 +747,8 @@ function HomePage() {
         .hero-line,
         .hero-copy,
         .hero-action,
-        .hero-chips {
+        .hero-chips,
+        .hero-plus-panel {
           animation: heroReveal 900ms cubic-bezier(.2,.75,.18,1) both;
         }
         .hero-line-top { animation-delay: 80ms; }
@@ -724,6 +756,7 @@ function HomePage() {
         .hero-copy { animation-delay: 420ms; }
         .hero-action { animation-delay: 560ms; }
         .hero-chips { animation-delay: 700ms; }
+        .hero-plus-panel { animation-delay: 780ms; }
         .hero-gold-word,
         .hero-white-word {
           position: relative;
@@ -768,6 +801,7 @@ function HomePage() {
           .hero-copy,
           .hero-action,
           .hero-chips,
+          .hero-plus-panel,
           .hero-gold-word::after,
           .hero-white-word::after {
             animation: none;
@@ -1609,26 +1643,65 @@ function PaymentFailed() {
   return <CustomerShell><main className="container-premium py-10"><section className="premium-card mx-auto max-w-2xl p-8 text-center"><X className="mx-auto text-red-600" size={56} /><h1 className="display-font mt-4 text-3xl font-black">Payment Failed</h1>{orderNumber && <p className="mt-2 font-bold text-[#8a6500]">Order {orderNumber}</p>}<p className="mt-2 text-black/65">{reason || "Your cart is safe. You can retry payment or choose Cash on Delivery."}</p><p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">No invoice is generated for failed payments. Redirecting you back to shopping.</p><div className="mt-6 flex flex-wrap justify-center gap-3"><Link href="/products"><Button variant="gold">Continue Shopping</Button></Link><Link href="/cart"><Button variant="outline">Back to Cart</Button></Link><Link href="/contact"><Button variant="ghost">Contact Support</Button></Link></div></section></main></CustomerShell>;
 }
 
+function trackDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function deliveryTrackSteps(order: Order) {
+  const terminalIssue = ["Cancelled", "Return Requested", "Refunded"].includes(order.status) || order.deliveryAssignmentStatus === "FAILED";
+  const delivered = order.status === "Delivered" || Boolean(order.deliveryDeliveredAt);
+  const out = delivered || order.status === "Out for Delivery" || Boolean(order.deliveryOutForDeliveryAt);
+  const packed = out || order.status === "Packed" || Boolean(order.deliveryPickedUpAt);
+  const confirmed = packed || ["Confirmed", "Packed", "Out for Delivery", "Delivered"].includes(order.status);
+  return [
+    { label: "Order Confirmed", icon: CheckCircle2, done: confirmed || order.status === "Placed", date: trackDate(order.createdAt), note: order.paymentStatus },
+    { label: "Packed", icon: Package, done: packed, date: trackDate(order.deliveryPickedUpAt), note: packed ? "Packed by store" : "Store is preparing items" },
+    { label: "Out for Delivery", icon: Truck, done: out, date: trackDate(order.deliveryOutForDeliveryAt), note: order.deliveryStaff ? `Delivery: ${order.deliveryStaff}` : "Delivery will be assigned" },
+    { label: "Delivered", icon: Home, done: delivered, date: trackDate(order.deliveryDeliveredAt), note: delivered ? "Order completed by delivery staff" : order.customerConfirmedAt ? "Receipt confirmed. Waiting for delivery completion" : "Waiting for receipt confirmation" },
+  ].map((step) => ({ ...step, blocked: terminalIssue && !step.done }));
+}
+
 function TrackOrder({ number }: { number?: string }) {
-  const { orders, products } = useStore();
+  const { orders, products, toast } = useStore();
   const [remoteOrder, setRemoteOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(Boolean(number));
+  const [confirming, setConfirming] = useState(false);
+  const loadTracking = () => {
+    if (!number) return;
+    setLoading(true);
+    fetchTracking(number).then((data) => setRemoteOrder(data.order)).catch(() => undefined).finally(() => setLoading(false));
+  };
   useEffect(() => {
     if (!number) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    fetchTracking(number).then((data) => setRemoteOrder(data.order)).catch(() => undefined).finally(() => setLoading(false));
+    loadTracking();
   }, [number]);
   const order = remoteOrder || orders.find((o) => o.orderNumber === number) || (!number ? orders[0] : null);
   if (loading && !order) return <CustomerShell><main className="container-premium py-10"><section className="premium-card mx-auto max-w-xl p-8 text-center"><PackageCheck className="mx-auto text-[#8a6500]" size={52} /><h1 className="display-font mt-4 text-3xl font-black">Loading tracking</h1><p className="mt-2 text-black/60">Please wait while we load your order tracking.</p></section></main></CustomerShell>;
   if (!order) return <CustomerShell><main className="container-premium py-10"><Empty title="Tracking not available" cta="Go to orders" href="/orders" /></main></CustomerShell>;
-  const steps = ["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered"];
-  const current = steps.indexOf(order.status);
-  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/orders" label="Back to orders" /><h1 className="display-font text-3xl font-black">Track Order {order.orderNumber}</h1><div className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]"><section className="premium-card p-6">{steps.map((s, i) => <div key={s} className="flex gap-4 pb-6"><div className={`h-8 w-8 rounded-full ${i <= current || ["Return Requested", "Refunded"].includes(order.status) ? "bg-[#d4af37]" : "bg-black/10"}`} /><div><h3 className="font-bold">{s}</h3><p className="text-sm text-black/55">{i <= current || ["Return Requested", "Refunded"].includes(order.status) ? "Completed" : "Pending"}</p></div></div>)}<p className="rounded-md bg-green-50 p-3 text-sm text-green-800">Delivery staff: {order.deliveryStaff || "Assigned by store"}. Estimated delivery: {order.deliveryDate}, {order.deliverySlot}</p>{Boolean(order.returns?.length) && <div className="mt-5 rounded-md border border-[#eadfca] bg-[#fffaf0] p-4"><h3 className="display-font text-xl font-black">Return & refund tracking</h3>{order.returns?.map((item) => { const refund = item.refunds?.[0]; const returnSteps = ["REQUESTED", "APPROVED", "COMPLETED"]; const returnIndex = returnSteps.indexOf(item.status); return <div key={item.id} className="mt-4 border-t pt-4"><p className="font-bold">{item.orderItemId ? order.items.find((orderItem) => orderItem.id === item.orderItemId)?.name || "Selected item" : "Full order"}</p><p className="text-sm text-black/60">{item.reason}</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{returnSteps.map((step, index) => <div key={step} className={`rounded-md border p-3 text-sm ${index <= returnIndex ? "border-[#d4af37] bg-white" : "border-black/10 bg-black/[0.03]"}`}><b>{step === "REQUESTED" ? "Requested" : step === "APPROVED" ? "Approved" : "Product received"}</b><p className="text-xs text-black/50">{index <= returnIndex ? "Done" : "Pending"}</p></div>)}</div>{item.bankDetails && <p className="mt-3 rounded-md bg-white p-3 text-sm">Refund bank: <b>{item.bankDetails.bankName}</b> · A/C {item.bankDetails.accountNumberMasked} · IFSC {item.bankDetails.ifsc}</p>}{refund ? <p className="mt-3 rounded-md bg-white p-3 text-sm">Refund: <b>{money(refund.amount)}</b> · <b>{refund.status.replace("_", " ")}</b></p> : <p className="mt-3 rounded-md bg-white p-3 text-sm text-black/60">Refund will be created after admin approves your return request.</p>}</div>; })}</div>}</section><OrderMini order={order} products={products} /></div></main></CustomerShell>;
+  const steps = deliveryTrackSteps(order);
+  const completed = steps.filter((step) => step.done).length;
+  const progress = Math.max(0, Math.min(100, ((completed - 1) / Math.max(1, steps.length - 1)) * 100));
+  const canConfirmReceived = order.status === "Out for Delivery" && !order.customerConfirmedAt;
+  const confirmReceived = async () => {
+    if (!window.confirm("Confirm that you received this order?")) return;
+    setConfirming(true);
+    try {
+      const updated = await confirmReceivedBackend(order.orderNumber, "Customer confirmed receipt from tracking page");
+      setRemoteOrder(updated);
+      toast("Delivery confirmed. Thank you.", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not confirm delivery.", "error");
+    } finally {
+      setConfirming(false);
+    }
+  };
+  return <CustomerShell><main className="container-premium py-8"><BackNav fallback="/orders" label="Back to orders" /><div className="mt-4 grid gap-6 lg:grid-cols-[1fr_340px]"><section className="premium-card overflow-hidden"><div className="grid gap-4 bg-white p-5 md:grid-cols-[1fr_auto]"><div><p className="text-xs font-bold uppercase text-[#8a6500]">Eagle Mart order tracking</p><h1 className="display-font mt-1 text-3xl font-black">Order ID: {order.orderNumber}</h1><p className="mt-2 text-sm text-black/60">{order.items.length} items | {order.paymentMethod} | {order.paymentStatus}</p></div><div className="grid gap-2 text-sm md:min-w-64 md:text-right"><p><span className="text-black/50">Expected arrival</span><br /><b>{order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString("en-IN") : "To be updated"}</b></p><p><span className="text-black/50">Tracking ID</span><br /><b>{order.deliveryAssignmentId || order.orderNumber}</b></p></div></div><div className="border-y border-[#eadfca] bg-[#faf7ef] p-5"><div className="relative hidden min-h-32 items-center justify-between md:flex"><div className="absolute left-8 right-8 top-[42px] h-2 rounded-full bg-black/15" /><div className="absolute left-8 top-[42px] h-2 rounded-full bg-green-600 transition-all" style={{ width: `calc((100% - 64px) * ${progress / 100})` }} />{steps.map((step) => { const Icon = step.icon; return <div key={step.label} className="relative z-10 grid w-32 justify-items-center gap-3 text-center"><span className={`grid h-12 w-12 place-items-center rounded-full border-4 ${step.done ? "border-green-600 bg-green-600 text-white" : step.blocked ? "border-red-500 bg-red-500 text-white" : "border-black/20 bg-white text-black/45"}`}>{step.done ? <CheckCircle2 size={24} /> : <Icon size={24} />}</span><div><p className="font-bold leading-tight">{step.label}</p><p className="mt-1 text-xs text-black/55">{step.done ? step.date || "Completed" : step.note}</p></div></div>; })}</div><div className="grid gap-3 md:hidden">{steps.map((step) => { const Icon = step.icon; return <div key={step.label} className={`flex gap-3 rounded-md border bg-white p-3 ${step.done ? "border-green-600" : step.blocked ? "border-red-400" : "border-black/10"}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${step.done ? "bg-green-600 text-white" : step.blocked ? "bg-red-500 text-white" : "bg-black/10 text-black/50"}`}>{step.done ? <CheckCircle2 size={21} /> : <Icon size={21} />}</span><div><p className="font-bold">{step.label}</p><p className="text-sm text-black/55">{step.done ? step.date || "Completed" : step.note}</p></div></div>; })}</div></div><div className="grid gap-4 p-5 md:grid-cols-3"><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-bold uppercase text-black/45">Current status</p><h2 className="mt-1 text-xl font-black">{order.status}</h2><p className="mt-1 text-sm text-black/60">{order.deliveryAssignmentStatus ? `Delivery status: ${order.deliveryAssignmentStatus.replaceAll("_", " ")}` : "Delivery assignment pending"}</p></div><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-bold uppercase text-black/45">Delivery partner</p><h2 className="mt-1 text-xl font-black">{order.deliveryStaff || "Not assigned"}</h2><p className="mt-1 text-sm text-black/60">{order.deliverySlot || "Slot will appear after scheduling"}</p></div><div className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-xs font-bold uppercase text-black/45">Address</p><p className="mt-1 text-sm font-bold">{order.address.line}</p><p className="text-sm text-black/60">{order.address.city} - {order.address.pincode}</p></div></div>{order.deliveryFailureReason && <div className="mx-5 mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"><b>Delivery issue reported:</b> {order.deliveryFailureReason.replaceAll("_", " ")}{order.deliveryFailureNote ? ` - ${order.deliveryFailureNote}` : ""}</div>}{canConfirmReceived && <div className="mx-5 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-green-200 bg-green-50 p-4"><p className="text-sm text-green-900"><b>Received your order?</b> Confirm receipt so delivery can be completed in the system.</p><Button variant="gold" disabled={confirming} onClick={confirmReceived}><CheckCircle2 size={16} /> {confirming ? "Confirming..." : "Confirm Received"}</Button></div>}{Boolean(order.returns?.length) && <div className="mx-5 mb-5 rounded-md border border-[#eadfca] bg-[#fffaf0] p-4"><h3 className="display-font text-xl font-black">Return & refund tracking</h3>{order.returns?.map((item) => { const refund = item.refunds?.[0]; const returnSteps = ["REQUESTED", "APPROVED", "COMPLETED"]; const returnIndex = returnSteps.indexOf(item.status); return <div key={item.id} className="mt-4 border-t pt-4"><p className="font-bold">{item.orderItemId ? order.items.find((orderItem) => orderItem.id === item.orderItemId)?.name || "Selected item" : "Full order"}</p><p className="text-sm text-black/60">{item.reason}</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{returnSteps.map((step, index) => <div key={step} className={`rounded-md border p-3 text-sm ${index <= returnIndex ? "border-[#d4af37] bg-white" : "border-black/10 bg-black/[0.03]"}`}><b>{step === "REQUESTED" ? "Requested" : step === "APPROVED" ? "Approved" : "Product received"}</b><p className="text-xs text-black/50">{index <= returnIndex ? "Done" : "Pending"}</p></div>)}</div>{item.bankDetails && <p className="mt-3 rounded-md bg-white p-3 text-sm">Refund bank: <b>{item.bankDetails.bankName}</b> | A/C {item.bankDetails.accountNumberMasked} | IFSC {item.bankDetails.ifsc}</p>}{refund ? <p className="mt-3 rounded-md bg-white p-3 text-sm">Refund: <b>{money(refund.amount)}</b> | <b>{refund.status.replace("_", " ")}</b></p> : <p className="mt-3 rounded-md bg-white p-3 text-sm text-black/60">Refund will be created after admin approves your return request.</p>}</div>; })}</div>}<div className="no-print px-5 pb-5"><Button variant="outline" onClick={loadTracking} disabled={loading}>{loading ? "Refreshing..." : "Refresh tracking"}</Button></div></section><OrderMini order={order} products={products} /></div></main></CustomerShell>;
 }
-
 const blankReturnBank = { bankAccountHolder: "", bankName: "", bankAccountNumber: "", bankIfsc: "" };
 
 function validateReturnBank(input: typeof blankReturnBank) {
@@ -1705,7 +1778,7 @@ function OrdersPage() {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button variant="outline" onClick={() => reorder(o)}><RotateCcw size={16} /> Reorder</Button>
-                      {canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold"><FileText size={16} /> Download invoice</Button></Link>}
+                      {canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold"><FileText size={16} /> Print invoice</Button></Link>}
                       {o.paymentStatus === "Failed" && <><Link href="/checkout?payment=razorpay"><Button variant="gold">Retry Payment</Button></Link><Link href="/checkout?payment=cod"><Button variant="outline">Choose COD</Button></Link></>}
                       {canReturn && <Button variant="ghost" onClick={() => { setReturningOrder(isReturning ? null : o.orderNumber); setReturnItemId(""); setReturnReason(""); setReturnBank(blankReturnBank); }}><PackageCheck size={16} /> Request return</Button>}
                     </div>
@@ -1760,7 +1833,7 @@ function OrderSummaryPage({ number }: { number?: string }) {
           <section className="mt-4">
             <h1 className="text-2xl font-black">Order summary</h1>
             <p className="mt-1 text-sm text-black/60">{order.status === "Delivered" ? "Delivered" : order.status} · {new Date(order.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
-            {canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`} className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[#0b8f20]">Download invoice <FileText size={15} /></Link>}
+            {canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`} className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[#0b8f20]">Print invoice <FileText size={15} /></Link>}
           </section>
           <section className="mt-6">
             <h2 className="font-black">{order.items.length} {order.items.length === 1 ? "item" : "items"} in this order</h2>
@@ -1800,7 +1873,7 @@ function OrderSummaryPage({ number }: { number?: string }) {
               <div><p className="text-black/50">Deliver to</p><p className="font-semibold">{address.name}, {address.line}, {address.city}, {address.state || "Gujarat"} - {address.pincode}</p></div>
               <div><p className="text-black/50">Order placed</p><p className="font-semibold">{new Date(order.createdAt).toLocaleString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</p></div>
             </div>
-            <div className="mt-6 flex flex-wrap gap-2"><Link href={`/track-order/${order.orderNumber}`}><Button>Track order</Button></Link>{canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">Download invoice</Button></Link>}<Link href="/orders"><Button variant="outline">Order history</Button></Link></div>
+            <div className="mt-6 flex flex-wrap gap-2"><Link href={`/track-order/${order.orderNumber}`}><Button>Track order</Button></Link>{canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">Print invoice</Button></Link>}<Link href="/orders"><Button variant="outline">Order history</Button></Link></div>
           </section>
         </div>
       </main>
@@ -1831,17 +1904,14 @@ function InvoicePage({ number }: { number?: string }) {
   useEffect(() => {
     if (order && !canShowInvoice(order)) router.replace("/products");
   }, [order, router]);
-  const printInvoice = () => window.print();
-  const downloadPdf = () => {
-    if (!order) return;
-    const previousTitle = document.title;
-    document.title = `Invoice-${order.orderNumber}-Eagle-Mart`;
+  const printInvoice = () => {
+    document.body.classList.add("invoice-receipt-print");
     window.print();
-    window.setTimeout(() => { document.title = previousTitle; }, 600);
+    window.setTimeout(() => document.body.classList.remove("invoice-receipt-print"), 700);
   };
   useEffect(() => {
     if (!order || !shouldAutoPrint || !canShowInvoice(order)) return;
-    const timer = window.setTimeout(() => window.print(), 450);
+    const timer = window.setTimeout(() => printInvoice(), 450);
     return () => window.clearTimeout(timer);
   }, [order, shouldAutoPrint]);
   if (loading && !order) return <CustomerShell><main className="container-premium py-10"><section className="premium-card mx-auto max-w-xl p-8 text-center"><FileText className="mx-auto text-[#8a6500]" size={52} /><h1 className="display-font mt-4 text-3xl font-black">Loading invoice</h1><p className="mt-2 text-black/60">Please wait while we load your invoice details.</p></section></main></CustomerShell>;
@@ -1883,25 +1953,53 @@ function InvoicePage({ number }: { number?: string }) {
       <main className="invoice-page container-premium py-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 no-print">
           <BackNav fallback="/orders" label="Back to orders" />
-          <div className="flex gap-2">
-            <Button onClick={printInvoice}>Print Invoice</Button>
-            <Button variant="outline" onClick={downloadPdf}>Download PDF</Button>
-          </div>
+          <Button onClick={printInvoice}>Print Invoice</Button>
         </div>
-        <section className="invoice-print-root premium-card bg-white p-4 text-black md:p-8">
-          <div className="flex flex-col justify-between gap-5 border-b border-[#eadfca] pb-6 md:flex-row">
-            <div><Logo /><p className="mt-4 font-bold">Eagle Mart Grocery & Essentials</p><p className="text-sm text-black/60">123, Premium Supermarket Tower, S.G. Highway, Ahmedabad, Gujarat - 380001</p><p className="text-sm text-black/60">GSTIN: 24ABCDE1234F1Z5 | support@eaglemart.in</p></div>
-            <div className="rounded-md bg-black p-5 text-white md:text-right"><p className="text-xs font-bold uppercase text-[#d4af37]">TAX INVOICE</p><h1 className="display-font mt-1 text-2xl font-black">{order.invoiceNumber || `INV-${order.orderNumber}`}</h1><p className="mt-2 text-sm text-white/70">Invoice date: {new Date(order.invoiceDate || order.createdAt).toLocaleDateString("en-IN")}</p><p className="text-sm text-white/70">Order: {order.orderNumber}</p></div>
+        <section className="invoice-print-root receipt-print-root bg-white text-black">
+          <div className="receipt-topline">
+            <span>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</span>
+            <span>Eagle Mart Grocery & Essentials</span>
           </div>
-          <div className="mt-6 grid gap-4 text-sm md:grid-cols-3">
-            <div className="rounded-md border border-[#eadfca] p-4"><b>Customer Details</b><p className="mt-2">{order.customerName}</p><p>{order.address.phone}</p></div>
-            <div className="rounded-md border border-[#eadfca] p-4"><b>Billing Address</b><p className="mt-2">{order.address.name}</p><p>{order.address.line}, {order.address.city}, {order.address.state || "Gujarat"} - {order.address.pincode}</p></div>
-            <div className="rounded-md border border-[#eadfca] p-4"><b>Shipping Address</b><p className="mt-2">{order.address.line}</p><p>{order.address.city} - {order.address.pincode}</p></div>
+          <div className="receipt-header">
+            <h1>EAGLE MART</h1>
+            <p>Eagle Club Grocery & Essentials</p>
+            <p>{storeAddress}</p>
+            <p>GSTIN: 24ABCDE1234F1Z5</p>
+            <p>TAX INVOICE</p>
           </div>
-          <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">{[["Payment method", order.paymentMethod], ["Payment status", order.paymentStatus], ["Order status", order.status], ["Order date", new Date(order.createdAt).toLocaleDateString("en-IN")]].map(([label, value]) => <div key={label} className="rounded-md bg-[#faf7ef] p-3"><p className="text-xs text-black/50">{label}</p><b>{value}</b></div>)}</div>
-          <div className="responsive-scroll mt-6 overflow-x-auto invoice-table-wrap"><table className="invoice-print-table w-full min-w-[1080px] border-collapse text-left text-xs"><thead className="bg-black text-white"><tr>{["Sr. No.", "Product", "SKU", "Unit", "Qty", "MRP", "Selling", "Discount", "GST %", "Tax", "Line Total"].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{rows.map((item) => <tr key={`${item.sku}-${item.index}`} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3">{item.index}</td><td className="font-bold">{item.name}</td><td>{item.sku}</td><td>{item.unit}</td><td>{item.qty}</td><td>{money(item.mrp)}</td><td>{money(item.price)}</td><td>{money(item.discount)}</td><td>{item.gstRate}%</td><td>{money(item.tax)}</td><td className="font-bold">{money(item.lineTotal + item.tax)}</td></tr>)}</tbody></table><p className="scroll-hint mt-2 sm:hidden">Swipe or drag sideways to view the full invoice.</p></div>
-          <div className="ml-auto mt-6 max-w-md space-y-2 rounded-md border border-[#eadfca] bg-[#faf7ef] p-5 text-sm"><div className="flex justify-between"><span>Subtotal</span><b>{money(t.subtotal)}</b></div><div className="flex justify-between"><span>Product Discount</span><b>-{money(t.discount)}</b></div><div className="flex justify-between"><span>Coupon Discount</span><b>-{money(t.couponDiscount)}</b></div><div className="flex justify-between"><span>GST/Tax</span><b>{money(t.gst)}</b></div><div className="flex justify-between"><span>Delivery Charge</span><b>{money(t.delivery)}</b></div><div className="flex justify-between"><span>Handling Charge</span><b>{money(t.handling)}</b></div><div className="flex justify-between border-t border-black/20 pt-3 display-font text-xl font-black"><span>Grand Total</span><span>{money(t.total)}</span></div></div>
-          <p className="mt-8 text-center font-bold text-[#8a6500]">Thank you for shopping with Eagle Mart.</p>
+          <div className="receipt-rule" />
+          <div className="receipt-meta">
+            <p><span>Bill No:</span><b>{order.invoiceNumber || `INV-${order.orderNumber}`}</b></p>
+            <p><span>Order:</span><b>{order.orderNumber}</b></p>
+            <p><span>Date:</span><b>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</b></p>
+            <p><span>Payment:</span><b>{order.paymentMethod} / {order.paymentStatus}</b></p>
+            <p><span>Customer:</span><b>{order.customerName}</b></p>
+            <p><span>Phone:</span><b>{order.address.phone}</b></p>
+          </div>
+          <div className="receipt-rule" />
+          <table className="receipt-items">
+            <thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
+            <tbody>{rows.map((item) => <tr key={`${item.sku}-${item.index}`}><td><b>{item.name}</b><span>{item.unit} | {item.sku}</span></td><td>{item.qty}</td><td>{money(item.price)}</td><td>{money(item.lineTotal + item.tax)}</td></tr>)}</tbody>
+          </table>
+          <div className="receipt-rule" />
+          <div className="receipt-totals">
+            <p><span>Items:</span><b>{rows.length}</b></p>
+            <p><span>Subtotal:</span><b>{money(t.subtotal)}</b></p>
+            <p><span>Product Discount:</span><b>-{money(t.discount)}</b></p>
+            <p><span>Coupon Discount:</span><b>-{money(t.couponDiscount)}</b></p>
+            <p><span>GST/Tax:</span><b>{money(t.gst)}</b></p>
+            <p><span>Delivery:</span><b>{money(t.delivery)}</b></p>
+            <p><span>Handling:</span><b>{money(t.handling)}</b></p>
+            <p className="receipt-grand"><span>NET TOTAL:</span><b>{money(t.total)}</b></p>
+          </div>
+          <div className="receipt-rule" />
+          <div className="receipt-tax">
+            <p><span>Taxable</span><span>GST</span><span>Total</span></p>
+            <p><b>{money(t.subtotal - t.discount - t.couponDiscount)}</b><b>{money(t.gst)}</b><b>{money(t.total)}</b></p>
+          </div>
+          <p className="receipt-address">{order.address.line}, {order.address.city} - {order.address.pincode}</p>
+          <p className="receipt-thanks">Thank you for shopping with Eagle Mart</p>
+          <div className="receipt-barcode" aria-hidden="true">{order.orderNumber}</div>
         </section>
       </main>
     </CustomerShell>
@@ -2039,6 +2137,16 @@ function AccountOrderCard({ order, products, coupons, onReturnSubmitted, onOrder
   return <div className="premium-card p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="display-font font-bold">{order.orderNumber}</h3><p className="text-sm text-black/55">{order.items.length} items | {money(order.grandTotal || totals(order.items, products, coupons, order.couponCode).total)}</p></div><div className="flex gap-2"><StatusBadge value={order.status} /><StatusBadge value={order.paymentStatus} /></div></div>{activeReturns.length > 0 && <div className="mt-4 rounded-md border border-[#eadfca] bg-[#fffaf0] p-3 text-sm"><p className="font-bold">Return and refund status</p>{activeReturns.map((item) => { const refund = item.refunds?.[0]; return <p key={item.id} className="mt-1 text-black/65">{item.orderItemId ? order.items.find((orderItem) => orderItem.id === item.orderItemId)?.name || "Selected item" : "Full order"}: <b className="text-[#8a6500]"> {item.status.replace("_", " ")}</b>{refund ? ` · Refund ${money(refund.amount)} ${refund.status.replace("_", " ")}` : " · Refund starts after approval"}</p>; })}</div>}<div className="mt-4 flex flex-wrap gap-2"><Link href={`/track-order/${order.orderNumber}`}><Button>Track</Button></Link>{canConfirmReceived && <Button variant="gold" disabled={confirming} onClick={confirmReceived}><CheckCircle2 size={16} /> {confirming ? "Confirming..." : "Confirm Received"}</Button>}{canShowInvoice(order) && <Link href={`/invoice/${order.orderNumber}`}><Button variant="gold">View Invoice</Button></Link>}{canReturn && <Button variant="outline" onClick={() => { setOpen((value) => !value); setBank(blankReturnBank); }}><PackageCheck size={16} /> Return</Button>}</div>{open && <div className="mt-4 grid gap-3 rounded-md border border-[#eadfca] bg-white p-4"><label className="grid gap-1 text-sm font-bold">Return selection<select value={itemId} onChange={(event) => setItemId(event.target.value)} className="rounded-md border px-3 py-2 font-normal"><option value="">Full order</option>{order.items.map((item) => <option key={item.id || item.sku} value={item.id}>{item.name || item.sku} {item.unit ? `- ${item.unit}` : ""}</option>)}</select></label><label className="grid gap-1 text-sm font-bold">Reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="rounded-md border px-3 py-2 font-normal" placeholder="Tell us why you want to return this delivered product" /></label><div className="grid gap-3 md:grid-cols-2"><input value={bank.bankAccountHolder} onChange={(e) => setBank({ ...bank, bankAccountHolder: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Account holder name" /><input value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} className="rounded-md border px-3 py-2" placeholder="Bank name" /><input value={bank.bankAccountNumber} onChange={(e) => setBank({ ...bank, bankAccountNumber: e.target.value.replace(/\D/g, "").slice(0, 18) })} className="rounded-md border px-3 py-2" placeholder="Account number" /><input value={bank.bankIfsc} onChange={(e) => setBank({ ...bank, bankIfsc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11) })} className="rounded-md border px-3 py-2" placeholder="IFSC code" /></div><p className="text-sm text-black/55">Bank details are saved securely with this return request and shown to authorized admin staff for refund processing.</p><div className="flex flex-wrap gap-2"><Button variant="gold" disabled={saving} onClick={submit}>{saving ? "Submitting..." : "Submit return"}</Button><Button variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button></div></div>}</div>;
 }
 
+function AccountTrackingPreview({ order }: { order?: Order }) {
+  if (!order) return <div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Active order timeline</h3><p className="mt-3 text-sm text-black/55">No active order yet.</p></div>;
+  const steps = deliveryTrackSteps(order);
+  const completed = steps.filter((step) => step.done).length;
+  const progress = Math.max(0, Math.min(100, ((completed - 1) / Math.max(1, steps.length - 1)) * 100));
+  const expectedDate = order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString("en-IN") : "Updating";
+  const deliveryStatus = order.deliveryAssignmentStatus ? order.deliveryAssignmentStatus.replaceAll("_", " ") : "Assignment pending";
+  return <div className="premium-card overflow-hidden"><div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eadfca] bg-white p-5"><div><p className="text-xs font-black uppercase tracking-wide text-[#8a6500]">Live order tracking</p><h3 className="display-font mt-1 text-2xl font-black">{order.orderNumber}</h3><p className="mt-1 text-sm text-black/60">Expected arrival: <b>{expectedDate}</b>{order.deliverySlot ? ` | ${order.deliverySlot}` : ""}</p></div><StatusBadge value={order.status} /></div><div className="p-5"><div className="relative hidden min-h-28 items-start justify-between md:flex"><div className="absolute left-6 right-6 top-5 h-1.5 rounded-full bg-black/15" /><div className="absolute left-6 top-5 h-1.5 rounded-full bg-green-600 transition-all" style={{ width: `calc((100% - 48px) * ${progress / 100})` }} />{steps.map((step) => { const Icon = step.icon; return <div key={step.label} className="relative z-10 grid w-28 justify-items-center gap-2 text-center"><span className={`grid h-11 w-11 place-items-center rounded-full border-4 ${step.done ? "border-green-600 bg-green-600 text-white" : step.blocked ? "border-red-500 bg-red-500 text-white" : "border-black/20 bg-white text-black/45"}`}>{step.done ? <CheckCircle2 size={21} /> : <Icon size={21} />}</span><div><p className="text-sm font-black leading-tight">{step.label}</p><p className="mt-1 text-xs leading-snug text-black/55">{step.done ? step.date || "Completed" : step.note}</p></div></div>; })}</div><div className="grid gap-2 md:hidden">{steps.map((step) => { const Icon = step.icon; return <div key={step.label} className={`flex gap-3 rounded-md border bg-white p-3 ${step.done ? "border-green-600" : step.blocked ? "border-red-400" : "border-black/10"}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${step.done ? "bg-green-600 text-white" : step.blocked ? "bg-red-500 text-white" : "bg-black/10 text-black/50"}`}>{step.done ? <CheckCircle2 size={20} /> : <Icon size={20} />}</span><div><p className="font-bold">{step.label}</p><p className="text-sm text-black/55">{step.done ? step.date || "Completed" : step.note}</p></div></div>; })}</div><div className="mt-4 grid gap-3 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 text-sm sm:grid-cols-2"><p><span className="block text-xs font-bold uppercase text-black/45">Delivery partner</span><b>{order.deliveryStaff || "Not assigned yet"}</b></p><p><span className="block text-xs font-bold uppercase text-black/45">Tracking status</span><b>{deliveryStatus}</b></p></div><Link href={`/track-order/${order.orderNumber}`}><Button className="mt-4"><Truck size={16} /> Track order</Button></Link></div></div>;
+}
+
 function AccountPage({ section = "dashboard" }: { section?: string }) {
   const { customer, authReady, orders, addresses, wishlist, products, coupons, moveWishlistToCart, toggleWishlist, logoutCustomer, refreshCustomerData, toast } = useStore();
   const router = useRouter();
@@ -2057,7 +2165,7 @@ function AccountPage({ section = "dashboard" }: { section?: string }) {
     if (active === "invoices") { const invoiceOrders = orders.filter(canShowInvoice); return <section><h2 className="display-font text-2xl font-black">Invoices</h2>{invoiceOrders.length ? <div className="mt-4 grid gap-3">{invoiceOrders.map((o) => <div key={o.orderNumber} className="premium-card flex flex-wrap items-center justify-between gap-3 p-5"><div><b>INV-{o.orderNumber}</b><p className="text-sm text-black/55">{new Date(o.createdAt).toLocaleDateString("en-IN")} | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div><Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link></div>)}</div> : <Empty title="No invoices yet" cta="View products" href="/products" />}</section>; }
     if (active === "coupons") return <section><h2 className="display-font text-2xl font-black">Coupons</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{coupons.filter((c) => c.active).map((coupon) => <div key={coupon.code} className="premium-card p-5"><p className="text-xs font-bold uppercase text-[#8a6500]">Available coupon</p><h3 className="display-font mt-1 text-xl font-black">{coupon.code}</h3><p className="text-sm text-black/60">{coupon.title}</p><p className="mt-2 text-sm font-bold">Minimum order {money(coupon.minOrder)}</p></div>)}</div></section>;
     if (active === "support") return <SupportCenter compact />;
-    return <section className="grid gap-6"><div className="premium-card overflow-hidden"><div className="bg-black p-6 text-white"><p className="text-xs font-bold uppercase text-[#d4af37]">Customer dashboard</p><h2 className="display-font mt-2 text-3xl font-black">Welcome back, {customer?.name?.split(" ")[0] || "Customer"}</h2><p className="mt-2 text-white/65">{customer?.email} {customer?.phone ? `| ${customer.phone}` : ""}</p></div><div className="grid gap-4 p-5 md:grid-cols-3">{[["Total orders", orders.length], ["Active orders", activeOrders.length], ["Wishlist count", wishlist.length], ["Saved addresses", addresses.length], ["Available coupons", coupons.filter((c) => c.active).length], ["Last order status", recentOrder?.status || "None"]].map(([k, v]) => <div key={String(k)} className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-sm text-black/55">{String(k)}</p><h3 className="display-font mt-2 text-2xl font-black">{String(v)}</h3></div>)}</div></div><div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]"><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Active order timeline</h3>{recentOrder ? <div className="mt-4 grid gap-3">{["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered"].map((step, index) => { const current = ["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered"].indexOf(recentOrder.status); return <div key={step} className="flex items-center gap-3"><span className={`h-3 w-3 rounded-full ${index <= current ? "bg-[#d4af37]" : "bg-black/15"}`} /><span className={index <= current ? "font-bold" : "text-black/45"}>{step}</span></div>; })}<Link href={`/track-order/${recentOrder.orderNumber}`}><Button className="mt-2">Track order</Button></Link></div> : <p className="mt-3 text-sm text-black/55">No active order yet.</p>}</div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Default address</h3>{defaultAddress ? <p className="mt-3 text-sm text-black/65">{defaultAddress.name}, {defaultAddress.line}, {defaultAddress.city} - {defaultAddress.pincode}</p> : <p className="mt-3 text-sm text-black/55">No saved address.</p>}<Link href="/account/addresses"><Button className="mt-4" variant="outline">Manage addresses</Button></Link></div></div><div className="grid gap-4 lg:grid-cols-3"><div className="premium-card p-5 lg:col-span-2"><h3 className="display-font text-xl font-bold">Recent orders</h3><div className="mt-3 grid gap-3">{orders.slice(0, 3).map((o) => <div key={o.orderNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#eadfca] bg-white p-3"><div><b>{o.orderNumber}</b><p className="text-xs text-black/55">{o.items.length} items | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div>{canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link>}</div>)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Coupons</h3>{coupons.filter((c) => c.active).slice(0, 3).map((coupon) => <div key={coupon.code} className="mt-3 rounded-md bg-[#fff8df] p-3"><b>{coupon.code}</b><p className="text-xs text-black/55">{coupon.title}</p></div>)}</div></div><div className="grid gap-4 lg:grid-cols-2"><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Reorder suggestions</h3><div className="mt-4 grid grid-cols-2 gap-3">{reorderSuggestions.map((p) => <ProductCard key={p.id} product={p} />)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Wishlist preview</h3>{wishlistProducts.length ? <div className="mt-4 grid grid-cols-2 gap-3">{wishlistProducts.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}</div> : <Empty title="Wishlist is empty" cta="Browse products" href="/products" />}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Support</h3><p className="mt-2 text-sm text-black/60">Need help with delivery, invoices, refunds, or address changes? Eagle Mart support is ready with your latest order context.</p><Link href="/account/support"><Button className="mt-4" variant="gold">Open support</Button></Link></div></section>;
+    return <section className="grid gap-6"><div className="premium-card overflow-hidden"><div className="bg-black p-6 text-white"><p className="text-xs font-bold uppercase text-[#d4af37]">Customer dashboard</p><h2 className="display-font mt-2 text-3xl font-black">Welcome back, {customer?.name?.split(" ")[0] || "Customer"}</h2><p className="mt-2 text-white/65">{customer?.email} {customer?.phone ? `| ${customer.phone}` : ""}</p></div><div className="grid gap-4 p-5 md:grid-cols-3">{[["Total orders", orders.length], ["Active orders", activeOrders.length], ["Wishlist count", wishlist.length], ["Saved addresses", addresses.length], ["Available coupons", coupons.filter((c) => c.active).length], ["Last order status", recentOrder?.status || "None"]].map(([k, v]) => <div key={String(k)} className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-sm text-black/55">{String(k)}</p><h3 className="display-font mt-2 text-2xl font-black">{String(v)}</h3></div>)}</div></div><div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]"><AccountTrackingPreview order={recentOrder} /><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Default address</h3>{defaultAddress ? <p className="mt-3 text-sm text-black/65">{defaultAddress.name}, {defaultAddress.line}, {defaultAddress.city} - {defaultAddress.pincode}</p> : <p className="mt-3 text-sm text-black/55">No saved address.</p>}<Link href="/account/addresses"><Button className="mt-4" variant="outline">Manage addresses</Button></Link></div></div><div className="grid gap-4 lg:grid-cols-3"><div className="premium-card p-5 lg:col-span-2"><h3 className="display-font text-xl font-bold">Recent orders</h3><div className="mt-3 grid gap-3">{orders.slice(0, 3).map((o) => <div key={o.orderNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#eadfca] bg-white p-3"><div><b>{o.orderNumber}</b><p className="text-xs text-black/55">{o.items.length} items | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div>{canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link>}</div>)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Coupons</h3>{coupons.filter((c) => c.active).slice(0, 3).map((coupon) => <div key={coupon.code} className="mt-3 rounded-md bg-[#fff8df] p-3"><b>{coupon.code}</b><p className="text-xs text-black/55">{coupon.title}</p></div>)}</div></div><div className="grid gap-4 lg:grid-cols-2"><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Reorder suggestions</h3><div className="mt-4 grid grid-cols-2 gap-3">{reorderSuggestions.map((p) => <ProductCard key={p.id} product={p} />)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Wishlist preview</h3>{wishlistProducts.length ? <div className="mt-4 grid grid-cols-2 gap-3">{wishlistProducts.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}</div> : <Empty title="Wishlist is empty" cta="Browse products" href="/products" />}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Support</h3><p className="mt-2 text-sm text-black/60">Need help with delivery, invoices, refunds, or address changes? Eagle Mart support is ready with your latest order context.</p><Link href="/account/support"><Button className="mt-4" variant="gold">Open support</Button></Link></div></section>;
   };
   if (authReady && !customer) return <CustomerShell><main className="container-premium flex min-h-[60vh] items-center justify-center py-10"><section className="premium-card max-w-lg p-8 text-center"><User className="mx-auto text-[#8a6500]" size={46} /><h1 className="display-font mt-4 text-3xl font-black">Login Required</h1><p className="mt-2 text-black/60">Please login first to view your account.</p><div className="mt-6 flex justify-center gap-3"><Link href="/login?next=/account"><Button variant="gold">Login</Button></Link><Link href="/signup"><Button variant="outline">Create Account</Button></Link></div></section></main></CustomerShell>;
   const navItems = [["dashboard", "Dashboard"], ["profile", "Profile"], ["orders", "My Orders"], ["addresses", "Addresses"], ["wishlist", "Wishlist"], ["invoices", "Invoices"], ["coupons", "Coupons"], ["support", "Support"]];

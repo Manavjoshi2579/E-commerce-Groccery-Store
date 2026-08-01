@@ -5,6 +5,7 @@ import { AdminStatus, AuthActorKind, AuthSessionStatus, OAuthProvider, OtpPurpos
 import { db } from "../lib/db.js";
 import { ADMIN_SESSION_MS, CUSTOMER_SESSION_MS, hashSecret, randomToken, signSession, type SessionKind, type SessionPayload } from "../lib/auth.js";
 import { adminPasswordIssues, customerPasswordIssues, normalizeEmail, normalizeIndianMobile } from "../validators/auth.js";
+import { deliveryAdminConfig, ensureDeliveryAdminAccount } from "./delivery-admin-maintenance.service.js";
 
 const GENERIC_RESET_MESSAGE = "If an account exists, password reset instructions have been sent.";
 const CUSTOMER_LOCK_MS = 5 * 60 * 1000;
@@ -415,6 +416,9 @@ export async function resetAdminProfile(id: string) {
 
 export async function loginAdmin(input: { email: string; password: string }, ctx: { ip?: string; userAgent?: string } = {}) {
   const email = normalizeEmail(input.email);
+  if (email === deliveryAdminConfig().email) {
+    await ensureDeliveryAdminAccount();
+  }
   const admin = await db.adminUser.findFirst({ where: { OR: [{ email }, { normalizedEmail: email }] }, include: { role: true } });
   const invalid = new AuthError("Invalid email or password.", "AUTH_INVALID_CREDENTIALS", 401);
   if (!admin) throw invalid;

@@ -10,7 +10,8 @@ export type Capability =
   | "products:read"
   | "inventory:read"
   | "inventory:update"
-  | "billing:read";
+  | "billing:read"
+  | "payments:update";
 
 export const roleCapabilities: Record<RoleName, Capability[]> = {
   [RoleName.SUPER_ADMIN]: [
@@ -24,13 +25,14 @@ export const roleCapabilities: Record<RoleName, Capability[]> = {
     "inventory:read",
     "inventory:update",
     "billing:read",
+    "payments:update",
   ],
-  [RoleName.STORE_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "products:read", "inventory:read"],
+  [RoleName.STORE_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "products:read", "inventory:read", "payments:update"],
   [RoleName.INVENTORY_MANAGER]: ["products:read", "inventory:read", "inventory:update"],
-  [RoleName.ORDER_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read"],
-  [RoleName.DELIVERY_STAFF]: ["orders:read", "delivery:read", "delivery:update_own_status"],
+  [RoleName.ORDER_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "payments:update"],
+  [RoleName.DELIVERY_STAFF]: ["orders:read", "delivery:read", "delivery:update_own_status", "payments:update"],
   [RoleName.SUPPORT_STAFF]: ["orders:read"],
-  [RoleName.BILLING_STAFF]: ["orders:read", "billing:read"],
+  [RoleName.BILLING_STAFF]: ["orders:read", "billing:read", "payments:update"],
 };
 
 export function hasCapability(role: RoleName | undefined, capability: Capability) {

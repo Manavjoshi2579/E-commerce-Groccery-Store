@@ -290,6 +290,7 @@ model AdminUser {
   sessions       AuthSession[]
   passwordResetTokens PasswordResetToken[]
   mfaRecoveryCodes AdminMfaRecoveryCode[]
+  deliveryStaffProfile DeliveryStaff?
 
   @@index([roleId])
   @@index([status])
@@ -896,6 +897,7 @@ model DeliveryHoliday {
 
 model DeliveryStaff {
   id          String               @id @default(cuid())
+  adminUserId String?              @unique
   name        String
   phone       String               @unique
   zoneId      String?
@@ -903,9 +905,11 @@ model DeliveryStaff {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
+  adminUser   AdminUser?           @relation(fields: [adminUserId], references: [id])
   zone        DeliveryZone?        @relation(fields: [zoneId], references: [id])
   assignments DeliveryAssignment[]
 
+  @@index([adminUserId])
   @@index([zoneId])
   @@index([active])
 }

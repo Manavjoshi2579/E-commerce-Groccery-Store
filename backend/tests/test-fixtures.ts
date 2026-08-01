@@ -43,13 +43,14 @@ export async function ensureTestPrincipals() {
   for (const [email, roleName, name] of [
     ["superadmin@eagleclub.in", RoleName.SUPER_ADMIN, "Eagle Mart Super Admin"],
     ["inventory@eagleclub.in", RoleName.INVENTORY_MANAGER, "Eagle Mart Inventory Manager"],
+    ["delivery@eagleclub.in", RoleName.DELIVERY_STAFF, "Eagle Mart Delivery"],
   ] as const) {
     const existing = await db.adminUser.findUnique({ where: { email } });
     if (existing) {
       await db.adminMfaRecoveryCode.deleteMany({ where: { adminUserId: existing.id } });
       await db.passwordResetToken.deleteMany({ where: { adminUserId: existing.id } });
     }
-    await db.adminUser.upsert({
+    const admin = await db.adminUser.upsert({
       where: { email },
       update: {
         name,
@@ -72,5 +73,12 @@ export async function ensureTestPrincipals() {
         status: AdminStatus.ACTIVE,
       },
     });
+    if (roleName === RoleName.DELIVERY_STAFF) {
+      await db.deliveryStaff.upsert({
+        where: { phone: "9999999999" },
+        update: { name, adminUserId: admin.id, active: true },
+        create: { name, phone: "9999999999", adminUserId: admin.id, active: true },
+      });
+    }
   }
 }

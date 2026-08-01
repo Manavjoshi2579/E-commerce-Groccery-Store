@@ -1,4 +1,4 @@
-import { Prisma, RoleName } from "@prisma/client";
+import { OrderStatus, Prisma, RoleName } from "@prisma/client";
 import { db } from "./db.js";
 
 export type AdminRbacContext = {
@@ -16,13 +16,10 @@ function scopedOrderWhere(context: AdminRbacContext): Prisma.OrderWhereInput | u
   if (context.role === RoleName.SUPER_ADMIN) return undefined;
 
   if (context.role === RoleName.DELIVERY_STAFF) {
-    if (context.deliveryStaffId) {
-      return { deliveryAssignment: { deliveryStaffId: context.deliveryStaffId } };
-    }
-
-    // Current schema has no AdminUser -> DeliveryStaff relation. Until that relation
-    // exists, delivery staff sees delivery-team orders only, never unrelated admin data.
-    return { deliveryAssignment: { isNot: null } };
+    return {
+      deliveryAssignment: { isNot: null },
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED] },
+    };
   }
 
   return undefined;

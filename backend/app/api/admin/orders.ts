@@ -1,12 +1,12 @@
 import { RoleName } from "@prisma/client";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdminRole } from "../../../middleware/auth.js";
 import { requireAdminCapability } from "../../../middleware/rbac.js";
-import { assignDelivery, getAdminOrder, listAdminOrders, updateAdminOrderStatus, updateDeliveryOrderStatus } from "../../../services/order.service.js";
+import { assignDelivery, getAdminOrder, listAdminOrders, listDeliveryOperationsOrders, markDeliveryAttemptFailed, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "../../../services/order.service.js";
 import { createDeliverySlot, deleteDeliverySlot, listAdminSlots, updateDeliverySlot } from "../../../services/delivery.service.js";
 import { db } from "../../../lib/db.js";
-import { adminOrderStatusSchema, assignDeliverySchema, deliveryStaffSchema, deliverySlotAdminSchema } from "../../../validators/checkout.js";
+import { adminOrderStatusSchema, adminPaymentStatusSchema, assignDeliverySchema, deliveryFailureSchema, deliveryStaffSchema, deliverySlotAdminSchema } from "../../../validators/checkout.js";
 
 export const adminOrderRouter = Router();
 
@@ -18,9 +18,23 @@ function param(value: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-adminOrderRouter.get("/orders", requireAdminCapability("orders:read"), async (req, res) => sendOk(res, { orders: await listAdminOrders(req.db) }));
+async function handlePaymentStatusUpdate(req: Request, res: Response) {
+  const parsed = adminPaymentStatusSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid payment status.");
+  try {
+    return sendOk(res, { order: await updateAdminPaymentStatus(param(req.params.id), parsed.data.status, { note: parsed.data.note, actorRole: req.admin?.role.name, actorId: req.admin?.id }, req.db!) });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not update payment status.");
+  }
+}
 
-adminOrderRouter.get("/delivery-staff", requireAdminRole(orderViewRoles), async (_req, res) => {
+adminOrderRouter.get("/orders", requireAdminCapability("orders:read"), async (req, res) => {
+  const orders = req.admin?.role.name === RoleName.DELIVERY_STAFF ? await listDeliveryOperationsOrders() : await listAdminOrders(req.db);
+  return sendOk(res, { orders });
+});
+adminOrderRouter.get("/delivery-orders", requireAdminCapability("delivery:read"), async (_req, res) => sendOk(res, { orders: await listDeliveryOperationsOrders() }));
+
+adminOrderRouter.get("/delivery-staff", requireAdminRole(deliveryStaffManageRoles), async (_req, res) => {
   const staff = await db.deliveryStaff.findMany({
     where: { active: true },
     orderBy: { name: "asc" },
@@ -29,7 +43,7 @@ adminOrderRouter.get("/delivery-staff", requireAdminRole(orderViewRoles), async 
   return sendOk(res, { staff });
 });
 
-adminOrderRouter.get("/delivery-slots", requireAdminRole(orderViewRoles), async (_req, res) => {
+adminOrderRouter.get("/delivery-slots", requireAdminRole(orderManageRoles), async (_req, res) => {
   return sendOk(res, { slots: await listAdminSlots() });
 });
 
@@ -102,6 +116,16 @@ adminOrderRouter.patch("/orders/:id/delivery-status", requireAdminCapability("de
   }
 });
 
+adminOrderRouter.post("/orders/:id/delivery-failure", requireAdminCapability("delivery:update_own_status"), async (req, res) => {
+  const parsed = deliveryFailureSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid delivery failure.");
+  try {
+    return sendOk(res, { order: await markDeliveryAttemptFailed(param(req.params.id), parsed.data, req.db!) });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not record delivery attempt.");
+  }
+});
+
 adminOrderRouter.patch("/orders/:id/status", requireAdminRole(orderManageRoles), async (req, res) => {
   const parsed = adminOrderStatusSchema.safeParse(req.body);
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid order status.");
@@ -111,6 +135,11 @@ adminOrderRouter.patch("/orders/:id/status", requireAdminRole(orderManageRoles),
     return sendError(res, 400, error instanceof Error ? error.message : "Could not update order.");
   }
 });
+
+adminOrderRouter.patch("/orders/:id/payment-status", requireAdminCapability("payments:update"), handlePaymentStatusUpdate);
+adminOrderRouter.patch("/orders/:id/payment", requireAdminCapability("payments:update"), handlePaymentStatusUpdate);
+adminOrderRouter.patch("/payments/:id/status", requireAdminCapability("payments:update"), handlePaymentStatusUpdate);
+adminOrderRouter.patch("/payments/:id/payment-status", requireAdminCapability("payments:update"), handlePaymentStatusUpdate);
 
 adminOrderRouter.post("/orders/:id/assign-delivery", requireAdminRole(orderManageRoles), async (req, res) => {
   const parsed = assignDeliverySchema.safeParse(req.body);

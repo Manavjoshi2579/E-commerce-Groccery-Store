@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdminRole } from "../../../middleware/auth.js";
-import { adjustInventory, inventoryRoles, listInventory, listStockMovements, updateInventory } from "../../../services/inventory.service.js";
-import { inventoryAdjustSchema, inventoryPatchSchema } from "../../../validators/checkout.js";
+import { adjustInventory, inventoryRoles, listInventory, listStockMovements, recordOfflineSale, updateInventory } from "../../../services/inventory.service.js";
+import { inventoryAdjustSchema, inventoryPatchSchema, offlineSaleSchema } from "../../../validators/checkout.js";
 
 export const adminInventoryRouter = Router();
 
@@ -29,3 +29,13 @@ adminInventoryRouter.post("/inventory/:id/adjust", requireAdminRole(inventoryRol
 });
 
 adminInventoryRouter.get("/inventory/movements", requireAdminRole(inventoryRoles), async (_req, res) => sendOk(res, { movements: await listStockMovements() }));
+
+adminInventoryRouter.post("/inventory/offline-sales", requireAdminRole(inventoryRoles), async (req, res) => {
+  const parsed = offlineSaleSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid offline sale payload.");
+  try {
+    return sendOk(res, { sale: await recordOfflineSale(req.admin!.id, parsed.data) }, 201);
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not record offline sale.");
+  }
+});
