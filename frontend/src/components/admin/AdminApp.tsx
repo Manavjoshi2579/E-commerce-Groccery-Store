@@ -36,7 +36,7 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSales, fetchAdminOfflineSyncConflicts, fetchAdminOrders, fetchAdminPosMetrics, lookupAdminPosInventory, markDeliveryAttemptFailed, resolveAdminOfflineSyncConflict, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSales, fetchAdminOrders, fetchAdminPosMetrics, lookupAdminPosInventory, markDeliveryAttemptFailed, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -52,7 +52,6 @@ const nav = [
   ["delivery", Truck, "Delivery"],
   ["payments", CreditCard, "Payments"],
   ["pos", WalletCards, "POS"],
-  ["pos-conflicts", ShieldCheck, "POS Sync Conflicts"],
   ["invoices", ClipboardList, "Invoices"],
   ["returns", RotateCcw, "Returns"],
   ["customers", Users, "Customers"],
@@ -71,7 +70,7 @@ const nav = [
 
 const roleSections: Record<string, string[]> = {
   SUPER_ADMIN: nav.map(([href]) => href),
-  STORE_MANAGER: ["orders", "delivery", "payments", "pos", "pos-conflicts", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
+  STORE_MANAGER: ["orders", "delivery", "payments", "pos", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
   INVENTORY_MANAGER: ["products", "inventory", "reports"],
   CASHIER: ["pos"],
   ORDER_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "reports"],
@@ -2642,26 +2641,6 @@ function DataTable({ headers, children, minWidth = "min-w-[760px]" }: { headers:
   return <div className="responsive-scroll -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0"><table className={`w-full ${minWidth} border-collapse text-left text-sm`}><thead className="bg-black text-white"><tr>{headers.map((h, index) => <th key={`${h}-${index}`} className="whitespace-nowrap p-3 align-middle">{h}</th>)}</tr></thead><tbody>{children}</tbody></table><p className="scroll-hint mt-2 sm:hidden">Swipe or drag sideways to view all columns.</p></div>;
 }
 
-function PosSyncConflicts() {
-  const { toast } = useStore();
-  const [rows, setRows] = useState<any[]>([]);
-  const [status, setStatus] = useState("");
-  const [q, setQ] = useState("");
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const load = () => fetchAdminOfflineSyncConflicts({ status: status || undefined, q: q || undefined }).then(setRows).catch((error) => toast(error instanceof Error ? error.message : "Unable to load POS sync conflicts.", "error"));
-  useEffect(() => { load(); }, []);
-  const resolve = (row: any, nextStatus: string) => {
-    const resolutionNote = notes[row.id]?.trim();
-    if (!resolutionNote) return toast("Resolution note is required.", "error");
-    resolveAdminOfflineSyncConflict(row.id, { status: nextStatus, resolutionNote }).then((saved) => {
-      setRows((items) => items.map((item) => item.id === saved.id ? saved : item));
-      setNotes((items) => ({ ...items, [row.id]: "" }));
-      toast("Conflict updated", "success");
-    }).catch((error) => toast(error instanceof Error ? error.message : "Could not update conflict.", "error"));
-  };
-  return <AdminShell section="pos-conflicts"><Panel title="POS Sync Conflicts"><div className="mb-4 grid gap-2 md:grid-cols-[180px_1fr_auto]"><select aria-label="Conflict status" value={status} onChange={(event) => setStatus(event.target.value)} className="h-12 rounded-md border px-3"><option value="">All statuses</option>{["STOCK_CONFLICT", "PRICE_CHANGED", "PRODUCT_DISABLED", "PRODUCT_NOT_FOUND", "LOCATION_INVALID", "DUPLICATE", "PAYMENT_REVIEW", "PARTIAL", "FAILED", "MANUAL_REVIEW", "REVIEWED", "CANCELLED"].map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select><input aria-label="Search conflicts" value={q} onChange={(event) => setQ(event.target.value)} className="h-12 rounded-md border px-3" placeholder="Search local/server reference, key, reason" /><Button variant="gold" onClick={load}>Search</Button></div><DataTable headers={["Created", "Local Ref", "Status", "Cashier", "Device", "Reason", "Resolution"]} minWidth="min-w-[1180px]">{rows.map((row) => <tr key={row.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 text-xs font-bold">{new Date(row.createdAt).toLocaleString("en-IN")}</td><td className="p-3 font-bold">{row.localReference}<p className="text-xs font-normal text-black/45">{row.serverReference || row.idempotencyKey || "-"}</p></td><td><StatusBadge value={row.status} /></td><td>{row.cashier?.name || "-"}</td><td className="max-w-36 truncate text-xs">{row.deviceId || "-"}</td><td className="max-w-xs text-sm text-black/65">{row.reason}</td><td className="p-3"><div className="grid gap-2"><input aria-label={`Resolution note for ${row.localReference}`} value={notes[row.id] || ""} onChange={(event) => setNotes((items) => ({ ...items, [row.id]: event.target.value }))} className="h-11 rounded-md border px-3 text-sm" placeholder="Resolution note" /><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => resolve(row, "REVIEWED")}>Mark reviewed</Button><Button variant="ghost" onClick={() => resolve(row, "MANUAL_REVIEW")}>Escalate</Button><Button variant="ghost" onClick={() => resolve(row, "CANCELLED")}>Cancel</Button></div></div></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No POS sync conflicts found.</p>}</Panel></AdminShell>;
-}
-
 function AdminPageSwitch({ slug }: { slug: string[] }) {
   const [first, second, third] = slug;
   if (!first) return <Dashboard />;
@@ -2669,7 +2648,6 @@ function AdminPageSwitch({ slug }: { slug: string[] }) {
   if (first === "products" && third === "edit") return <ProductManager mode="edit" id={second} />;
   if (first === "products") return <ProductManager />;
   if (first === "pos") return <Inventory posOnly />;
-  if (first === "pos-conflicts") return <PosSyncConflicts />;
   if (first === "inventory") return <Inventory productId={second} />;
   if (first === "orders") return <Orders detail={second} />;
   if (first === "coupons") return <CouponsManaged />;
