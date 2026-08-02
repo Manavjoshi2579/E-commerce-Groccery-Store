@@ -26,6 +26,7 @@ import { healthRouter } from "./api/health.js";
 import { supportRouter } from "./api/support.js";
 import { databaseConnectionMessage, isDatabaseError } from "../lib/db-health.js";
 import { sendError } from "../lib/http.js";
+import { logger } from "../lib/logger.js";
 import { csrfProtection } from "../middleware/csrf.js";
 import { adminMutationRateLimit } from "../middleware/rate-limit.js";
 
@@ -54,6 +55,18 @@ function cacheHeaders(req: express.Request, res: express.Response, next: express
   return next();
 }
 
+function requestTimeout(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const timeoutMs = Number(process.env.API_REQUEST_TIMEOUT_MS || 15000);
+  const timer = setTimeout(() => {
+    if (res.headersSent) return;
+    logger.warn("api_request_timeout", { method: req.method, path: req.path, timeoutMs });
+    sendError(res, 503, "Request timed out. Please try again.", "REQUEST_TIMEOUT");
+  }, timeoutMs);
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+  next();
+}
+
 export function createApp() {
   const app = express();
 
@@ -61,6 +74,7 @@ export function createApp() {
   app.set("etag", "strong");
   app.set("trust proxy", 1);
   app.use(compression({ threshold: 1024 }));
+  app.use(requestTimeout);
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");

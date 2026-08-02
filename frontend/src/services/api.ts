@@ -36,6 +36,7 @@ type CacheEntry = { expiresAt: number; value: unknown };
 const responseCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 const publicGetCacheMs = 30_000;
+const requestTimeoutMs = 12_000;
 
 function cacheKey(path: string, init?: RequestInit) {
   return `${requestMethod(init)}:${path}`;
@@ -74,17 +75,23 @@ async function requestApiNetwork<T>(path: string, init?: RequestInit): Promise<T
   const attempts = canRetryRequest(init) ? 2 : 1;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let response: Response;
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       response = await fetch(`${API_BASE}${path}`, {
         ...init,
         credentials: "include",
+        signal: init?.signal || controller.signal,
         headers: {
           "Content-Type": "application/json",
           ...(init?.headers || {}),
         },
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw new Error("Request timed out. Please try again.");
       throw new Error(API_UNAVAILABLE_MESSAGE);
+    } finally {
+      globalThis.clearTimeout(timeout);
     }
 
     let body: ApiEnvelope<T> | null = null;
