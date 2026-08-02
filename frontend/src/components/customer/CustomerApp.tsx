@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { memo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, BadgePercent, Bell, BookOpen, CheckCircle2, ChevronRight, Circle, Clapperboard, CreditCard, Eye, EyeOff, GraduationCap, Headphones, Heart, Home, Lightbulb, LogOut, MapPin, Menu, Minus, Music, Package, PackageCheck,
   PlayCircle, Plus, Search, ShieldCheck, ShoppingBag, Sparkles, Truck, User, X, FileText, RotateCcw, MessageCircle,
@@ -450,7 +450,7 @@ function SocialLogo({ name }: { name: "Facebook" | "Instagram" | "X" | "YouTube"
   return <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true"><path fill="currentColor" d="M4.98 3.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM.5 8h4.9v16H.5V8Zm8 0h4.7v2.2h.1c.7-1.3 2.4-2.7 4.9-2.7 5.2 0 6.2 3.4 6.2 7.9V24h-4.9v-7.6c0-1.8 0-4.1-2.5-4.1s-2.9 2-2.9 4V24H8.5V8Z" transform="scale(.9) translate(1.3 0)" /></svg>;
 }
 
-function ProductCard({ product, footer }: { product: Product; footer?: ReactNode }) {
+const ProductCard = memo(function ProductCard({ product, footer }: { product: Product; footer?: ReactNode }) {
   const { addToCart, toggleWishlist, wishlist, authReady } = useStore();
   const variants = customerVisibleVariants(product);
   const fallbackVariant = defaultVariant(product);
@@ -463,7 +463,7 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-md border border-[#e8dfcd] bg-white shadow-sm transition hover:border-[#d4af37] hover:shadow-md">
       <Link href={`/product/${product.slug}`} className="block bg-[#fbfaf6] p-2">
-        <img src={product.image} alt={product.name} onError={(event) => { event.currentTarget.src = imageFallback; }} className="aspect-square w-full rounded-md bg-white object-contain p-2 transition duration-300 group-hover:scale-[1.02]" />
+        <img src={product.image} alt={product.name} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.src = imageFallback; }} className="aspect-square w-full rounded-md bg-white object-contain p-2 transition duration-300 group-hover:scale-[1.02]" />
       </Link>
       <div className="flex flex-1 flex-col px-3 pb-3 pt-2">
         <div className="flex items-start gap-2">
@@ -487,7 +487,7 @@ function ProductCard({ product, footer }: { product: Product; footer?: ReactNode
       {footer && <div className="grid grid-cols-2 gap-2 border-t border-[#eadfca] bg-white p-3">{footer}</div>}
     </article>
   );
-}
+});
 
 function ComingSoonExperience({
   variant,
@@ -883,14 +883,14 @@ function ProductsPage({ mode, value }: { mode?: string; value?: string }) {
         minPrice: minPrice || undefined,
         maxPrice: maxPrice || undefined,
         sort,
-        limit: 1000,
+        limit: 100,
       }).then((result) => {
         const nextProducts = result.products.filter((product) => isCustomerVisibleProduct(product) && productMatchesSearch(product, query));
         registerProducts(nextProducts);
         setRemoteProducts(nextProducts);
         setRemoteFilters(result.filters);
       }).catch((error) => toast(error instanceof Error ? error.message : "Unable to load filtered products.", "error")).finally(() => setLoadingProducts(false));
-    }, 180);
+    }, 200);
     return () => window.clearTimeout(timer);
   }, [activeCategory, availability, brand, local, maxPrice, minPrice, organic, query, sort, registerProducts, toast]);
   useEffect(() => {

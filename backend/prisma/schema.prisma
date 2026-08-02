@@ -455,7 +455,9 @@ model Category {
   products    Product[]
 
   @@index([slug])
+  @@index([name])
   @@index([status])
+  @@index([updatedAt])
   @@index([parentId])
 }
 
@@ -473,6 +475,7 @@ model Brand {
 
   @@index([slug])
   @@index([status])
+  @@index([updatedAt])
 }
 
 model Product {
@@ -520,6 +523,12 @@ model Product {
   @@index([sku])
   @@index([clientProductCode])
   @@index([imageStatus])
+  @@index([name])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([categoryId, status, updatedAt])
+  @@index([brandId, status, updatedAt])
+  @@index([status, featured, updatedAt])
 }
 
 model ProductImage {
@@ -582,6 +591,9 @@ model Inventory {
   @@unique([productId, variantId])
   @@index([productId])
   @@index([variantId])
+  @@index([stock])
+  @@index([reserved])
+  @@index([updatedAt])
 }
 
 model StockMovement {
@@ -616,6 +628,8 @@ model StockMovement {
   @@index([type])
   @@index([referenceType, referenceId])
   @@index([createdAt])
+  @@index([productId, createdAt])
+  @@index([type, createdAt])
 }
 
 model Cart {
@@ -775,6 +789,11 @@ model Order {
   @@index([orderNumber])
   @@index([status])
   @@index([createdAt])
+  @@index([updatedAt])
+  @@index([paymentStatus])
+  @@index([customerPhone])
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model OrderItem {
@@ -819,6 +838,8 @@ model Payment {
 
   @@index([orderId])
   @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model Invoice {
@@ -840,6 +861,8 @@ model Invoice {
 
   @@index([orderId])
   @@index([invoiceNumber])
+  @@index([invoiceDate])
+  @@index([createdAt])
 }
 
 model DeliveryZone {
@@ -936,6 +959,7 @@ model DeliveryAssignment {
   @@index([deliveryStaffId])
   @@index([status])
   @@index([assignedAt])
+  @@index([deliveryStaffId, status])
 }
 
 model CustomerDeliveryConfirmation {

@@ -1,4 +1,5 @@
 import cookieParser from "cookie-parser";
+import compression from "compression";
 import cors from "cors";
 import express from "express";
 import { catalogRouter } from "./api/catalog.js";
@@ -33,11 +34,33 @@ function allowedOrigins() {
   return configured.split(",").map((origin) => origin.trim()).filter(Boolean);
 }
 
+function cacheHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.method !== "GET") {
+    res.setHeader("Cache-Control", "no-store");
+    return next();
+  }
+  const path = req.path;
+  const publicCatalog = ["/api/catalog/home", "/api/categories", "/api/brands"].some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+    || path.startsWith("/api/products")
+    || path.startsWith("/api/search");
+  if (publicCatalog) {
+    res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=300");
+    res.setHeader("Vary", "Accept-Encoding");
+    return next();
+  }
+  if (path.startsWith("/api/admin") || path.startsWith("/api/account") || path.startsWith("/api/cart") || path.startsWith("/api/orders") || path.startsWith("/api/wishlist")) {
+    res.setHeader("Cache-Control", "private, no-store");
+  }
+  return next();
+}
+
 export function createApp() {
   const app = express();
 
   app.disable("x-powered-by");
+  app.set("etag", "strong");
   app.set("trust proxy", 1);
+  app.use(compression({ threshold: 1024 }));
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
@@ -45,6 +68,7 @@ export function createApp() {
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     next();
   });
+  app.use(cacheHeaders);
   app.use(cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);

@@ -31,7 +31,45 @@ function canRetryRequest(init?: RequestInit) {
   return ["GET", "HEAD", "OPTIONS"].includes(requestMethod(init));
 }
 
+type CacheEntry = { expiresAt: number; value: unknown };
+
+const responseCache = new Map<string, CacheEntry>();
+const inFlightRequests = new Map<string, Promise<unknown>>();
+const publicGetCacheMs = 30_000;
+
+function cacheKey(path: string, init?: RequestInit) {
+  return `${requestMethod(init)}:${path}`;
+}
+
+export function clearApiCache(prefix?: string) {
+  for (const key of responseCache.keys()) {
+    if (!prefix || key.includes(prefix)) responseCache.delete(key);
+  }
+}
+
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = requestMethod(init);
+  const shouldUseCache = method === "GET" && !init?.body;
+  const key = shouldUseCache ? cacheKey(path, init) : "";
+  if (shouldUseCache) {
+    const cached = responseCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+    const pending = inFlightRequests.get(key);
+    if (pending) return pending as Promise<T>;
+  }
+
+  const requestPromise = requestApiNetwork<T>(path, init).then((value) => {
+    if (shouldUseCache) responseCache.set(key, { value, expiresAt: Date.now() + publicGetCacheMs });
+    else responseCache.clear();
+    return value;
+  }).finally(() => {
+    if (shouldUseCache) inFlightRequests.delete(key);
+  });
+  if (shouldUseCache) inFlightRequests.set(key, requestPromise);
+  return requestPromise;
+}
+
+async function requestApiNetwork<T>(path: string, init?: RequestInit): Promise<T> {
   let lastRateLimitError: ApiError | null = null;
   const attempts = canRetryRequest(init) ? 2 : 1;
   for (let attempt = 0; attempt < attempts; attempt += 1) {

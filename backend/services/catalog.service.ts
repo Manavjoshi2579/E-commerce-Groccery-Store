@@ -451,6 +451,7 @@ export async function getHomepageCatalogSections() {
   const categories = await db.category.findMany({
     where: { deletedAt: null, status: ProductStatus.ACTIVE },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    take: 12,
   });
   const sections = [];
   for (const category of categories) {
@@ -463,6 +464,7 @@ export async function getHomepageCatalogSections() {
       where,
       include: productInclude,
       orderBy: [{ featured: "desc" }, { updatedAt: "desc" }, { name: "asc" }],
+      take: 8,
     });
     if (!rows.length) continue;
     const products = rows.sort(sortHomepageProducts).map(mapProduct);
