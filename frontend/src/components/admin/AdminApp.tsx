@@ -36,7 +36,7 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -847,31 +847,70 @@ function ProductManager({ mode, id }: { mode?: "new" | "edit"; id?: string }) {
   return <AdminShell section="products"><Panel title="Product Management"><div className="mb-4 grid gap-2 sm:gap-3 xl:grid-cols-[1fr_220px_auto]"><input className="min-w-0 rounded-md border px-3 py-2 text-sm sm:text-base" placeholder="Search/filter products" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setProductPage(1); }} /><select aria-label="Image status" value={imageStatusFilter} onChange={(e) => { setImageStatusFilter(e.target.value); setProductPage(1); }} className="min-w-0 rounded-md border px-3 py-2 text-sm sm:text-base"><option value="">All image statuses</option><option value="VERIFIED">Image Available</option><option value="PLACEHOLDER">Missing Image</option><option value="NEEDS_REVIEW">Review Required</option></select><div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{canEditCatalog && <Button className="w-full sm:w-auto" variant="outline" onClick={downloadTemplate}>Download template</Button>}{canEditCatalog && <Link href="/admin/products/new" className="min-w-0"><Button className="w-full sm:w-auto" variant="gold"><Plus size={16} /> Add Product</Button></Link>}</div></div>{canEditCatalog && <section className="mb-4 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3 sm:p-4"><div className="grid gap-3 lg:grid-cols-[1fr_220px_auto_auto] lg:items-end"><label className="grid cursor-pointer gap-2 rounded-md border-2 border-dashed border-[#d4af37] bg-white p-3 text-sm font-bold sm:p-4"><span>{bulkFile ? bulkFile.name : "Drop or choose CSV/XLSX product file"}</span><span className="text-xs font-normal text-black/55">CSV, XLSX, XLS up to 5 MB and 1000 rows.</span><input type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="sr-only" disabled={bulkLoading} onChange={(event) => previewBulkFile(event.target.files?.[0])} /></label><label className="text-sm font-bold">Import mode<select value={bulkMode} onChange={(event) => setBulkMode(event.target.value as BulkImportMode)} className="mt-1 w-full rounded-md border px-3 py-2.5 text-sm sm:py-3 sm:text-base"><option value="create_update">Create and update existing</option><option value="create_only">Create new products only</option><option value="update_only">Update existing products only</option></select></label><label className="flex items-center gap-2 rounded-md border border-[#eadfca] bg-white px-3 py-2.5 text-sm font-bold sm:py-3"><input type="checkbox" checked={overwriteExistingPrimaryImage} onChange={(event) => setOverwriteExistingPrimaryImage(event.target.checked)} /><span className="min-w-0">Update images from Primary Image URL</span></label><Button className="w-full lg:w-auto" variant="gold" disabled={!bulkFile || bulkLoading || Boolean(bulkSummary?.invalidRows)} onClick={confirmBulkImport}>{bulkLoading ? "Working..." : "Confirm import"}</Button><Button className="w-full lg:w-auto" variant="outline" onClick={resetBulkImport}>Cancel/reset</Button></div>{bulkSummary && <div className="mt-4 grid gap-3"><div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-7">{[["Total rows", bulkSummary.totalRows], ["Valid rows", bulkSummary.validRows], ["Invalid rows", bulkSummary.invalidRows], ["New products", bulkSummary.newProducts ?? 0], ["To update", bulkSummary.productsToUpdate ?? 0], ["Created", bulkSummary.created], ["Updated", bulkSummary.updated]].map(([label, value]) => <div key={String(label)} className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/50">{String(label)}</p><b className="text-lg">{String(value)}</b></div>)}</div><div className="flex flex-wrap items-center gap-2"><input className="rounded-md border px-3 py-2 text-sm" placeholder="Search preview rows" value={bulkPreviewSearch} onChange={(event) => setBulkPreviewSearch(event.target.value)} />{bulkSummary.failedRowsCsv && <Button variant="outline" onClick={downloadFailedRows}>Download failed rows</Button>}</div>{filteredBulkRows.length > 0 && <DataTable headers={["Row", "Status", "Action", "SKU", "Product", "Image URL", "Preview", "Image Status", "Messages"]} minWidth="min-w-[1080px]">{filteredBulkRows.map((row) => <tr key={row.row} className="border-b bg-white"><td className="p-3 font-bold">{row.row}</td><td><StatusBadge value={row.status} /></td><td className="capitalize">{row.action}</td><td>{row.data?.sku || "Auto"}</td><td>{row.data?.name}</td><td className="max-w-[220px] truncate text-xs">{row.image?.url || "-"}</td><td>{row.image?.status === "valid" ? <img src={row.image.url} alt="" className="h-12 w-12 rounded-md border object-contain" /> : "-"}</td><td><StatusBadge value={row.image?.status || "none"} /></td><td className="max-w-md text-sm text-black/65">{[...(row.errors || []).map((item) => item.message), ...(row.warnings || []).map((item) => item.message)].join("; ") || "Ready"}</td></tr>)}</DataTable>}{bulkSummary.errors.length > 0 && <div className="grid gap-1 text-sm text-red-700">{bulkSummary.errors.slice(0, 12).map((item) => <p key={item.row}>Row {item.row}: {item.errors.join(", ")}</p>)}</div>}</div>}</section>}<DataTable headers={["Image", "Product Name", "SKU", "Category", "Brand", "Image Status", "MRP", "Selling Price", "Stock", "Status", "Featured", "Actions"]} minWidth="min-w-[1180px]">{products.map((p) => <tr key={p.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 align-middle"><img src={p.image} alt={p.name} className="h-12 w-12 rounded-md border border-[#eadfca] object-contain" /></td><td className="p-3 align-middle font-bold">{p.name}</td><td className="p-3 align-middle">{p.sku}</td><td className="p-3 align-middle">{p.category}</td><td className="p-3 align-middle">{p.brand}</td><td className="p-3 align-middle"><StatusBadge value={p.imageStatus || "Placeholder"} /></td><td className="p-3 align-middle">{money(p.mrp)}</td><td className="p-3 align-middle">{money(p.price)}</td><td className="p-3 align-middle">{p.stock}</td><td className="p-3 align-middle"><StatusBadge value={p.active === false ? "Inactive" : p.stock <= 0 ? "Out of stock" : "Active"} /></td><td className="p-3 align-middle">{p.featured ? "Yes" : "No"}</td><td className="p-3 align-middle"><div data-testid="product-actions" className="flex items-center gap-2 whitespace-nowrap"><Link className="rounded border px-2 py-1 text-xs font-bold" href={`/product/${p.slug}`}>View</Link>{canEditCatalog && <Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/products/${p.id}/edit`}>Edit</Link>}{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => toggleActive(p)}>{p.active === false ? "Activate" : "Disable"}</button>}<Link className="rounded border px-2 py-1 text-xs font-bold" href={`/admin/inventory/${p.id}`}>Stock</Link>{canEditCatalog && <button className="rounded border px-2 py-1 text-xs font-bold" onClick={() => openImageEditor(p)}>Replace Image</button>}{canEditCatalog && <button className="rounded px-2 py-1 text-xs font-bold text-red-700" onClick={() => remove(p)}>Delete</button>}</div></td></tr>)}</DataTable><PaginationControls page={productPagination.page} totalPages={productPagination.totalPages} total={productPagination.total} onPageChange={setProductPage} /></Panel>{imageEditor && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"><div className="w-full max-w-lg rounded-md bg-white p-5 shadow-xl"><div className="mb-4 flex items-start justify-between gap-4"><div><h3 className="display-font text-xl font-black">Replace Image</h3><p className="text-sm text-black/60">{imageEditor.name}</p></div><button className="rounded-md border p-2" aria-label="Close image editor" onClick={() => setImageEditor(null)}><X size={18} /></button></div><label className="text-sm font-bold">Image URL<input autoFocus aria-label="Replacement image URL" value={imageUrlDraft} onChange={(event) => setImageUrlDraft(event.target.value)} placeholder="Paste image URL" className="mt-1 w-full rounded-md border px-3 py-2" /></label>{imageUrlDraft.trim() && <img src={imageUrlDraft.trim()} alt="" className="mt-4 h-32 w-32 rounded-md border border-[#eadfca] object-contain" />}<div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => setImageUrlDraft("")}>Use placeholder</Button><Button variant="outline" onClick={() => setImageEditor(null)}>Cancel</Button><Button variant="gold" disabled={savingImageId === imageEditor.id} onClick={saveProductImage}>{savingImageId === imageEditor.id ? "Saving..." : "Update image"}</Button></div></div></div>}</AdminShell>;
 }
 
+type AdminInventoryRow = Product & {
+  inventoryId: string;
+  inventoryProductId: string;
+  variantId?: string | null;
+  stock: number;
+  onHand?: number;
+  reserved?: number;
+  sold?: number;
+  damaged?: number;
+  returned?: number;
+  adjustment?: number;
+  lowStock: number;
+  variantLabel?: string;
+};
+
 function Inventory({ productId }: { productId?: string }) {
-  const { products, adjustStock } = useStore();
-  const [remoteInventory, setRemoteInventory] = useState<{ id: string; productId: string; variantId?: string; stock: number; lowStockThreshold?: number; product: Product; status?: string }[]>([]);
+  const { adjustStock, toast } = useStore();
+  const [remoteInventory, setRemoteInventory] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<Record<string, string>>({});
   const [inventorySearch, setInventorySearch] = useState("");
-  const { toast } = useStore();
-  useEffect(() => { fetchAdminInventory().then(setRemoteInventory).catch((error) => toast(error instanceof Error ? error.message : "Unable to load inventory. Database connection is unavailable.", "error")); }, [toast]);
+  const [offlineSearch, setOfflineSearch] = useState("");
+  const [offlineCart, setOfflineCart] = useState<Record<string, number>>({});
+  const [offlineNote, setOfflineNote] = useState("");
+  const [offlineSaving, setOfflineSaving] = useState(false);
+  const [lastOfflineSale, setLastOfflineSale] = useState<any>(null);
   const inventoryStatus = (stock: number, lowStock: number) => stock <= 0 ? "Out of stock" : stock <= lowStock ? "Low stock" : "In stock";
-  const rows = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
-    const lowStock = item.lowStockThreshold ?? item.product.lowStock;
+  const loadInventory = async () => {
+    const [inventoryRows, movementRows] = await Promise.all([fetchAdminInventory(), fetchAdminInventoryMovements()]);
+    setRemoteInventory(inventoryRows);
+    setMovements(movementRows);
+  };
+  useEffect(() => {
+    loadInventory().catch((error) => toast(error instanceof Error ? error.message : "Unable to load inventory. Database connection is unavailable.", "error"));
+  }, [toast]);
+  const rows: AdminInventoryRow[] = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
+    const lowStock = Number(item.lowStockThreshold ?? item.product.lowStock ?? 0);
     const stock = Number(item.stock || 0);
-    return { ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock, lowStock, statusText: inventoryStatus(stock, lowStock) };
+    const variant = item.variant || item.product.variants?.find((option: ProductVariant) => option.id === item.variantId);
+    return { ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock, onHand: item.onHand, reserved: item.reserved, sold: item.sold, damaged: item.damaged, returned: item.returned, adjustment: item.adjustment, lowStock, variantLabel: variant?.label || variant?.unit || item.product.unit, statusText: inventoryStatus(stock, lowStock) };
   });
+  const selectedProduct = rows[0];
   const filteredRows = rows.filter((row) => {
     const needle = inventorySearch.trim().toLowerCase();
     if (!needle) return true;
     const status = inventoryStatus(row.stock, row.lowStock);
-    return [row.name, row.slug, row.sku, row.category, row.categorySlug, row.brand, row.brandSlug, row.variantId, status, row.stock, row.lowStock]
+    return [row.name, row.slug, row.sku, row.category, row.categorySlug, row.brand, row.brandSlug, row.variantId, row.variantLabel, status, row.stock, row.lowStock]
       .some((value) => String(value || "").toLowerCase().includes(needle));
   });
+  const offlineMatches = rows.filter((row) => {
+    const needle = offlineSearch.trim().toLowerCase();
+    if (!needle) return false;
+    return [row.name, row.sku, row.brand, row.category, row.variantLabel].some((value) => String(value || "").toLowerCase().includes(needle));
+  }).slice(0, 8);
+  const offlineItems = Object.entries(offlineCart).map(([inventoryId, quantity]) => {
+    const row = rows.find((item) => item.inventoryId === inventoryId);
+    return row ? { row, quantity } : null;
+  }).filter(Boolean) as { row: AdminInventoryRow; quantity: number }[];
+  const offlineTotal = offlineItems.reduce((sum, item) => sum + item.quantity * Number(item.row.price || 0), 0);
   const pagedRows = usePagedItems(filteredRows);
   useEffect(() => {
     pagedRows.resetPage();
   }, [inventorySearch]);
-  const adjust = (row: Product & { inventoryId: string }, quantity: number) => {
+  const adjust = (row: AdminInventoryRow, quantity: number) => {
     if (!Number.isInteger(quantity) || quantity === 0) {
       toast("Enter a non-zero whole number adjustment.", "error");
       return;
@@ -880,16 +919,90 @@ function Inventory({ productId }: { productId?: string }) {
       adjustStock(row.id, updated.stock);
       setRemoteInventory((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated, product: updated.product } : item));
       setAdjustments((items) => ({ ...items, [row.inventoryId]: "" }));
+      fetchAdminInventoryMovements().then(setMovements).catch(() => undefined);
       toast("Inventory updated", "success");
     }).catch((error) => toast(error instanceof Error ? error.message : "Could not adjust inventory.", "error"));
   };
-  const submitAdjustment = (event: FormEvent<HTMLFormElement>, row: Product & { inventoryId: string }) => {
+  const submitAdjustment = (event: FormEvent<HTMLFormElement>, row: AdminInventoryRow) => {
     event.preventDefault();
     const value = adjustments[row.inventoryId]?.trim() ?? "";
     adjust(row, Number(value));
   };
-  const selectedProduct = rows[0];
-  return <AdminShell section="inventory"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat label={productId ? "Product SKUs" : "Total SKUs"} value={String(rows.length)} sub={productId ? selectedProduct?.name || "Selected product" : "Tracked"} /><Stat label="Low Stock" value={String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length)} sub="Needs restock" /><Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub="Critical" /><Stat label="Recently Restocked" value={String(rows.filter((p) => p.stock > p.lowStock * 2).length)} sub="Healthy" /></div><div className="mt-6"><Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>{productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}<div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><label className="relative min-w-0"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search inventory" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder="Search product, SKU, brand, category, variant, status" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} /></label><span className="text-sm font-bold text-black/55">{filteredRows.length} of {rows.length} SKUs</span></div><DataTable headers={["Product", "Current stock", "Low threshold", "Status", "Adjust"]}>{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}{p.variantId && <div className="text-xs font-normal text-black/50">Variant {p.variantId.slice(-8).toUpperCase()}</div>}<div className="mt-1 text-xs font-normal text-black/45">{[p.sku, p.category, p.brand].filter(Boolean).join(" | ")}</div></td><td>{p.stock}</td><td>{p.lowStock}</td><td><StatusBadge value={inventoryStatus(p.stock, p.lowStock)} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-11 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}{rows.length > 0 && !filteredRows.length && <p className="rounded-md bg-white p-4 text-sm font-bold text-black/55">No inventory matches this search.</p>}<PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} /></Panel></div></AdminShell>;
+  const addOfflineItem = (row: AdminInventoryRow) => {
+    if (row.stock <= 0) return toast("This item has no available stock.", "error");
+    setOfflineCart((items) => ({ ...items, [row.inventoryId]: Math.min(row.stock, (items[row.inventoryId] || 0) + 1) }));
+    setOfflineSearch("");
+  };
+  const updateOfflineQty = (row: AdminInventoryRow, quantity: number) => {
+    if (quantity <= 0) {
+      setOfflineCart((items) => {
+        const next = { ...items };
+        delete next[row.inventoryId];
+        return next;
+      });
+      return;
+    }
+    setOfflineCart((items) => ({ ...items, [row.inventoryId]: Math.min(row.stock, Math.trunc(quantity)) }));
+  };
+  const submitOfflineSale = async () => {
+    if (!offlineItems.length) return toast("Add at least one product to record an offline sale.", "error");
+    setOfflineSaving(true);
+    try {
+      const sale = await createAdminOfflineSale({
+        note: offlineNote.trim() || undefined,
+        items: offlineItems.map(({ row, quantity }) => ({ productId: row.inventoryProductId, variantId: row.variantId || null, quantity, unitPrice: Number(row.price || 0) })),
+      });
+      setLastOfflineSale(sale);
+      setOfflineCart({});
+      setOfflineNote("");
+      await loadInventory();
+      toast(`Offline sale recorded: ${sale.referenceNumber}`, "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not record offline sale.", "error");
+    } finally {
+      setOfflineSaving(false);
+    }
+  };
+  const soldToday = movements.filter((movement) => {
+    const created = new Date(movement.createdAt);
+    const today = new Date();
+    return created.toDateString() === today.toDateString() && ["ONLINE_SALE", "OFFLINE_SALE", "SALE"].includes(movement.type);
+  }).reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+  return <AdminShell section="inventory">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Stat label={productId ? "Product SKUs" : "Available SKUs"} value={String(rows.filter((p) => p.stock > 0).length)} sub={productId ? selectedProduct?.name || "Selected product" : `${rows.length} tracked`} />
+      <Stat label="Reserved Stock" value={String(rows.reduce((sum, p) => sum + Number(p.reserved || 0), 0))} sub="Online holds" />
+      <Stat label="Sold Today" value={String(soldToday)} sub="Online + offline" />
+      <Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub={`${rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length} low stock`} />
+    </div>
+    <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+      <Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>
+        {productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}
+        <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><label className="relative min-w-0"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search inventory" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder="Search product, SKU, brand, category, variant, status" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} /></label><span className="text-sm font-bold text-black/55">{filteredRows.length} of {rows.length} SKUs</span></div>
+        <DataTable headers={["Product", "Available", "Reserved", "Low", "Status", "Adjust"]} minWidth="min-w-[920px]">{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}<div className="text-xs font-normal text-black/50">{p.variantLabel || p.unit}</div><div className="mt-1 text-xs font-normal text-black/45">{[p.sku, p.category, p.brand].filter(Boolean).join(" | ")}</div></td><td className="font-bold">{p.stock}</td><td>{p.reserved || 0}</td><td>{p.lowStock}</td><td><StatusBadge value={inventoryStatus(p.stock, p.lowStock)} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-12 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>
+        {!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}
+        {rows.length > 0 && !filteredRows.length && <p className="rounded-md bg-white p-4 text-sm font-bold text-black/55">No inventory matches this search.</p>}
+        <PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} />
+      </Panel>
+      <Panel title="Offline Sale">
+        <div className="grid gap-3">
+          <label className="relative"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search offline sale product" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Search or scan SKU/product code" value={offlineSearch} onChange={(event) => setOfflineSearch(event.target.value)} /></label>
+          {offlineSearch.trim() && <div className="max-h-72 overflow-y-auto rounded-md border border-[#eadfca] bg-white">{offlineMatches.length ? offlineMatches.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="flex w-full items-center justify-between gap-3 border-b px-3 py-3 text-left hover:bg-[#fff8df]"><span><b className="block text-sm">{row.name}</b><span className="text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit} | {row.stock} available</span></span><span className="text-sm font-black">{money(row.price)}</span></button>) : <p className="p-4 text-sm text-black/55">No matching inventory item.</p>}</div>}
+          <div className="grid gap-2">{offlineItems.map(({ row, quantity }) => <div key={row.inventoryId} className="grid gap-2 rounded-md border border-[#eadfca] bg-white p-3"><div className="flex justify-between gap-3"><div><b className="text-sm">{row.name}</b><p className="text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit}</p></div><b>{money(row.price * quantity)}</b></div><div className="flex items-center justify-between gap-2"><div className="inline-flex overflow-hidden rounded-md border border-black"><button type="button" className="h-11 w-11 font-black" onClick={() => updateOfflineQty(row, quantity - 1)}>-</button><input aria-label={`Offline sale quantity for ${row.name}`} className="h-11 w-14 border-x text-center font-black" value={quantity} onChange={(event) => updateOfflineQty(row, Number(event.target.value || 0))} inputMode="numeric" /><button type="button" className="h-11 w-11 font-black" onClick={() => updateOfflineQty(row, quantity + 1)}>+</button></div><span className="text-xs font-bold text-black/50">Max {row.stock}</span></div></div>)}</div>
+          <input aria-label="Offline sale note" className="rounded-md border border-[#cfc4a6] px-3 py-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Invoice note / customer reference" value={offlineNote} onChange={(event) => setOfflineNote(event.target.value)} />
+          <div className="rounded-md bg-[#faf7ef] p-3"><div className="flex justify-between text-sm"><span>Items</span><b>{offlineItems.reduce((sum, item) => sum + item.quantity, 0)}</b></div><div className="mt-2 flex justify-between text-base"><span className="font-black">Offline total</span><b>{money(offlineTotal)}</b></div></div>
+          <Button variant="gold" className="w-full" disabled={offlineSaving || !offlineItems.length} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Generate invoice & update stock"}</Button>
+          {lastOfflineSale && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">Last invoice: {lastOfflineSale.referenceNumber}</p>}
+        </div>
+      </Panel>
+    </div>
+    <div className="mt-6">
+      <Panel title="Inventory Movement Audit">
+        <DataTable headers={["Time", "Product", "Type", "Qty", "Before", "After", "Channel", "Reference"]} minWidth="min-w-[980px]">{movements.slice(0, 25).map((movement) => <tr key={movement.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 text-xs font-bold">{new Date(movement.createdAt).toLocaleString("en-IN")}</td><td className="p-3"><b>{movement.product?.name || "Product"}</b><p className="text-xs text-black/50">{movement.product?.sku || movement.variantId || "-"}</p></td><td><StatusBadge value={String(movement.type || "").replaceAll("_", " ")} /></td><td className="font-bold">{movement.quantity}</td><td>{movement.quantityBefore ?? "-"}</td><td>{movement.quantityAfter ?? "-"}</td><td>{movement.channel || "-"}</td><td>{movement.order?.orderNumber || movement.referenceId || movement.note || "-"}</td></tr>)}</DataTable>
+        {!movements.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory movements found.</p>}
+      </Panel>
+    </div>
+  </AdminShell>;
 }
 
 function OrderTable({ compact = false, ordersOverride }: { compact?: boolean; ordersOverride?: Order[] }) {

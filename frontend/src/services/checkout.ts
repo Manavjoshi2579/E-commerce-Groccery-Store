@@ -287,8 +287,15 @@ export async function fetchAdminInventory() {
     productId: item.productId,
     variantId: item.variantId,
     stock: item.stock,
+    onHand: item.onHand,
+    reserved: item.reserved,
+    sold: item.sold,
+    damaged: item.damaged,
+    returned: item.returned,
+    adjustment: item.adjustment,
     lowStockThreshold: item.lowStockThreshold,
     product: mapApiProduct(item.product),
+    variant: item.variant,
     status: item.status,
   }));
 }
@@ -304,6 +311,16 @@ export async function adjustAdminInventory(id: string, quantity: number) {
     product: mapApiProduct(data.inventory.product),
     status: data.inventory.status,
   };
+}
+
+export async function fetchAdminInventoryMovements() {
+  const data = await requestApi<{ movements: any[] }>("/api/admin/inventory/movements");
+  return data.movements || [];
+}
+
+export async function createAdminOfflineSale(input: { note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number }[] }) {
+  const data = await requestApi<{ sale: any }>("/api/admin/inventory/offline-sales", { method: "POST", body: JSON.stringify(input) });
+  return data.sale;
 }
 
 export { mapApiProduct, mapCoupon };

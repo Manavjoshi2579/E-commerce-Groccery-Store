@@ -194,7 +194,12 @@ export async function recordOfflineSale(adminUserId: string, input: { note?: str
       const inventory = await tx.inventory.findFirstOrThrow({ where: { productId: item.productId, variantId: item.variantId ?? null } });
       const available = inventory.stock - inventory.reserved;
       if (available < item.quantity) throw new Error("Insufficient stock for offline sale.");
-      const updated = await tx.inventory.update({ where: { id: inventory.id }, data: { stock: { decrement: item.quantity }, sold: { increment: item.quantity } } });
+      const updatedCount = await tx.inventory.updateMany({
+        where: { id: inventory.id, reserved: inventory.reserved, stock: { gte: inventory.reserved + item.quantity } },
+        data: { stock: { decrement: item.quantity }, sold: { increment: item.quantity } },
+      });
+      if (updatedCount.count !== 1) throw new Error(`Insufficient stock for offline sale: ${item.productId}.`);
+      const updated = await tx.inventory.findUniqueOrThrow({ where: { id: inventory.id } });
       await tx.stockMovement.create({
         data: {
           inventoryId: inventory.id,
