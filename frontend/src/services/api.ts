@@ -19,6 +19,12 @@ export class ApiError extends Error {
   }
 }
 
+function displayApiError(message: string) {
+  if (/Too big: expected number to be <=100/i.test(message)) return "The request is too large. Please refresh and try again.";
+  if (/Too small: expected number/i.test(message)) return "Enter a valid number and try again.";
+  return message;
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
@@ -103,7 +109,7 @@ async function requestApiNetwork<T>(path: string, init?: RequestInit): Promise<T
 
     if (response.ok && body.ok) return body.data;
 
-    const error = body.ok ? new ApiError(`API ${response.status}: request failed`) : new ApiError(body.error.message, body.error.code, body.error.retryAfterSeconds);
+    const error = body.ok ? new ApiError(`API ${response.status}: request failed`) : new ApiError(displayApiError(body.error.message), body.error.code, body.error.retryAfterSeconds);
     if (response.status === 429 && canRetryRequest(init) && attempt + 1 < attempts) {
       lastRateLimitError = error;
       const retryAfterSeconds = Math.max(1, Math.min(error.retryAfterSeconds || Number(response.headers.get("Retry-After")) || 1, 5));

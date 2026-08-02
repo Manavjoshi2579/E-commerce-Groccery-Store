@@ -3,7 +3,7 @@
 import type { Address, Order, Product } from "@/types";
 import { mapApiProduct } from "./catalog";
 import { mapCoupon } from "./commerce";
-import { requestApi } from "./api";
+import { clearApiCache, requestApi } from "./api";
 
 export function mapAddress(input: any): Address {
   const address = input || {};
@@ -284,6 +284,30 @@ export async function fetchAdminInventory() {
   const data = await requestApi<{ inventory: any[] }>("/api/admin/inventory");
   return data.inventory.map((item) => ({
     id: item.id,
+    locationId: item.locationId,
+    location: item.location,
+    productId: item.productId,
+    variantId: item.variantId,
+    stock: item.stock,
+    onHand: item.onHand,
+    reserved: item.reserved,
+    sold: item.sold,
+    damaged: item.damaged,
+    returned: item.returned,
+    adjustment: item.adjustment,
+    lowStockThreshold: item.lowStockThreshold,
+    product: mapApiProduct(item.product),
+    variant: item.variant,
+    status: item.status,
+  }));
+}
+
+export async function searchAdminPosInventory(query: string) {
+  const data = await requestApi<{ inventory: any[] }>(`/api/admin/inventory/pos-search?q=${encodeURIComponent(query)}`);
+  return data.inventory.map((item) => ({
+    id: item.id,
+    locationId: item.locationId,
+    location: item.location,
     productId: item.productId,
     variantId: item.variantId,
     stock: item.stock,
@@ -302,6 +326,7 @@ export async function fetchAdminInventory() {
 
 export async function adjustAdminInventory(id: string, quantity: number) {
   const data = await requestApi<{ inventory: any }>(`/api/admin/inventory/${id}/adjust`, { method: "POST", body: JSON.stringify({ quantity, note: "Adjusted from admin UI" }) });
+  clearStockCaches();
   return {
     id: data.inventory.id,
     productId: data.inventory.productId,
@@ -313,14 +338,28 @@ export async function adjustAdminInventory(id: string, quantity: number) {
   };
 }
 
+export async function createAdminStockInward(input: { inventoryId: string; quantity: number; vendor?: string; invoiceReference?: string; note?: string }) {
+  const data = await requestApi<{ inventory: any }>("/api/admin/inventory/inward", { method: "POST", body: JSON.stringify(input) });
+  clearStockCaches();
+  return data.inventory;
+}
+
 export async function fetchAdminInventoryMovements() {
   const data = await requestApi<{ movements: any[] }>("/api/admin/inventory/movements");
   return data.movements || [];
 }
 
-export async function createAdminOfflineSale(input: { note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number }[] }) {
+export async function createAdminOfflineSale(input: { locationId?: string | null; idempotencyKey?: string; customerReference?: string; paymentMethod?: "CASH" | "UPI" | "CARD" | "OTHER"; cashReceived?: number | null; note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number }[] }) {
   const data = await requestApi<{ sale: any }>("/api/admin/inventory/offline-sales", { method: "POST", body: JSON.stringify(input) });
+  clearStockCaches();
   return data.sale;
 }
 
 export { mapApiProduct, mapCoupon };
+
+function clearStockCaches() {
+  clearApiCache("/api/products");
+  clearApiCache("/api/catalog/home");
+  clearApiCache("/api/cart");
+  clearApiCache("/api/admin/inventory");
+}

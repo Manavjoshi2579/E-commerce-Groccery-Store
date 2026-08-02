@@ -13,6 +13,7 @@ const rolePermissions: Record<RoleName, string[]> = {
   SUPER_ADMIN: ["*"],
   STORE_MANAGER: ["catalog:*", "orders:*", "reports:read"],
   INVENTORY_MANAGER: ["inventory:*", "catalog:read"],
+  CASHIER: ["pos:*", "inventory:read", "catalog:read", "invoices:create"],
   ORDER_MANAGER: ["orders:*", "delivery:assign"],
   DELIVERY_STAFF: ["delivery:*", "orders:read"],
   SUPPORT_STAFF: ["customers:read", "orders:read", "returns:*", "faqs:*"],

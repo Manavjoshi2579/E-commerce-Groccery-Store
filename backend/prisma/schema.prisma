@@ -50,6 +50,7 @@ enum RoleName {
   STORE_MANAGER
   INVENTORY_MANAGER
   ORDER_MANAGER
+  CASHIER
   DELIVERY_STAFF
   SUPPORT_STAFF
   BILLING_STAFF
@@ -84,6 +85,17 @@ enum StockMovementType {
   MANUAL_ADJUSTMENT
   RESTOCK
   CANCELLED_ORDER
+  PURCHASE
+  REFUND
+  PAYMENT_FAILURE
+  TRANSFER
+  AUDIT
+  STOCK_INWARD
+  LOST
+  STOLEN
+  TRANSFER_IN
+  TRANSFER_OUT
+  AUDIT_CORRECTION
 }
 
 enum StockMovementChannel {
@@ -297,6 +309,29 @@ model AdminUser {
   @@index([normalizedEmail])
 }
 
+model StoreLocation {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  type        String          @default("STORE")
+  addressLine String?
+  city        String?
+  state       String?
+  pincode     String?
+  active      Boolean         @default(true)
+  isDefault   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  inventory    Inventory[]
+  movements    StockMovement[]
+  offlineSales OfflineSale[]
+
+  @@index([code])
+  @@index([active])
+  @@index([isDefault])
+}
+
 model AuthSession {
   id          String            @id @default(cuid())
   tokenHash   String            @unique
@@ -484,6 +519,9 @@ model Product {
   name        String
   sku         String        @unique
   clientProductCode String?
+  barcode     String?       @unique
+  qrCode      String?       @unique
+  pluCode     String?       @unique
   importIdentity String?   @unique
   sourceCategory String?
   categoryId  String
@@ -522,6 +560,9 @@ model Product {
   @@index([slug])
   @@index([sku])
   @@index([clientProductCode])
+  @@index([barcode])
+  @@index([qrCode])
+  @@index([pluCode])
   @@index([imageStatus])
   @@index([name])
   @@index([createdAt])
@@ -574,10 +615,16 @@ model Inventory {
   id                String          @id @default(cuid())
   productId         String
   variantId         String?
+  locationId        String?
   stock             Int             @default(0)
   reserved          Int             @default(0)
   sold              Int             @default(0)
   damaged           Int             @default(0)
+  expired           Int             @default(0)
+  safetyStock       Int             @default(0)
+  reorderLevel      Int             @default(0)
+  incoming          Int             @default(0)
+  outgoing          Int             @default(0)
   returned          Int             @default(0)
   adjustment        Int             @default(0)
   lowStockThreshold Int             @default(10)
@@ -586,11 +633,13 @@ model Inventory {
 
   product           Product         @relation(fields: [productId], references: [id])
   variant           ProductVariant? @relation(fields: [variantId], references: [id])
+  location          StoreLocation?  @relation(fields: [locationId], references: [id])
   movements         StockMovement[]
 
-  @@unique([productId, variantId])
+  @@unique([productId, variantId, locationId])
   @@index([productId])
   @@index([variantId])
+  @@index([locationId])
   @@index([stock])
   @@index([reserved])
   @@index([updatedAt])
@@ -601,6 +650,8 @@ model StockMovement {
   inventoryId   String
   productId     String
   variantId     String?
+  locationId    String?
+  targetLocationId String?
   type          StockMovementType
   quantity      Int
   quantityBefore Int?
@@ -619,11 +670,13 @@ model StockMovement {
 
   inventory     Inventory         @relation(fields: [inventoryId], references: [id])
   product       Product           @relation(fields: [productId], references: [id])
+  location      StoreLocation?    @relation(fields: [locationId], references: [id])
   order         Order?            @relation(fields: [orderId], references: [id])
   adminUser     AdminUser?        @relation(fields: [adminUserId], references: [id])
 
   @@index([inventoryId])
   @@index([productId])
+  @@index([locationId])
   @@index([orderId])
   @@index([type])
   @@index([referenceType, referenceId])
@@ -999,6 +1052,12 @@ model OfflineSale {
   id              String        @id @default(cuid())
   referenceNumber String        @unique
   actorId         String
+  locationId      String?
+  idempotencyKey  String?       @unique
+  customerReference String?
+  paymentMethod   String        @default("CASH")
+  cashReceived    Decimal?      @db.Decimal(10, 2)
+  changeDue       Decimal?      @db.Decimal(10, 2)
   total           Decimal       @db.Decimal(10, 2)
   status          String        @default("RECORDED")
   note            String?
@@ -1006,9 +1065,12 @@ model OfflineSale {
   updatedAt       DateTime      @updatedAt
 
   actor           AdminUser     @relation(fields: [actorId], references: [id])
+  location        StoreLocation? @relation(fields: [locationId], references: [id])
   items           OfflineSaleItem[]
 
   @@index([actorId])
+  @@index([locationId])
+  @@index([paymentMethod])
   @@index([status])
   @@index([createdAt])
 }

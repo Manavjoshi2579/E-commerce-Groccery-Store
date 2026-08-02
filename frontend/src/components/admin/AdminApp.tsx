@@ -36,7 +36,7 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -50,6 +50,7 @@ const nav = [
   ["orders", WalletCards, "Orders"],
   ["delivery", Truck, "Delivery"],
   ["payments", CreditCard, "Payments"],
+  ["pos", WalletCards, "POS"],
   ["invoices", ClipboardList, "Invoices"],
   ["returns", RotateCcw, "Returns"],
   ["customers", Users, "Customers"],
@@ -70,6 +71,7 @@ const roleSections: Record<string, string[]> = {
   SUPER_ADMIN: nav.map(([href]) => href),
   STORE_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
   INVENTORY_MANAGER: ["products", "inventory", "reports"],
+  CASHIER: ["pos"],
   ORDER_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "reports"],
   DELIVERY_STAFF: ["delivery"],
   SUPPORT_STAFF: ["orders", "returns", "customers", "support", "faqs"],
@@ -93,6 +95,7 @@ function roleLandingPath(role: string | undefined) {
   if (role === "SUPER_ADMIN") return "/admin";
   if (role === "STORE_MANAGER") return "/admin/orders";
   if (role === "INVENTORY_MANAGER") return "/admin/inventory";
+  if (role === "CASHIER") return "/admin/pos";
   if (role === "DELIVERY_STAFF") return "/admin/delivery";
   if (role === "BILLING_STAFF") return "/admin/payments";
   if (role === "SUPPORT_STAFF") return "/admin/support";
@@ -190,6 +193,13 @@ function title(slug: string) {
   return slug.split("/").pop()!.split("-").map((x) => x[0].toUpperCase() + x.slice(1)).join(" ");
 }
 
+function adminErrorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+  if (/Too big: expected number to be <=100/i.test(error.message)) return "Admin request limit was too high. Please refresh the page.";
+  if (/expected number|invalid.*payload|invalid.*filters/i.test(error.message)) return fallback;
+  return error.message;
+}
+
 function productSlug(name: string, id: string) {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "eagle-mart-product";
   return `${base}-${id.toLowerCase().replace(/[^a-z0-9]/g, "").slice(-6)}`;
@@ -216,7 +226,7 @@ function Dashboard() {
       fetchAdminOrders().then(setRemoteOrders).catch((error) => toast(error instanceof Error ? error.message : "Unable to load dashboard orders. Database connection is unavailable.", "error"));
     }
     if (canAdminAccess(role, "products")) {
-      fetchAdminProducts({ limit: 500 }).then((result) => setRemoteProducts(result.products)).catch((error) => toast(error instanceof Error ? error.message : "Unable to load dashboard products. Database connection is unavailable.", "error"));
+      fetchAdminProducts({ limit: 100 }).then((result) => setRemoteProducts(result.products)).catch((error) => toast(adminErrorMessage(error, "Unable to load dashboard products. Database connection is unavailable."), "error"));
     }
     if (canAdminAccess(role, "coupons")) {
       fetchAdminCoupons().then(setRemoteCoupons).catch((error) => toast(error instanceof Error ? error.message : "Unable to load dashboard coupons. Database connection is unavailable.", "error"));
@@ -858,11 +868,13 @@ type AdminInventoryRow = Product & {
   damaged?: number;
   returned?: number;
   adjustment?: number;
+  locationId?: string | null;
+  location?: { id: string; code: string; name: string } | null;
   lowStock: number;
   variantLabel?: string;
 };
 
-function Inventory({ productId }: { productId?: string }) {
+function Inventory({ productId, posOnly = false }: { productId?: string; posOnly?: boolean }) {
   const { adjustStock, toast } = useStore();
   const [remoteInventory, setRemoteInventory] = useState<any[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
@@ -871,8 +883,13 @@ function Inventory({ productId }: { productId?: string }) {
   const [offlineSearch, setOfflineSearch] = useState("");
   const [offlineCart, setOfflineCart] = useState<Record<string, number>>({});
   const [offlineNote, setOfflineNote] = useState("");
+  const [offlineCustomer, setOfflineCustomer] = useState("");
+  const [offlinePaymentMethod, setOfflinePaymentMethod] = useState<"CASH" | "UPI" | "CARD" | "OTHER">("CASH");
+  const [cashReceived, setCashReceived] = useState("");
   const [offlineSaving, setOfflineSaving] = useState(false);
   const [lastOfflineSale, setLastOfflineSale] = useState<any>(null);
+  const [stockInward, setStockInward] = useState({ inventoryId: "", quantity: "", vendor: "", invoiceReference: "", note: "" });
+  const [inwardSaving, setInwardSaving] = useState(false);
   const inventoryStatus = (stock: number, lowStock: number) => stock <= 0 ? "Out of stock" : stock <= lowStock ? "Low stock" : "In stock";
   const loadInventory = async () => {
     const [inventoryRows, movementRows] = await Promise.all([fetchAdminInventory(), fetchAdminInventoryMovements()]);
@@ -882,30 +899,50 @@ function Inventory({ productId }: { productId?: string }) {
   useEffect(() => {
     loadInventory().catch((error) => toast(error instanceof Error ? error.message : "Unable to load inventory. Database connection is unavailable.", "error"));
   }, [toast]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("eagle-pos-cart") || "{}");
+      if (saved && typeof saved === "object") setOfflineCart(saved);
+      setOfflineNote(window.localStorage.getItem("eagle-pos-note") || "");
+      setOfflineCustomer(window.localStorage.getItem("eagle-pos-customer") || "");
+    } catch {
+      window.localStorage.removeItem("eagle-pos-cart");
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("eagle-pos-cart", JSON.stringify(offlineCart));
+    window.localStorage.setItem("eagle-pos-note", offlineNote);
+    window.localStorage.setItem("eagle-pos-customer", offlineCustomer);
+  }, [offlineCart, offlineNote, offlineCustomer]);
   const rows: AdminInventoryRow[] = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
     const lowStock = Number(item.lowStockThreshold ?? item.product.lowStock ?? 0);
     const stock = Number(item.stock || 0);
     const variant = item.variant || item.product.variants?.find((option: ProductVariant) => option.id === item.variantId);
-    return { ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, stock, onHand: item.onHand, reserved: item.reserved, sold: item.sold, damaged: item.damaged, returned: item.returned, adjustment: item.adjustment, lowStock, variantLabel: variant?.label || variant?.unit || item.product.unit, statusText: inventoryStatus(stock, lowStock) };
+    return { ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, locationId: item.locationId, location: item.location, stock, onHand: item.onHand, reserved: item.reserved, sold: item.sold, damaged: item.damaged, returned: item.returned, adjustment: item.adjustment, lowStock, variantLabel: variant?.label || variant?.unit || item.product.unit, statusText: inventoryStatus(stock, lowStock) };
   });
   const selectedProduct = rows[0];
   const filteredRows = rows.filter((row) => {
     const needle = inventorySearch.trim().toLowerCase();
     if (!needle) return true;
     const status = inventoryStatus(row.stock, row.lowStock);
-    return [row.name, row.slug, row.sku, row.category, row.categorySlug, row.brand, row.brandSlug, row.variantId, row.variantLabel, status, row.stock, row.lowStock]
+    return [row.name, row.slug, row.sku, row.clientProductCode, row.barcode, row.qrCode, row.pluCode, row.category, row.categorySlug, row.brand, row.brandSlug, row.variantId, row.variantLabel, row.location?.name, row.location?.code, status, row.stock, row.lowStock]
       .some((value) => String(value || "").toLowerCase().includes(needle));
   });
   const offlineMatches = rows.filter((row) => {
     const needle = offlineSearch.trim().toLowerCase();
     if (!needle) return false;
-    return [row.name, row.sku, row.brand, row.category, row.variantLabel].some((value) => String(value || "").toLowerCase().includes(needle));
+    return [row.name, row.sku, row.clientProductCode, row.barcode, row.qrCode, row.pluCode, row.brand, row.category, row.variantLabel].some((value) => String(value || "").toLowerCase().includes(needle));
   }).slice(0, 8);
   const offlineItems = Object.entries(offlineCart).map(([inventoryId, quantity]) => {
     const row = rows.find((item) => item.inventoryId === inventoryId);
     return row ? { row, quantity } : null;
   }).filter(Boolean) as { row: AdminInventoryRow; quantity: number }[];
   const offlineTotal = offlineItems.reduce((sum, item) => sum + item.quantity * Number(item.row.price || 0), 0);
+  const cashNumber = Number(cashReceived || 0);
+  const changeDue = offlinePaymentMethod === "CASH" ? Math.max(0, cashNumber - offlineTotal) : 0;
+  const quickRows = rows.filter((row) => row.stock > 0).sort((a, b) => Number(b.sold || 0) - Number(a.sold || 0)).slice(0, 12);
   const pagedRows = usePagedItems(filteredRows);
   useEffect(() => {
     pagedRows.resetPage();
@@ -946,15 +983,23 @@ function Inventory({ productId }: { productId?: string }) {
   };
   const submitOfflineSale = async () => {
     if (!offlineItems.length) return toast("Add at least one product to record an offline sale.", "error");
+    if (offlinePaymentMethod === "CASH" && cashNumber < offlineTotal) return toast("Cash received cannot be less than bill total.", "error");
     setOfflineSaving(true);
     try {
       const sale = await createAdminOfflineSale({
+        idempotencyKey: `POS:${uid("sale")}`,
+        customerReference: offlineCustomer.trim() || undefined,
+        paymentMethod: offlinePaymentMethod,
+        cashReceived: offlinePaymentMethod === "CASH" ? cashNumber : null,
         note: offlineNote.trim() || undefined,
+        locationId: offlineItems[0]?.row.locationId || undefined,
         items: offlineItems.map(({ row, quantity }) => ({ productId: row.inventoryProductId, variantId: row.variantId || null, quantity, unitPrice: Number(row.price || 0) })),
       });
       setLastOfflineSale(sale);
       setOfflineCart({});
       setOfflineNote("");
+      setOfflineCustomer("");
+      setCashReceived("");
       await loadInventory();
       toast(`Offline sale recorded: ${sale.referenceNumber}`, "success");
     } catch (error) {
@@ -963,12 +1008,31 @@ function Inventory({ productId }: { productId?: string }) {
       setOfflineSaving(false);
     }
   };
+  const submitStockInward = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const quantity = Number(stockInward.quantity);
+    if (!stockInward.inventoryId) return toast("Choose a product before recording inward stock.", "error");
+    if (!Number.isInteger(quantity) || quantity <= 0) return toast("Enter a valid inward quantity.", "error");
+    setInwardSaving(true);
+    try {
+      const updated = await createAdminStockInward({ inventoryId: stockInward.inventoryId, quantity, vendor: stockInward.vendor || undefined, invoiceReference: stockInward.invoiceReference || undefined, note: stockInward.note || undefined });
+      setRemoteInventory((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated, product: updated.product || item.product } : item));
+      setStockInward({ inventoryId: "", quantity: "", vendor: "", invoiceReference: "", note: "" });
+      await loadInventory();
+      toast("Stock inward recorded", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not record stock inward.", "error");
+    } finally {
+      setInwardSaving(false);
+    }
+  };
   const soldToday = movements.filter((movement) => {
     const created = new Date(movement.createdAt);
     const today = new Date();
     return created.toDateString() === today.toDateString() && ["ONLINE_SALE", "OFFLINE_SALE", "SALE"].includes(movement.type);
   }).reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
-  return <AdminShell section="inventory">
+  const shellSection = posOnly ? "pos" : "inventory";
+  return <AdminShell section={shellSection}>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Stat label={productId ? "Product SKUs" : "Available SKUs"} value={String(rows.filter((p) => p.stock > 0).length)} sub={productId ? selectedProduct?.name || "Selected product" : `${rows.length} tracked`} />
       <Stat label="Reserved Stock" value={String(rows.reduce((sum, p) => sum + Number(p.reserved || 0), 0))} sub="Online holds" />
@@ -976,32 +1040,52 @@ function Inventory({ productId }: { productId?: string }) {
       <Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub={`${rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length} low stock`} />
     </div>
     <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
-      <Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>
+      {!posOnly && <Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>
         {productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}
         <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><label className="relative min-w-0"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search inventory" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder="Search product, SKU, brand, category, variant, status" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} /></label><span className="text-sm font-bold text-black/55">{filteredRows.length} of {rows.length} SKUs</span></div>
         <DataTable headers={["Product", "Available", "Reserved", "Low", "Status", "Adjust"]} minWidth="min-w-[920px]">{pagedRows.items.map((p) => <tr key={p.inventoryId} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{p.name}<div className="text-xs font-normal text-black/50">{p.variantLabel || p.unit}</div><div className="mt-1 text-xs font-normal text-black/45">{[p.sku, p.category, p.brand].filter(Boolean).join(" | ")}</div></td><td className="font-bold">{p.stock}</td><td>{p.reserved || 0}</td><td>{p.lowStock}</td><td><StatusBadge value={inventoryStatus(p.stock, p.lowStock)} /></td><td><form className="flex items-center gap-2" onSubmit={(event) => submitAdjustment(event, p)}><input aria-label={`Adjustment for ${p.name}`} type="number" step="1" value={adjustments[p.inventoryId] ?? ""} onChange={(event) => setAdjustments((items) => ({ ...items, [p.inventoryId]: event.target.value }))} className="h-12 w-24 rounded-md border border-black px-3 text-center text-sm font-bold outline-none focus:border-[#d4af37]" placeholder="Qty" /><Button variant="gold" disabled={!adjustments[p.inventoryId]?.trim()}>Update</Button></form></td></tr>)}</DataTable>
         {!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory row found for this product in the database.</p>}
         {rows.length > 0 && !filteredRows.length && <p className="rounded-md bg-white p-4 text-sm font-bold text-black/55">No inventory matches this search.</p>}
         <PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} />
-      </Panel>
-      <Panel title="Offline Sale">
-        <div className="grid gap-3">
-          <label className="relative"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search offline sale product" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Search or scan SKU/product code" value={offlineSearch} onChange={(event) => setOfflineSearch(event.target.value)} /></label>
-          {offlineSearch.trim() && <div className="max-h-72 overflow-y-auto rounded-md border border-[#eadfca] bg-white">{offlineMatches.length ? offlineMatches.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="flex w-full items-center justify-between gap-3 border-b px-3 py-3 text-left hover:bg-[#fff8df]"><span><b className="block text-sm">{row.name}</b><span className="text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit} | {row.stock} available</span></span><span className="text-sm font-black">{money(row.price)}</span></button>) : <p className="p-4 text-sm text-black/55">No matching inventory item.</p>}</div>}
-          <div className="grid gap-2">{offlineItems.map(({ row, quantity }) => <div key={row.inventoryId} className="grid gap-2 rounded-md border border-[#eadfca] bg-white p-3"><div className="flex justify-between gap-3"><div><b className="text-sm">{row.name}</b><p className="text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit}</p></div><b>{money(row.price * quantity)}</b></div><div className="flex items-center justify-between gap-2"><div className="inline-flex overflow-hidden rounded-md border border-black"><button type="button" className="h-11 w-11 font-black" onClick={() => updateOfflineQty(row, quantity - 1)}>-</button><input aria-label={`Offline sale quantity for ${row.name}`} className="h-11 w-14 border-x text-center font-black" value={quantity} onChange={(event) => updateOfflineQty(row, Number(event.target.value || 0))} inputMode="numeric" /><button type="button" className="h-11 w-11 font-black" onClick={() => updateOfflineQty(row, quantity + 1)}>+</button></div><span className="text-xs font-bold text-black/50">Max {row.stock}</span></div></div>)}</div>
-          <input aria-label="Offline sale note" className="rounded-md border border-[#cfc4a6] px-3 py-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Invoice note / customer reference" value={offlineNote} onChange={(event) => setOfflineNote(event.target.value)} />
-          <div className="rounded-md bg-[#faf7ef] p-3"><div className="flex justify-between text-sm"><span>Items</span><b>{offlineItems.reduce((sum, item) => sum + item.quantity, 0)}</b></div><div className="mt-2 flex justify-between text-base"><span className="font-black">Offline total</span><b>{money(offlineTotal)}</b></div></div>
-          <Button variant="gold" className="w-full" disabled={offlineSaving || !offlineItems.length} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Generate invoice & update stock"}</Button>
-          {lastOfflineSale && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">Last invoice: {lastOfflineSale.referenceNumber}</p>}
+      </Panel>}
+      <Panel title={posOnly ? "Eagle Mart POS" : "Offline Sale"}>
+        <div className={posOnly ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : "grid gap-3"}>
+          <div className="grid gap-3">
+            <label className="relative"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search offline sale product" className="h-12 w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Search/scan SKU, product code, barcode, QR or PLU" value={offlineSearch} onChange={(event) => setOfflineSearch(event.target.value)} /></label>
+            {offlineSearch.trim() && <div className="max-h-80 overflow-y-auto rounded-md border border-[#eadfca] bg-white">{offlineMatches.length ? offlineMatches.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="flex min-h-16 w-full items-center justify-between gap-3 border-b px-3 py-3 text-left hover:bg-[#fff8df]"><span><b className="block text-sm">{row.name}</b><span className="text-xs text-black/50">{[row.sku, row.clientProductCode, row.barcode, row.pluCode, row.variantLabel || row.unit, `${row.stock} available`].filter(Boolean).join(" | ")}</span></span><span className="text-sm font-black">{money(row.price)}</span></button>) : <p className="p-4 text-sm text-black/55">No matching inventory item.</p>}</div>}
+            {posOnly && <div><div className="mb-2 flex items-center justify-between gap-3"><h3 className="display-font text-lg font-black">Quick select</h3><span className="text-xs font-bold uppercase text-black/45">{quickRows.length} live SKUs</span></div><div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{quickRows.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="grid min-h-32 content-between rounded-md border border-[#eadfca] bg-white p-3 text-left shadow-sm transition hover:border-[#d4af37] hover:bg-[#fff8df]"><span><b className="line-clamp-2 text-sm">{row.name}</b><span className="mt-1 block text-xs text-black/50">{row.variantLabel || row.unit} | {row.stock} left</span></span><span className="font-black">{money(row.price)}</span></button>)}</div></div>}
+          </div>
+          <div className={posOnly ? "sticky bottom-3 grid gap-3 self-start rounded-md border border-[#eadfca] bg-white p-3 shadow-xl lg:top-24" : "grid gap-3"}>
+            <div className="grid gap-2">{offlineItems.length ? offlineItems.map(({ row, quantity }) => <div key={row.inventoryId} className="grid gap-2 rounded-md border border-[#eadfca] bg-[#faf7ef] p-3"><div className="flex justify-between gap-3"><div><b className="text-sm">{row.name}</b><p className="text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit}</p></div><b>{money(row.price * quantity)}</b></div><div className="flex items-center justify-between gap-2"><div className="inline-flex overflow-hidden rounded-md border border-black"><button type="button" aria-label={`Decrease ${row.name}`} className="h-12 w-12 font-black" onClick={() => updateOfflineQty(row, quantity - 1)}>-</button><input aria-label={`Offline sale quantity for ${row.name}`} className="h-12 w-16 border-x text-center font-black" value={quantity} onChange={(event) => updateOfflineQty(row, Number(event.target.value || 0))} inputMode="numeric" /><button type="button" aria-label={`Increase ${row.name}`} className="h-12 w-12 font-black" onClick={() => updateOfflineQty(row, quantity + 1)}>+</button></div><button type="button" className="h-12 rounded-md border px-3 text-sm font-bold" onClick={() => updateOfflineQty(row, 0)}>Remove</button></div></div>) : <p className="rounded-md border border-dashed border-[#cfc4a6] p-4 text-sm text-black/55">Scan or choose products to start a POS bill.</p>}</div>
+            <input aria-label="POS customer reference" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Customer reference optional" value={offlineCustomer} onChange={(event) => setOfflineCustomer(event.target.value)} />
+            <input aria-label="Offline sale note" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Invoice note optional" value={offlineNote} onChange={(event) => setOfflineNote(event.target.value)} />
+            <select aria-label="POS payment method" value={offlinePaymentMethod} onChange={(event) => setOfflinePaymentMethod(event.target.value as any)} className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm font-bold outline-none focus:border-[#d4af37]"><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="OTHER">Other</option></select>
+            {offlinePaymentMethod === "CASH" && <div className="grid grid-cols-2 gap-2"><input aria-label="Cash received" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Cash received" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} inputMode="decimal" /><div className="rounded-md bg-[#faf7ef] p-3 text-sm"><span className="text-black/55">Change</span><b className="block">{money(changeDue)}</b></div></div>}
+            <div className="rounded-md bg-[#faf7ef] p-3"><div className="flex justify-between text-sm"><span>Items</span><b>{offlineItems.reduce((sum, item) => sum + item.quantity, 0)}</b></div><div className="mt-2 flex justify-between text-base"><span className="font-black">Bill total</span><b>{money(offlineTotal)}</b></div></div>
+            <div className="grid grid-cols-2 gap-2"><Button variant="outline" disabled={offlineSaving || !offlineItems.length} onClick={() => setOfflineCart({})}>Clear</Button><Button variant="gold" disabled={offlineSaving || !offlineItems.length} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Complete Sale"}</Button></div>
+            {lastOfflineSale && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">Receipt ready: {lastOfflineSale.referenceNumber}{lastOfflineSale.changeDue != null ? ` | Change ${money(Number(lastOfflineSale.changeDue))}` : ""}</p>}
+          </div>
         </div>
       </Panel>
     </div>
-    <div className="mt-6">
+    {!posOnly && <div className="mt-6">
+      <Panel title="Stock Inward">
+        <form onSubmit={submitStockInward} className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_120px_1fr_1fr_auto] md:items-end">
+          <label className="text-sm font-bold">Product<select aria-label="Stock inward product" value={stockInward.inventoryId} onChange={(event) => setStockInward((current) => ({ ...current, inventoryId: event.target.value }))} className="mt-1 h-12 w-full rounded-md border px-3"><option value="">Choose product</option>{rows.map((row) => <option key={row.inventoryId} value={row.inventoryId}>{row.name} | {row.variantLabel || row.unit} | {row.stock} available</option>)}</select></label>
+          <label className="text-sm font-bold">Qty<input aria-label="Stock inward quantity" value={stockInward.quantity} onChange={(event) => setStockInward((current) => ({ ...current, quantity: event.target.value }))} className="mt-1 h-12 w-full rounded-md border px-3" inputMode="numeric" /></label>
+          <label className="text-sm font-bold">Vendor<input aria-label="Stock inward vendor" value={stockInward.vendor} onChange={(event) => setStockInward((current) => ({ ...current, vendor: event.target.value }))} className="mt-1 h-12 w-full rounded-md border px-3" /></label>
+          <label className="text-sm font-bold">Invoice ref<input aria-label="Stock inward invoice reference" value={stockInward.invoiceReference} onChange={(event) => setStockInward((current) => ({ ...current, invoiceReference: event.target.value }))} className="mt-1 h-12 w-full rounded-md border px-3" /></label>
+          <Button variant="gold" disabled={inwardSaving || !stockInward.inventoryId || !stockInward.quantity}>{inwardSaving ? "Saving..." : "Record inward"}</Button>
+          <label className="text-sm font-bold md:col-span-5">Notes<input aria-label="Stock inward notes" value={stockInward.note} onChange={(event) => setStockInward((current) => ({ ...current, note: event.target.value }))} className="mt-1 h-12 w-full rounded-md border px-3" /></label>
+        </form>
+      </Panel>
+    </div>}
+    {!posOnly && <div className="mt-6">
       <Panel title="Inventory Movement Audit">
         <DataTable headers={["Time", "Product", "Type", "Qty", "Before", "After", "Channel", "Reference"]} minWidth="min-w-[980px]">{movements.slice(0, 25).map((movement) => <tr key={movement.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 text-xs font-bold">{new Date(movement.createdAt).toLocaleString("en-IN")}</td><td className="p-3"><b>{movement.product?.name || "Product"}</b><p className="text-xs text-black/50">{movement.product?.sku || movement.variantId || "-"}</p></td><td><StatusBadge value={String(movement.type || "").replaceAll("_", " ")} /></td><td className="font-bold">{movement.quantity}</td><td>{movement.quantityBefore ?? "-"}</td><td>{movement.quantityAfter ?? "-"}</td><td>{movement.channel || "-"}</td><td>{movement.order?.orderNumber || movement.referenceId || movement.note || "-"}</td></tr>)}</DataTable>
         {!movements.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory movements found.</p>}
       </Panel>
-    </div>
+    </div>}
   </AdminShell>;
 }
 
@@ -2397,6 +2481,7 @@ function AdminPageSwitch({ slug }: { slug: string[] }) {
   if (first === "products" && second === "new") return <ProductManager mode="new" />;
   if (first === "products" && third === "edit") return <ProductManager mode="edit" id={second} />;
   if (first === "products") return <ProductManager />;
+  if (first === "pos") return <Inventory posOnly />;
   if (first === "inventory") return <Inventory productId={second} />;
   if (first === "orders") return <Orders detail={second} />;
   if (first === "coupons") return <CouponsManaged />;

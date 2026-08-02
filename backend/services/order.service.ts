@@ -501,7 +501,8 @@ async function ensureDeliveryAssignmentForDispatch(tx: Prisma.TransactionClient,
 }
 
 export async function listAdminOrders(client: OrderClient = db) {
-  const orders = await client.order.findMany({ include: orderInclude, orderBy: { createdAt: "desc" } });
+  const orderClient = client.order as any;
+  const orders = await orderClient.findMany({ include: orderInclude, orderBy: { createdAt: "desc" } });
   return orders.map(mapOrder);
 }
 
@@ -521,7 +522,8 @@ export async function listDeliveryOperationsOrders() {
 }
 
 export async function getAdminOrder(idOrNumber: string, client: OrderClient = db) {
-  const order = await client.order.findFirst({ where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] }, include: orderInclude });
+  const orderClient = client.order as any;
+  const order = await orderClient.findFirst({ where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] }, include: orderInclude });
   if (!order) throw new Error("Order not found.");
   return mapOrder(order);
 }
@@ -553,7 +555,8 @@ export async function updateDeliveryOrderStatus(idOrNumber: string, status: Orde
   const allowed: OrderStatus[] = [OrderStatus.PACKED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED];
   if (!allowed.includes(status)) throw new Error("Invalid delivery status.");
 
-  const order = await client.order.findFirst({
+  const orderClient = client.order as any;
+  const order = await orderClient.findFirst({
     where: {
       OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }],
       status: { notIn: [OrderStatus.CANCELLED, OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED] },
@@ -581,7 +584,8 @@ export async function updateDeliveryOrderStatus(idOrNumber: string, status: Orde
 }
 
 export async function updateAdminPaymentStatus(idOrNumber: string, status: PaymentStatus, input: { note?: string; actorRole?: string; actorId?: string }, client: OrderClient = db) {
-  const order = await client.order.findFirst({
+  const orderClient = client.order as any;
+  const order = await orderClient.findFirst({
     where: { OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }] },
     include: orderInclude,
   });
@@ -623,7 +627,8 @@ export async function updateAdminPaymentStatus(idOrNumber: string, status: Payme
 }
 
 export async function markDeliveryAttemptFailed(idOrNumber: string, input: { reason: string; note?: string }, client: RbacPrismaClient) {
-  const order = await client.order.findFirst({
+  const orderClient = client.order as any;
+  const order = await orderClient.findFirst({
     where: {
       OR: [{ id: idOrNumber }, { orderNumber: idOrNumber }],
       status: { notIn: [OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED] },

@@ -10,6 +10,7 @@ export type Capability =
   | "products:read"
   | "inventory:read"
   | "inventory:update"
+  | "pos:sell"
   | "billing:read"
   | "payments:update";
 
@@ -24,11 +25,13 @@ export const roleCapabilities: Record<RoleName, Capability[]> = {
     "products:read",
     "inventory:read",
     "inventory:update",
+    "pos:sell",
     "billing:read",
     "payments:update",
   ],
-  [RoleName.STORE_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "products:read", "inventory:read", "payments:update"],
+  [RoleName.STORE_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "products:read", "inventory:read", "pos:sell", "payments:update"],
   [RoleName.INVENTORY_MANAGER]: ["products:read", "inventory:read", "inventory:update"],
+  [RoleName.CASHIER]: ["products:read", "inventory:read", "pos:sell", "billing:read"],
   [RoleName.ORDER_MANAGER]: ["orders:read", "orders:update_status", "orders:assign_delivery", "delivery:read", "payments:update"],
   [RoleName.DELIVERY_STAFF]: ["orders:read", "delivery:read", "delivery:update_own_status", "payments:update"],
   [RoleName.SUPPORT_STAFF]: ["orders:read"],

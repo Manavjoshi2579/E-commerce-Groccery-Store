@@ -92,7 +92,20 @@ export const inventoryAdjustSchema = z.object({
   note: z.string().trim().max(180).optional(),
 });
 
+export const stockInwardSchema = z.object({
+  inventoryId: z.string().min(8),
+  quantity: z.coerce.number().int().min(1).max(10000),
+  vendor: z.string().trim().max(120).optional(),
+  invoiceReference: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(240).optional(),
+});
+
 export const offlineSaleSchema = z.object({
+  locationId: z.string().min(8).optional().nullable(),
+  idempotencyKey: z.string().trim().min(12).max(120).optional(),
+  customerReference: z.string().trim().max(120).optional(),
+  paymentMethod: z.enum(["CASH", "UPI", "CARD", "OTHER"]).optional().default("CASH"),
+  cashReceived: z.coerce.number().min(0).optional().nullable(),
   note: z.string().trim().max(180).optional(),
   items: z.array(z.object({
     productId: z.string().min(8),

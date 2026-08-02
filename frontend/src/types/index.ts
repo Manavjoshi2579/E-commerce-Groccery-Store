@@ -4,6 +4,9 @@ export type Product = {
   name: string;
   sku: string;
   clientProductCode?: string | null;
+  barcode?: string | null;
+  qrCode?: string | null;
+  pluCode?: string | null;
   brand: string;
   brandId?: string;
   brandSlug?: string;

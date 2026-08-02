@@ -24,6 +24,35 @@ const productInclude = {
 type ProductWithCatalog = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
 const categoryImageFallback = "/assets/categories/category-placeholder.webp";
+const defaultStoreLocationId = "default-store";
+
+async function ensureDefaultCatalogLocation(tx: Prisma.TransactionClient) {
+  return tx.storeLocation.upsert({
+    where: { code: "MAIN-STORE" },
+    update: {
+      name: "Eagle Mart Main Store",
+      type: "STORE",
+      addressLine: "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama",
+      city: "Vadodara",
+      state: "Gujarat",
+      pincode: "390024",
+      active: true,
+      isDefault: true,
+    },
+    create: {
+      id: defaultStoreLocationId,
+      code: "MAIN-STORE",
+      name: "Eagle Mart Main Store",
+      type: "STORE",
+      addressLine: "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama",
+      city: "Vadodara",
+      state: "Gujarat",
+      pincode: "390024",
+      active: true,
+      isDefault: true,
+    },
+  });
+}
 
 const homepageCategoryGroups = [
   { key: "fruits-vegetables", title: "Fruits & Vegetables", imageUrl: "/assets/categories/fruits-vegetables.png", aliases: ["fruits", "vegetables", "fresh produce", "fruit", "vegetable"] },
@@ -211,6 +240,9 @@ export function mapProduct(product: ProductWithCatalog) {
     sku: product.sku,
     productCode: product.clientProductCode,
     clientProductCode: product.clientProductCode,
+    barcode: product.barcode,
+    qrCode: product.qrCode,
+    pluCode: product.pluCode,
     brand: product.brand.name,
     brandId: product.brandId,
     brandSlug: product.brand.slug,
@@ -738,10 +770,11 @@ export async function updateProduct(id: string, input: any) {
         }
         seenIds.add(variantId);
 
+        const location = await ensureDefaultCatalogLocation(tx);
         await tx.inventory.upsert({
-          where: { productId_variantId: { productId: id, variantId } },
+          where: { productId_variantId_locationId: { productId: id, variantId, locationId: location.id } },
           update: { stock: variantInput.stock, lowStockThreshold: variantInput.lowStockThreshold },
-          create: { productId: id, variantId, stock: variantInput.stock, lowStockThreshold: variantInput.lowStockThreshold },
+          create: { productId: id, variantId, locationId: location.id, stock: variantInput.stock, lowStockThreshold: variantInput.lowStockThreshold },
         });
       }
 
@@ -1300,10 +1333,11 @@ export async function bulkImportProducts(input: string | { filename?: string; co
       } else if (variantSkuValue !== variant.sku) {
         await tx.productVariant.update({ where: { id: variant.id }, data: { sku: variantSkuValue } });
       }
+      const location = await ensureDefaultCatalogLocation(tx);
       await tx.inventory.upsert({
-        where: { productId_variantId: { productId: product.id, variantId: variant.id } },
+        where: { productId_variantId_locationId: { productId: product.id, variantId: variant.id, locationId: location.id } },
         update: { stock: data.stock, lowStockThreshold: data.lowStockThreshold },
-        create: { productId: product.id, variantId: variant.id, stock: data.stock, lowStockThreshold: data.lowStockThreshold },
+        create: { productId: product.id, variantId: variant.id, locationId: location.id, stock: data.stock, lowStockThreshold: data.lowStockThreshold },
       });
       if (shouldApplyPrimaryImage) {
         const currentImages = await tx.productImage.findMany({ where: { productId: product.id } });
@@ -1582,10 +1616,11 @@ export async function replaceClientCatalogFromWorkbook(input: string | { filenam
       if (existing?.variants[0]) {
         await tx.productVariant.update({ where: { id: variant.id }, data: { label: item.unit, unit: item.unit, sourceUnit: item.sourceUnit || null, mrp: numbers.mrp, price: numbers.sellingPrice, costPrice: numbers.costPrice, status: ProductStatus.ACTIVE } });
       }
+      const location = await ensureDefaultCatalogLocation(tx);
       await tx.inventory.upsert({
-        where: { productId_variantId: { productId: product.id, variantId: variant.id } },
+        where: { productId_variantId_locationId: { productId: product.id, variantId: variant.id, locationId: location.id } },
         update: { stock: inactiveByRule ? 0 : numbers.stock, lowStockThreshold: 5 },
-        create: { productId: product.id, variantId: variant.id, stock: inactiveByRule ? 0 : numbers.stock, lowStockThreshold: 5 },
+        create: { productId: product.id, variantId: variant.id, locationId: location.id, stock: inactiveByRule ? 0 : numbers.stock, lowStockThreshold: 5 },
       });
       if (!existing?.images.length) {
         await tx.productImage.create({ data: { productId: product.id, url: productImageFallback, alt: item.name, isPrimary: true, sortOrder: 1 } });
