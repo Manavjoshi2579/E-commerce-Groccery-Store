@@ -901,7 +901,8 @@ model Payment {
 model Invoice {
   id             String   @id @default(cuid())
   invoiceNumber  String   @unique
-  orderId        String   @unique
+  orderId        String?  @unique
+  offlineSaleId  String?  @unique
   invoiceDate    DateTime @default(now())
   subtotal       Decimal  @db.Decimal(10, 2)
   couponDiscount Decimal  @default(0) @db.Decimal(10, 2)
@@ -913,9 +914,11 @@ model Invoice {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  order          Order    @relation(fields: [orderId], references: [id])
+  order          Order?   @relation(fields: [orderId], references: [id])
+  offlineSale    OfflineSale? @relation(fields: [offlineSaleId], references: [id])
 
   @@index([orderId])
+  @@index([offlineSaleId])
   @@index([invoiceNumber])
   @@index([invoiceDate])
   @@index([createdAt])
@@ -1054,6 +1057,8 @@ model OrderStatusHistory {
 model OfflineSale {
   id              String        @id @default(cuid())
   referenceNumber String        @unique
+  invoiceNumber   String?       @unique
+  receiptNumber   String?       @unique
   actorId         String
   locationId      String?
   idempotencyKey  String?       @unique
@@ -1070,8 +1075,11 @@ model OfflineSale {
   actor           AdminUser     @relation(fields: [actorId], references: [id])
   location        StoreLocation? @relation(fields: [locationId], references: [id])
   items           OfflineSaleItem[]
+  invoice         Invoice?
 
   @@index([actorId])
+  @@index([invoiceNumber])
+  @@index([receiptNumber])
   @@index([locationId])
   @@index([paymentMethod])
   @@index([status])

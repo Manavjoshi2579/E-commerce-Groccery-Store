@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdminRole } from "../../../middleware/auth.js";
-import { adjustInventory, inventoryRoles, listInventory, listOfflineSyncConflicts, listStockMovements, posRoles, recordOfflineSale, recordStockInward, resolveOfflineSyncConflict, searchPosInventory, syncOfflineSales, updateInventory } from "../../../services/inventory.service.js";
+import { adjustInventory, getPosMetrics, inventoryRoles, listInventory, listOfflineSales, listOfflineSyncConflicts, listStockMovements, lookupPosInventory, posRoles, recordOfflineSale, recordStockInward, resolveOfflineSyncConflict, searchPosInventory, syncOfflineSales, updateInventory } from "../../../services/inventory.service.js";
 import { inventoryAdjustSchema, inventoryPatchSchema, offlineSaleSchema, offlineSaleSyncSchema, offlineSyncConflictResolutionSchema, stockInwardSchema } from "../../../validators/checkout.js";
 
 export const adminInventoryRouter = Router();
@@ -15,6 +15,30 @@ adminInventoryRouter.get("/inventory", requireAdminRole(inventoryRoles), async (
 adminInventoryRouter.get("/inventory/pos-search", requireAdminRole(posRoles), async (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q : "";
   return sendOk(res, { inventory: await searchPosInventory(q) });
+});
+
+adminInventoryRouter.get("/inventory/pos-lookup", requireAdminRole(posRoles), async (req, res) => {
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  try {
+    return sendOk(res, await lookupPosInventory(code));
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not resolve scan code.");
+  }
+});
+
+adminInventoryRouter.get("/inventory/pos-metrics", requireAdminRole(posRoles), async (req, res) => {
+  const deviceQueued = typeof req.query.deviceQueued === "string" ? Number(req.query.deviceQueued) : 0;
+  return sendOk(res, { metrics: await getPosMetrics({ deviceQueued: Number.isFinite(deviceQueued) ? deviceQueued : 0 }) });
+});
+
+adminInventoryRouter.get("/inventory/offline-sales", requireAdminRole(posRoles), async (req, res) => {
+  return sendOk(res, await listOfflineSales({
+    q: typeof req.query.q === "string" ? req.query.q : undefined,
+    paymentMethod: typeof req.query.paymentMethod === "string" ? req.query.paymentMethod : undefined,
+    status: typeof req.query.status === "string" ? req.query.status : undefined,
+    page: typeof req.query.page === "string" ? Number(req.query.page) : undefined,
+    pageSize: typeof req.query.pageSize === "string" ? Number(req.query.pageSize) : undefined,
+  }));
 });
 
 adminInventoryRouter.patch("/inventory/:id", requireAdminRole(inventoryRoles), async (req, res) => {

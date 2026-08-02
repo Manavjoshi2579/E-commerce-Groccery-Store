@@ -36,7 +36,7 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSyncConflicts, fetchAdminOrders, markDeliveryAttemptFailed, resolveAdminOfflineSyncConflict, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSales, fetchAdminOfflineSyncConflicts, fetchAdminOrders, fetchAdminPosMetrics, lookupAdminPosInventory, markDeliveryAttemptFailed, resolveAdminOfflineSyncConflict, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
@@ -895,6 +895,8 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
   const [syncing, setSyncing] = useState(false);
   const [queuedSales, setQueuedSales] = useState<PosQueuedSale[]>([]);
   const [deviceId, setDeviceId] = useState("");
+  const [posMetrics, setPosMetrics] = useState<any>(null);
+  const [offlineSales, setOfflineSales] = useState<any[]>([]);
   const [stockInward, setStockInward] = useState({ inventoryId: "", quantity: "", vendor: "", invoiceReference: "", note: "" });
   const [inwardSaving, setInwardSaving] = useState(false);
   const inventoryStatus = (stock: number, lowStock: number) => stock <= 0 ? "Out of stock" : stock <= lowStock ? "Low stock" : "In stock";
@@ -953,8 +955,14 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     return row ? { row, quantity } : null;
   }).filter(Boolean) as { row: AdminInventoryRow; quantity: number }[];
   const offlineTotal = offlineItems.reduce((sum, item) => sum + item.quantity * Number(item.row.price || 0), 0);
-  const cashNumber = Number(cashReceived || 0);
-  const changeDue = offlinePaymentMethod === "CASH" ? Math.max(0, cashNumber - offlineTotal) : 0;
+  const toPaise = (value: number | string) => Math.max(0, Math.round(Number(value || 0) * 100));
+  const offlineTotalPaise = toPaise(offlineTotal);
+  const cashReceivedPaise = toPaise(cashReceived);
+  const cashNumber = cashReceivedPaise / 100;
+  const amountDue = offlinePaymentMethod === "CASH" ? Math.max(0, offlineTotalPaise - cashReceivedPaise) / 100 : 0;
+  const changeDue = offlinePaymentMethod === "CASH" ? Math.max(0, cashReceivedPaise - offlineTotalPaise) / 100 : 0;
+  const canCompleteSale = Boolean(offlineItems.length) && !offlineSaving && (offlinePaymentMethod !== "CASH" || amountDue <= 0);
+  const pendingSyncCount = queuedSales.filter((sale) => ["QUEUED", "FAILED"].includes(sale.status)).length;
   const quickRows = rows.filter((row) => row.stock > 0).sort((a, b) => Number(b.sold || 0) - Number(a.sold || 0)).slice(0, 12);
   const pagedRows = usePagedItems(filteredRows);
   useEffect(() => {
@@ -983,10 +991,20 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     setOfflineCart((items) => ({ ...items, [row.inventoryId]: Math.min(row.stock, (items[row.inventoryId] || 0) + 1) }));
     setOfflineSearch("");
   };
+  const refreshPosMetrics = async () => {
+    if (!posOnly) return;
+    const [metrics, history] = await Promise.all([fetchAdminPosMetrics(pendingSyncCount), fetchAdminOfflineSales({ pageSize: 8 })]);
+    setPosMetrics(metrics);
+    setOfflineSales(history.sales || []);
+  };
+  useEffect(() => {
+    refreshPosMetrics().catch(() => undefined);
+  }, [posOnly, pendingSyncCount]);
   const handleScanCode = async (code: string) => {
     try {
-      const matches = await searchAdminPosInventory(code);
-      const item = matches[0];
+      const result = await lookupAdminPosInventory(code);
+      if (result.ambiguous) return toast("Multiple products match this code. Use manual search to choose the correct item.", "error");
+      const item = result.match;
       if (!item) return toast("No product found for scanned code.", "error");
       const variant = item.variant || item.product.variants?.find((option: ProductVariant) => option.id === item.variantId);
       addOfflineItem({ ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, locationId: item.locationId, location: item.location, stock: Number(item.stock || 0), onHand: item.onHand, reserved: item.reserved, sold: item.sold, damaged: item.damaged, returned: item.returned, adjustment: item.adjustment, lowStock: Number(item.lowStockThreshold ?? item.product.lowStock ?? 0), variantLabel: variant?.label || variant?.unit || item.product.unit });
@@ -1043,6 +1061,7 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       setCashReceived("");
       await clearPosDraft();
       await loadInventory();
+      await refreshPosMetrics();
       toast(`Offline sale recorded: ${sale.referenceNumber}`, "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not record offline sale.", "error");
@@ -1062,6 +1081,7 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       }
       await refreshQueue();
       await loadInventory();
+      await refreshPosMetrics();
       toast("Offline sync completed", "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not sync offline sales.", "error");
@@ -1096,14 +1116,30 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     return created.toDateString() === today.toDateString() && ["ONLINE_SALE", "OFFLINE_SALE", "SALE"].includes(movement.type);
   }).reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
   const shellSection = posOnly ? "pos" : "inventory";
+  const statCards: [string, string, string][] = posOnly
+    ? [
+      ["POS Sales Today", String(posMetrics?.salesToday ?? 0), "Completed/synced"],
+      ["POS Revenue Today", money(Number(posMetrics?.revenueToday || 0)), "Database total"],
+      ["Items Sold Today", String(posMetrics?.itemsSoldToday ?? 0), "POS quantity"],
+      ["Pending Sync", String(pendingSyncCount), "This device"],
+      ["Sync Conflicts", String(posMetrics?.syncConflicts ?? 0), "Needs review"],
+      ["Cash Sales Today", money(Number(posMetrics?.cashSalesToday || 0)), "Cash"],
+      ["UPI/Card Sales Today", money(Number(posMetrics?.upiCardSalesToday || 0)), "Digital"],
+    ]
+    : [
+      [productId ? "Product SKUs" : "Tracked SKUs", String(rows.length), productId ? selectedProduct?.name || "Selected product" : "Database"],
+      ["Available SKUs", String(rows.filter((p) => p.stock > 0).length), "Sellable"],
+      ["On-Hand Units", String(rows.reduce((sum, p) => sum + Number(p.onHand || p.stock || 0), 0)), "Physical"],
+      ["Reserved Units", String(rows.reduce((sum, p) => sum + Number(p.reserved || 0), 0)), "Online holds"],
+      ["Available Units", String(rows.reduce((sum, p) => sum + Number(p.stock || 0), 0)), "After safety stock"],
+      ["Low Stock", String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length), "Below threshold"],
+      ["Out of Stock", String(rows.filter((p) => p.stock <= 0).length), "Needs inward"],
+    ];
   return <AdminShell section={shellSection}>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Stat label={productId ? "Product SKUs" : "Available SKUs"} value={String(rows.filter((p) => p.stock > 0).length)} sub={productId ? selectedProduct?.name || "Selected product" : `${rows.length} tracked`} />
-      <Stat label="Reserved Stock" value={String(rows.reduce((sum, p) => sum + Number(p.reserved || 0), 0))} sub="Online holds" />
-      <Stat label="Sold Today" value={String(soldToday)} sub="Online + offline" />
-      <Stat label="Out of Stock" value={String(rows.filter((p) => p.stock <= 0).length)} sub={`${rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length} low stock`} />
+      {statCards.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}
     </div>
-    <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+    <div className={posOnly ? "mt-6 grid gap-6" : "mt-6 grid gap-6"}>
       {!posOnly && <Panel title={productId ? `Inventory - ${selectedProduct?.name || "Selected Product"}` : "Inventory"}>
         {productId && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#eadfca] bg-white p-3"><p className="text-sm text-black/60">{selectedProduct ? `${selectedProduct.sku} | ${selectedProduct.category} | ${selectedProduct.brand}` : "Loading product inventory from database..."}</p><Link href="/admin/inventory"><Button variant="outline">View all inventory</Button></Link></div>}
         <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><label className="relative min-w-0"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search inventory" className="w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none transition focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 sm:text-base" placeholder="Search product, SKU, brand, category, variant, status" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} /></label><span className="text-sm font-bold text-black/55">{filteredRows.length} of {rows.length} SKUs</span></div>
@@ -1112,7 +1148,7 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
         {rows.length > 0 && !filteredRows.length && <p className="rounded-md bg-white p-4 text-sm font-bold text-black/55">No inventory matches this search.</p>}
         <PaginationControls page={pagedRows.page} totalPages={pagedRows.totalPages} total={pagedRows.total} onPageChange={pagedRows.setPage} />
       </Panel>}
-      <Panel title={posOnly ? "Eagle Mart POS" : "Offline Sale"}>
+      {posOnly && <Panel title="Eagle Mart POS">
         <div className={posOnly ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : "grid gap-3"}>
           <div className="grid gap-3">
             {posOnly && <div className={`rounded-md border p-3 text-sm font-bold ${online ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"}`}>{online ? "Online: sales commit directly to server inventory." : "Offline Mode: sales are provisional and queued on this device."}<div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" onClick={() => setScannerOpen(true)}>Scan</Button><Button variant="outline" disabled={syncing || !queuedSales.some((sale) => ["QUEUED", "FAILED"].includes(sale.status))} onClick={syncQueued}>{syncing ? "Syncing..." : `Sync queue (${queuedSales.filter((sale) => sale.status !== "SYNCED").length})`}</Button></div></div>}
@@ -1125,13 +1161,14 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
             <input aria-label="POS customer reference" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Customer reference optional" value={offlineCustomer} onChange={(event) => setOfflineCustomer(event.target.value)} />
             <input aria-label="Offline sale note" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Invoice note optional" value={offlineNote} onChange={(event) => setOfflineNote(event.target.value)} />
             <select aria-label="POS payment method" value={offlinePaymentMethod} onChange={(event) => setOfflinePaymentMethod(event.target.value as any)} className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm font-bold outline-none focus:border-[#d4af37]"><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="OTHER">Other</option></select>
-            {offlinePaymentMethod === "CASH" && <div className="grid grid-cols-2 gap-2"><input aria-label="Cash received" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Cash received" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} inputMode="decimal" /><div className="rounded-md bg-[#faf7ef] p-3 text-sm"><span className="text-black/55">Change</span><b className="block">{money(changeDue)}</b></div></div>}
+            {offlinePaymentMethod === "CASH" && <div className="grid gap-2 sm:grid-cols-3"><input aria-label="Cash received" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Cash received" value={cashReceived} onChange={(event) => setCashReceived(event.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1"))} inputMode="decimal" /><div className={`rounded-md p-3 text-sm ${amountDue > 0 ? "bg-red-50 text-red-700" : "bg-[#faf7ef]"}`}><span className="text-black/55">Amount Due</span><b className="block">{money(amountDue)}</b></div><div className="rounded-md bg-[#faf7ef] p-3 text-sm"><span className="text-black/55">Change to Return</span><b className="block">{money(changeDue)}</b></div></div>}
             <div className="rounded-md bg-[#faf7ef] p-3"><div className="flex justify-between text-sm"><span>Items</span><b>{offlineItems.reduce((sum, item) => sum + item.quantity, 0)}</b></div><div className="mt-2 flex justify-between text-base"><span className="font-black">Bill total</span><b>{money(offlineTotal)}</b></div></div>
-            <div className="grid grid-cols-2 gap-2"><Button variant="outline" disabled={offlineSaving || !offlineItems.length} onClick={() => setOfflineCart({})}>Clear</Button><Button variant="gold" disabled={offlineSaving || !offlineItems.length} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Complete Sale"}</Button></div>
-            {lastOfflineSale && <p className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">Receipt ready: {lastOfflineSale.referenceNumber}{lastOfflineSale.changeDue != null ? ` | Change ${money(Number(lastOfflineSale.changeDue))}` : ""}</p>}
+            <div className="grid grid-cols-2 gap-2"><Button variant="outline" disabled={offlineSaving || !offlineItems.length} onClick={() => setOfflineCart({})}>Clear</Button><Button variant="gold" disabled={!canCompleteSale} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Complete Sale"}</Button></div>
+            {lastOfflineSale && <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800"><p>Receipt ready: {lastOfflineSale.referenceNumber}</p><p>{lastOfflineSale.invoiceNumber || lastOfflineSale.invoice?.invoiceNumber || "Invoice pending"} | {lastOfflineSale.receiptNumber || ""}</p>{lastOfflineSale.changeDue != null ? <p>Change {money(Number(lastOfflineSale.changeDue))}</p> : null}<div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}>Print</Button><Button variant="gold" onClick={() => setLastOfflineSale(null)}>New Sale</Button></div></div>}
           </div>
         </div>
-      </Panel>
+      </Panel>}
+      {posOnly && <Panel title="Offline Sales"><DataTable headers={["Sale", "Invoice", "Date", "Cashier", "Location", "Items", "Total", "Payment", "Actions"]} minWidth="min-w-[1080px]">{offlineSales.map((sale) => <tr key={sale.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{sale.referenceNumber}<div className="text-xs font-normal text-black/50">{sale.receiptNumber || "-"}</div></td><td className="p-3">{sale.invoiceNumber || sale.invoice?.invoiceNumber || "-"}</td><td className="p-3">{new Date(sale.createdAt).toLocaleString("en-IN")}</td><td className="p-3">{sale.actor?.name || sale.actor?.email || "-"}</td><td className="p-3">{sale.location?.name || "-"}</td><td className="p-3">{sale.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0}</td><td className="p-3 font-black">{money(Number(sale.total || 0))}</td><td className="p-3"><StatusBadge value={sale.paymentMethod || "CASH"} /></td><td className="p-3"><Button variant="outline" onClick={() => setLastOfflineSale(sale)}>View receipt</Button></td></tr>)}</DataTable>{!offlineSales.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No POS offline sales found.</p>}</Panel>}
     </div>
     {!posOnly && <div className="mt-6">
       <Panel title="Stock Inward">

@@ -324,6 +324,30 @@ export async function searchAdminPosInventory(query: string) {
   }));
 }
 
+export async function lookupAdminPosInventory(code: string) {
+  const data = await requestApi<{ match: any | null; options: any[]; ambiguous?: boolean }>(`/api/admin/inventory/pos-lookup?code=${encodeURIComponent(code)}`);
+  return {
+    ...data,
+    match: data.match ? { ...data.match, product: mapApiProduct(data.match.product) } : null,
+    options: (data.options || []).map((item) => ({ ...item, product: mapApiProduct(item.product) })),
+  };
+}
+
+export async function fetchAdminPosMetrics(deviceQueued = 0) {
+  const data = await requestApi<{ metrics: any }>(`/api/admin/inventory/pos-metrics?deviceQueued=${encodeURIComponent(String(deviceQueued))}`);
+  return data.metrics;
+}
+
+export async function fetchAdminOfflineSales(filters?: { q?: string; paymentMethod?: string; status?: string; page?: number; pageSize?: number }) {
+  const params = new URLSearchParams();
+  if (filters?.q) params.set("q", filters.q);
+  if (filters?.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.page) params.set("page", String(filters.page));
+  if (filters?.pageSize) params.set("pageSize", String(filters.pageSize));
+  return requestApi<{ sales: any[]; pagination: any }>(`/api/admin/inventory/offline-sales${params.size ? `?${params}` : ""}`);
+}
+
 export async function adjustAdminInventory(id: string, quantity: number) {
   const data = await requestApi<{ inventory: any }>(`/api/admin/inventory/${id}/adjust`, { method: "POST", body: JSON.stringify({ quantity, note: "Adjusted from admin UI" }) });
   clearStockCaches();

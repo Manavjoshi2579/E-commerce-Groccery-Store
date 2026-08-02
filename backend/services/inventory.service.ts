@@ -1,4 +1,4 @@
-import { Prisma, RoleName, StockMovementChannel, StockMovementType } from "@prisma/client";
+import { Prisma, RoleName, SettingType, StockMovementChannel, StockMovementType } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { mapProduct } from "./catalog.service.js";
 
@@ -74,6 +74,33 @@ export function mapInventory(row: any) {
 }
 
 type Tx = Prisma.TransactionClient;
+
+async function nextSequence(tx: Tx, key: string) {
+  const current = await tx.setting.findUnique({ where: { key } });
+  const next = Number(current?.value || "0") + 1;
+  await tx.setting.upsert({
+    where: { key },
+    update: { value: String(next) },
+    create: { key, value: String(next), type: SettingType.NUMBER },
+  });
+  return next;
+}
+
+async function nextPosReferences(tx: Tx) {
+  const year = new Date().getFullYear();
+  const saleSequence = await nextSequence(tx, `pos-sale:${year}`);
+  const invoiceSequence = await nextSequence(tx, `pos-invoice:${year}`);
+  const receiptSequence = await nextSequence(tx, `pos-receipt:${year}`);
+  return {
+    referenceNumber: `POS-${year}-${String(saleSequence).padStart(6, "0")}`,
+    invoiceNumber: `INV-POS-${year}-${String(invoiceSequence).padStart(6, "0")}`,
+    receiptNumber: `RCPT-${year}-${String(receiptSequence).padStart(6, "0")}`,
+  };
+}
+
+function moneyToPaise(value: number | Prisma.Decimal | null | undefined) {
+  return Math.round(Number(value || 0) * 100);
+}
 
 async function movementExists(tx: Tx, idempotencyKey?: string) {
   return idempotencyKey ? tx.stockMovement.findUnique({ where: { idempotencyKey } }) : null;
@@ -197,6 +224,25 @@ export async function searchPosInventory(query: string) {
   const needle = query.trim();
   if (!needle) return [];
   await ensureDefaultStoreLocation();
+  const exact = await db.inventory.findMany({
+    where: {
+      locationId: defaultLocation.id,
+      product: {
+        deletedAt: null,
+        OR: [
+          { barcode: needle },
+          { qrCode: needle },
+          { sku: needle },
+          { clientProductCode: needle },
+          { pluCode: needle },
+        ],
+      },
+    },
+    include: inventoryInclude,
+    orderBy: [{ product: { name: "asc" } }, { updatedAt: "desc" }],
+    take: 10,
+  });
+  if (exact.length) return exact.map(mapInventory);
   const rows = await db.inventory.findMany({
     where: {
       locationId: defaultLocation.id,
@@ -219,6 +265,30 @@ export async function searchPosInventory(query: string) {
     take: 30,
   });
   return rows.map(mapInventory);
+}
+
+export async function lookupPosInventory(code: string) {
+  const needle = code.trim();
+  if (!needle) throw new Error("Scan code is required.");
+  await ensureDefaultStoreLocation();
+  const priorities: Prisma.ProductWhereInput[] = [
+    { barcode: needle },
+    { qrCode: needle },
+    { sku: needle },
+    { clientProductCode: needle },
+    { pluCode: needle },
+  ];
+  for (const productWhere of priorities) {
+    const rows = await db.inventory.findMany({
+      where: { product: { deletedAt: null, ...productWhere } },
+      include: inventoryInclude,
+      orderBy: [{ location: { isDefault: "desc" } }, { updatedAt: "desc" }],
+      take: 2,
+    });
+    if (rows.length === 1) return { match: mapInventory(rows[0]), options: [] };
+    if (rows.length > 1) return { match: null, options: rows.map(mapInventory), ambiguous: true };
+  }
+  return { match: null, options: [], ambiguous: false };
 }
 
 export async function updateInventory(id: string, input: { stock?: number; lowStockThreshold?: number }) {
@@ -274,24 +344,82 @@ export async function listStockMovements() {
   return db.stockMovement.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { product: true, location: true, adminUser: { select: { name: true, email: true } }, order: { select: { orderNumber: true } } } });
 }
 
+export async function listOfflineSales(filters: { q?: string; paymentMethod?: string; status?: string; page?: number; pageSize?: number } = {}) {
+  const page = Math.max(1, filters.page || 1);
+  const pageSize = Math.min(100, Math.max(1, filters.pageSize || 25));
+  const where: Prisma.OfflineSaleWhereInput = {
+    ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.q ? {
+      OR: [
+        { referenceNumber: { contains: filters.q } },
+        { invoiceNumber: { contains: filters.q } },
+        { receiptNumber: { contains: filters.q } },
+        { customerReference: { contains: filters.q } },
+        { actor: { name: { contains: filters.q } } },
+        { location: { name: { contains: filters.q } } },
+      ],
+    } : {}),
+  };
+  const [sales, total] = await Promise.all([
+    db.offlineSale.findMany({
+      where,
+      include: { items: { include: { product: true, variant: true } }, actor: { select: { name: true, email: true } }, location: true, invoice: true },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    db.offlineSale.count({ where }),
+  ]);
+  return { sales, pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
+}
+
+export async function getPosMetrics(input: { deviceQueued?: number } = {}) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const [sales, conflicts] = await Promise.all([
+    db.offlineSale.findMany({ where: { createdAt: { gte: start }, status: { not: "VOIDED" } }, include: { items: true } }),
+    db.offlineSyncConflict.count({ where: { status: { notIn: ["REVIEWED", "CANCELLED", "SYNCED"] } } }),
+  ]);
+  const cashSales = sales.filter((sale) => sale.paymentMethod === "CASH");
+  const upiCardSales = sales.filter((sale) => ["UPI", "CARD"].includes(sale.paymentMethod));
+  return {
+    salesToday: sales.length,
+    revenueToday: sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0),
+    itemsSoldToday: sales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0), 0),
+    pendingSync: input.deviceQueued || 0,
+    syncConflicts: conflicts,
+    cashSalesToday: cashSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0),
+    upiCardSalesToday: upiCardSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0),
+  };
+}
+
 export async function recordOfflineSale(adminUserId: string, input: { locationId?: string | null; idempotencyKey?: string; customerReference?: string; paymentMethod?: string; cashReceived?: number | null; note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number }[] }) {
   return db.$transaction(async (tx) => {
     if (input.idempotencyKey) {
-      const existing = await tx.offlineSale.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { items: true, actor: { select: { name: true, email: true } } } });
+      const existing = await tx.offlineSale.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { items: { include: { product: true, variant: true } }, actor: { select: { name: true, email: true } }, location: true, invoice: true } });
       if (existing) return existing;
     }
     const location = input.locationId ? await tx.storeLocation.findUniqueOrThrow({ where: { id: input.locationId } }) : await ensureDefaultStoreLocation(tx);
-    const referenceNumber = `OFF-${new Date().getFullYear()}-${Date.now()}`;
+    const references = await nextPosReferences(tx);
     const total = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    if (!Number.isFinite(total) || total <= 0) throw new Error("POS bill total must be greater than zero.");
+    const paymentMethod = input.paymentMethod || "CASH";
+    const cashReceived = input.cashReceived ?? null;
+    if (paymentMethod === "CASH" && moneyToPaise(cashReceived) < moneyToPaise(total)) {
+      throw new Error("Cash received is less than bill total.");
+    }
     const sale = await tx.offlineSale.create({
       data: {
-        referenceNumber,
+        referenceNumber: references.referenceNumber,
+        invoiceNumber: references.invoiceNumber,
+        receiptNumber: references.receiptNumber,
         locationId: location.id,
         idempotencyKey: input.idempotencyKey,
         customerReference: input.customerReference,
-        paymentMethod: input.paymentMethod || "CASH",
-        cashReceived: input.cashReceived ?? null,
-        changeDue: input.paymentMethod === "CASH" && input.cashReceived != null ? Math.max(0, input.cashReceived - total) : null,
+        paymentMethod,
+        cashReceived,
+        changeDue: paymentMethod === "CASH" && cashReceived != null ? Math.max(0, cashReceived - total) : null,
         actorId: adminUserId,
         total,
         note: input.note,
@@ -305,7 +433,20 @@ export async function recordOfflineSale(adminUserId: string, input: { locationId
           })),
         },
       },
-      include: { items: true, actor: { select: { name: true, email: true } } },
+      include: { items: { include: { product: true, variant: true } }, actor: { select: { name: true, email: true } }, location: true, invoice: true },
+    });
+
+    await tx.invoice.create({
+      data: {
+        invoiceNumber: references.invoiceNumber,
+        offlineSaleId: sale.id,
+        subtotal: total,
+        couponDiscount: 0,
+        deliveryCharge: 0,
+        handlingCharge: 0,
+        gstTotal: 0,
+        grandTotal: total,
+      },
     });
 
     for (const item of input.items) {
@@ -330,17 +471,18 @@ export async function recordOfflineSale(adminUserId: string, input: { locationId
           quantityBefore: available,
           quantityAfter: updated.stock - updated.reserved - updated.safetyStock,
           referenceType: "OFFLINE_SALE",
-          referenceId: sale.id,
+          referenceId: references.referenceNumber,
           actorType: "ADMIN",
           actorId: adminUserId,
           adminUserId,
           idempotencyKey: `OFFLINE_SALE:${sale.id}:${item.productId}:${item.variantId ?? "base"}`,
-          note: input.note ?? `Offline sale ${referenceNumber}`,
+          metadata: { offlineSaleId: sale.id, invoiceNumber: references.invoiceNumber, receiptNumber: references.receiptNumber },
+          note: input.note ?? `Offline sale ${references.referenceNumber}`,
         },
       });
     }
 
-    return sale;
+    return tx.offlineSale.findUniqueOrThrow({ where: { id: sale.id }, include: { items: { include: { product: true, variant: true } }, actor: { select: { name: true, email: true } }, location: true, invoice: true } });
   });
 }
 
@@ -352,13 +494,14 @@ export async function syncOfflineSales(adminUserId: string, input: { deviceId: s
       results.push({ localReference: sale.localReference, status: "SYNCED", retryable: false, serverReference: committed.referenceNumber, saleId: committed.id });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Offline sale sync failed.";
+      const reason = message.slice(0, 180);
       const status = /insufficient stock/i.test(message) ? "STOCK_CONFLICT" : /not found/i.test(message) ? "PRODUCT_NOT_FOUND" : /location/i.test(message) ? "LOCATION_INVALID" : "FAILED";
       const retryable = status === "FAILED";
       const conflict = await db.offlineSyncConflict.upsert({
         where: { localReference: sale.localReference },
         update: {
           status,
-          reason: message,
+          reason,
           retryable,
           locationId: sale.locationId ?? null,
           cashierId: adminUserId,
@@ -370,7 +513,7 @@ export async function syncOfflineSales(adminUserId: string, input: { deviceId: s
           localReference: sale.localReference,
           idempotencyKey: sale.idempotencyKey,
           status,
-          reason: message,
+          reason,
           retryable,
           locationId: sale.locationId ?? null,
           cashierId: adminUserId,
@@ -379,7 +522,7 @@ export async function syncOfflineSales(adminUserId: string, input: { deviceId: s
           result: { message, status },
         },
       });
-      results.push({ localReference: sale.localReference, status, retryable, conflictId: conflict.id, reason: message });
+      results.push({ localReference: sale.localReference, status, retryable, conflictId: conflict.id, reason });
     }
   }
   return results;

@@ -91,7 +91,9 @@ afterAll(async () => {
     await db.order.delete({ where: { id: order.id } });
   }
   for (const offlineSaleId of cleanup.offlineSaleIds) {
-    await db.stockMovement.deleteMany({ where: { referenceType: "OFFLINE_SALE", referenceId: offlineSaleId } });
+    const sale = await db.offlineSale.findUnique({ where: { id: offlineSaleId } });
+    await db.stockMovement.deleteMany({ where: { referenceType: "OFFLINE_SALE", referenceId: sale?.referenceNumber || offlineSaleId } });
+    await db.invoice.deleteMany({ where: { offlineSaleId } });
     await db.offlineSaleItem.deleteMany({ where: { offlineSaleId } });
     await db.offlineSale.deleteMany({ where: { id: offlineSaleId } });
   }
@@ -421,6 +423,8 @@ describe("admin order and inventory APIs", () => {
     const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
     const response = await admin.post("/api/admin/inventory/offline-sales").send({
       note: "Walk-in store sale",
+      paymentMethod: "CASH",
+      cashReceived: 30,
       items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
     }).expect(201);
     cleanup.offlineSaleIds.push(response.body.data.sale.id);
@@ -428,8 +432,60 @@ describe("admin order and inventory APIs", () => {
     const after = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
     expect(after.stock).toBe(before.stock - 1);
     expect(after.sold).toBe(before.sold + 1);
-    const movement = await db.stockMovement.findFirst({ where: { referenceType: "OFFLINE_SALE", referenceId: response.body.data.sale.id, type: StockMovementType.OFFLINE_SALE } });
+    expect(response.body.data.sale.referenceNumber).toMatch(/^POS-\d{4}-\d{6}$/);
+    expect(response.body.data.sale.invoiceNumber).toMatch(/^INV-POS-\d{4}-\d{6}$/);
+    expect(response.body.data.sale.receiptNumber).toMatch(/^RCPT-\d{4}-\d{6}$/);
+    expect(Number(response.body.data.sale.changeDue)).toBe(5);
+    const invoice = await db.invoice.findUnique({ where: { offlineSaleId: response.body.data.sale.id } });
+    expect(invoice?.invoiceNumber).toBe(response.body.data.sale.invoiceNumber);
+    const movement = await db.stockMovement.findFirst({ where: { referenceType: "OFFLINE_SALE", referenceId: response.body.data.sale.referenceNumber, type: StockMovementType.OFFLINE_SALE } });
     expect(movement).toBeTruthy();
+  });
+
+  it("rejects underpaid cash POS sales and accepts exact or extra cash", async () => {
+    await admin.post("/api/admin/inventory/offline-sales").send({
+      paymentMethod: "CASH",
+      cashReceived: 24,
+      items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+    }).expect(400);
+
+    const exact = await admin.post("/api/admin/inventory/offline-sales").send({
+      paymentMethod: "CASH",
+      cashReceived: 25,
+      items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+    }).expect(201);
+    cleanup.offlineSaleIds.push(exact.body.data.sale.id);
+    expect(Number(exact.body.data.sale.changeDue)).toBe(0);
+
+    const extra = await admin.post("/api/admin/inventory/offline-sales").send({
+      paymentMethod: "CASH",
+      cashReceived: 50,
+      items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+    }).expect(201);
+    cleanup.offlineSaleIds.push(extra.body.data.sale.id);
+    expect(Number(extra.body.data.sale.changeDue)).toBe(25);
+  });
+
+  it("resolves POS barcode, QR, SKU, product code and PLU from live inventory", async () => {
+    const token = String(Date.now());
+    const previous = await db.product.findUniqueOrThrow({ where: { id: productId }, select: { barcode: true, qrCode: true, pluCode: true, clientProductCode: true } });
+    const product = await db.product.update({
+      where: { id: productId },
+      data: {
+        clientProductCode: `PCTEST${token}`,
+        barcode: `890TEST${token}`,
+        qrCode: `EAGLE_PRODUCT:${productId}`,
+        pluCode: `PLU${token.slice(-6)}`,
+      },
+    });
+    const codes = [product.barcode, product.qrCode, product.sku, product.clientProductCode, product.pluCode].filter(Boolean) as string[];
+    for (const code of codes) {
+      const response = await admin.get(`/api/admin/inventory/pos-lookup?code=${encodeURIComponent(code)}`).expect(200);
+      expect(response.body.data.match.productId).toBe(productId);
+      expect(response.body.data.match.product.sku).toBe(product.sku);
+      expect(response.body.data.match.stock).toEqual(expect.any(Number));
+    }
+    await db.product.update({ where: { id: productId }, data: previous });
   });
 
   it("syncs queued POS sales idempotently and records stock conflicts", async () => {
