@@ -36,13 +36,14 @@ import {
   updateAdminProduct,
 } from "@/services/catalog";
 import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCoupon } from "@/services/commerce";
-import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOrders, markDeliveryAttemptFailed, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
+import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSyncConflicts, fetchAdminOrders, markDeliveryAttemptFailed, resolveAdminOfflineSyncConflict, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
 import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
 import { fetchAdminSupportTickets, updateAdminSupportTicket } from "@/services/support";
 import { beginAdminMfaEnrollment, confirmAdminMfaEnrollment, disableAdminMfa, regenerateAdminRecoveryCodes, type AdminMfaEnrollment } from "@/services/auth";
 import { money, uid } from "@/lib/money";
+import { clearPosDraft, getPosDeviceId, listQueuedSales, loadPosDraft, queueOfflineSale, savePosDraft, updateQueuedSale, type PosQueuedSale } from "@/lib/posOfflineDb";
 import type { AdminCustomer, Category, Coupon, FAQ, Order, OrderStatus, Product, ProductVariant, SupportTicket } from "@/types";
 
 const nav = [
@@ -51,6 +52,7 @@ const nav = [
   ["delivery", Truck, "Delivery"],
   ["payments", CreditCard, "Payments"],
   ["pos", WalletCards, "POS"],
+  ["pos-conflicts", ShieldCheck, "POS Sync Conflicts"],
   ["invoices", ClipboardList, "Invoices"],
   ["returns", RotateCcw, "Returns"],
   ["customers", Users, "Customers"],
@@ -69,7 +71,7 @@ const nav = [
 
 const roleSections: Record<string, string[]> = {
   SUPER_ADMIN: nav.map(([href]) => href),
-  STORE_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
+  STORE_MANAGER: ["orders", "delivery", "payments", "pos", "pos-conflicts", "invoices", "returns", "customers", "support", "inventory", "products", "categories", "brands", "coupons", "faqs", "reports"],
   INVENTORY_MANAGER: ["products", "inventory", "reports"],
   CASHIER: ["pos"],
   ORDER_MANAGER: ["orders", "delivery", "payments", "invoices", "returns", "customers", "support", "reports"],
@@ -888,6 +890,11 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
   const [cashReceived, setCashReceived] = useState("");
   const [offlineSaving, setOfflineSaving] = useState(false);
   const [lastOfflineSale, setLastOfflineSale] = useState<any>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [queuedSales, setQueuedSales] = useState<PosQueuedSale[]>([]);
+  const [deviceId, setDeviceId] = useState("");
   const [stockInward, setStockInward] = useState({ inventoryId: "", quantity: "", vendor: "", invoiceReference: "", note: "" });
   const [inwardSaving, setInwardSaving] = useState(false);
   const inventoryStatus = (stock: number, lowStock: number) => stock <= 0 ? "Out of stock" : stock <= lowStock ? "Low stock" : "In stock";
@@ -901,21 +908,27 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
   }, [toast]);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const saved = JSON.parse(window.localStorage.getItem("eagle-pos-cart") || "{}");
-      if (saved && typeof saved === "object") setOfflineCart(saved);
-      setOfflineNote(window.localStorage.getItem("eagle-pos-note") || "");
-      setOfflineCustomer(window.localStorage.getItem("eagle-pos-customer") || "");
-    } catch {
-      window.localStorage.removeItem("eagle-pos-cart");
-    }
+    setOnline(window.navigator.onLine);
+    getPosDeviceId().then(setDeviceId).catch(() => setDeviceId("browser-pos"));
+    loadPosDraft<{ cart?: Record<string, number>; note?: string; customer?: string }>().then((saved) => {
+      if (saved?.cart) setOfflineCart(saved.cart);
+      if (saved?.note) setOfflineNote(saved.note);
+      if (saved?.customer) setOfflineCustomer(saved.customer);
+    }).catch(() => undefined);
+    listQueuedSales().then(setQueuedSales).catch(() => undefined);
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("eagle-pos-cart", JSON.stringify(offlineCart));
-    window.localStorage.setItem("eagle-pos-note", offlineNote);
-    window.localStorage.setItem("eagle-pos-customer", offlineCustomer);
+    savePosDraft({ cart: offlineCart, note: offlineNote, customer: offlineCustomer }).catch(() => undefined);
   }, [offlineCart, offlineNote, offlineCustomer]);
+  const refreshQueue = () => listQueuedSales().then(setQueuedSales).catch(() => undefined);
   const rows: AdminInventoryRow[] = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
     const lowStock = Number(item.lowStockThreshold ?? item.product.lowStock ?? 0);
     const stock = Number(item.stock || 0);
@@ -970,6 +983,18 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     setOfflineCart((items) => ({ ...items, [row.inventoryId]: Math.min(row.stock, (items[row.inventoryId] || 0) + 1) }));
     setOfflineSearch("");
   };
+  const handleScanCode = async (code: string) => {
+    try {
+      const matches = await searchAdminPosInventory(code);
+      const item = matches[0];
+      if (!item) return toast("No product found for scanned code.", "error");
+      const variant = item.variant || item.product.variants?.find((option: ProductVariant) => option.id === item.variantId);
+      addOfflineItem({ ...item.product, inventoryId: item.id, inventoryProductId: item.productId, variantId: item.variantId, locationId: item.locationId, location: item.location, stock: Number(item.stock || 0), onHand: item.onHand, reserved: item.reserved, sold: item.sold, damaged: item.damaged, returned: item.returned, adjustment: item.adjustment, lowStock: Number(item.lowStockThreshold ?? item.product.lowStock ?? 0), variantLabel: variant?.label || variant?.unit || item.product.unit });
+      toast("Scanned product added", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not resolve scanned code.", "error");
+    }
+  };
   const updateOfflineQty = (row: AdminInventoryRow, quantity: number) => {
     if (quantity <= 0) {
       setOfflineCart((items) => {
@@ -986,20 +1011,37 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     if (offlinePaymentMethod === "CASH" && cashNumber < offlineTotal) return toast("Cash received cannot be less than bill total.", "error");
     setOfflineSaving(true);
     try {
-      const sale = await createAdminOfflineSale({
-        idempotencyKey: `POS:${uid("sale")}`,
+      const localReference = `LOCAL-${Date.now()}-${uid("pos")}`;
+      const idempotencyKey = `POS:${deviceId || "browser"}:${localReference}`;
+      const payload = {
+        localReference,
+        idempotencyKey,
         customerReference: offlineCustomer.trim() || undefined,
         paymentMethod: offlinePaymentMethod,
         cashReceived: offlinePaymentMethod === "CASH" ? cashNumber : null,
         note: offlineNote.trim() || undefined,
         locationId: offlineItems[0]?.row.locationId || undefined,
         items: offlineItems.map(({ row, quantity }) => ({ productId: row.inventoryProductId, variantId: row.variantId || null, quantity, unitPrice: Number(row.price || 0) })),
-      });
+      };
+      if (!online) {
+        await queueOfflineSale({ localReference, idempotencyKey, deviceId: deviceId || "browser-pos", status: "QUEUED", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), payload });
+        setLastOfflineSale({ referenceNumber: localReference, status: "QUEUED", changeDue });
+        setOfflineCart({});
+        setOfflineNote("");
+        setOfflineCustomer("");
+        setCashReceived("");
+        await clearPosDraft();
+        await refreshQueue();
+        toast(`Offline sale queued: ${localReference}`, "success");
+        return;
+      }
+      const sale = await createAdminOfflineSale(payload);
       setLastOfflineSale(sale);
       setOfflineCart({});
       setOfflineNote("");
       setOfflineCustomer("");
       setCashReceived("");
+      await clearPosDraft();
       await loadInventory();
       toast(`Offline sale recorded: ${sale.referenceNumber}`, "success");
     } catch (error) {
@@ -1008,6 +1050,28 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       setOfflineSaving(false);
     }
   };
+  const syncQueued = async () => {
+    const queued = (await listQueuedSales()).filter((sale) => ["QUEUED", "FAILED"].includes(sale.status));
+    if (!queued.length) return toast("No offline sales waiting to sync.", "success");
+    setSyncing(true);
+    try {
+      queued.forEach((sale) => updateQueuedSale(sale.localReference, { status: "SYNCING" }).catch(() => undefined));
+      const results = await syncAdminOfflineSales({ deviceId: deviceId || "browser-pos", sales: queued.map((sale) => sale.payload) });
+      for (const result of results) {
+        await updateQueuedSale(result.localReference, { status: result.status, result });
+      }
+      await refreshQueue();
+      await loadInventory();
+      toast("Offline sync completed", "success");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not sync offline sales.", "error");
+    } finally {
+      setSyncing(false);
+    }
+  };
+  useEffect(() => {
+    if (online && posOnly && queuedSales.some((sale) => ["QUEUED", "FAILED"].includes(sale.status))) syncQueued();
+  }, [online]);
   const submitStockInward = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const quantity = Number(stockInward.quantity);
@@ -1051,6 +1115,7 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       <Panel title={posOnly ? "Eagle Mart POS" : "Offline Sale"}>
         <div className={posOnly ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]" : "grid gap-3"}>
           <div className="grid gap-3">
+            {posOnly && <div className={`rounded-md border p-3 text-sm font-bold ${online ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"}`}>{online ? "Online: sales commit directly to server inventory." : "Offline Mode: sales are provisional and queued on this device."}<div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" onClick={() => setScannerOpen(true)}>Scan</Button><Button variant="outline" disabled={syncing || !queuedSales.some((sale) => ["QUEUED", "FAILED"].includes(sale.status))} onClick={syncQueued}>{syncing ? "Syncing..." : `Sync queue (${queuedSales.filter((sale) => sale.status !== "SYNCED").length})`}</Button></div></div>}
             <label className="relative"><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/45" /><input aria-label="Search offline sale product" className="h-12 w-full rounded-md border border-[#cfc4a6] bg-white py-3 pl-10 pr-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Search/scan SKU, product code, barcode, QR or PLU" value={offlineSearch} onChange={(event) => setOfflineSearch(event.target.value)} /></label>
             {offlineSearch.trim() && <div className="max-h-80 overflow-y-auto rounded-md border border-[#eadfca] bg-white">{offlineMatches.length ? offlineMatches.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="flex min-h-16 w-full items-center justify-between gap-3 border-b px-3 py-3 text-left hover:bg-[#fff8df]"><span><b className="block text-sm">{row.name}</b><span className="text-xs text-black/50">{[row.sku, row.clientProductCode, row.barcode, row.pluCode, row.variantLabel || row.unit, `${row.stock} available`].filter(Boolean).join(" | ")}</span></span><span className="text-sm font-black">{money(row.price)}</span></button>) : <p className="p-4 text-sm text-black/55">No matching inventory item.</p>}</div>}
             {posOnly && <div><div className="mb-2 flex items-center justify-between gap-3"><h3 className="display-font text-lg font-black">Quick select</h3><span className="text-xs font-bold uppercase text-black/45">{quickRows.length} live SKUs</span></div><div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{quickRows.map((row) => <button type="button" key={row.inventoryId} onClick={() => addOfflineItem(row)} className="grid min-h-32 content-between rounded-md border border-[#eadfca] bg-white p-3 text-left shadow-sm transition hover:border-[#d4af37] hover:bg-[#fff8df]"><span><b className="line-clamp-2 text-sm">{row.name}</b><span className="mt-1 block text-xs text-black/50">{row.variantLabel || row.unit} | {row.stock} left</span></span><span className="font-black">{money(row.price)}</span></button>)}</div></div>}
@@ -1086,7 +1151,67 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
         {!movements.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No inventory movements found.</p>}
       </Panel>
     </div>}
+    {scannerOpen && <PosScannerModal onClose={() => setScannerOpen(false)} onScan={handleScanCode} />}
   </AdminShell>;
+}
+
+function PosScannerModal({ onClose, onScan }: { onClose: () => void; onScan: (code: string) => void }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<any>(null);
+  const lastScanRef = useRef({ code: "", time: 0 });
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState("");
+  const [status, setStatus] = useState("Requesting camera...");
+  const stop = () => {
+    controlsRef.current?.stop?.();
+    controlsRef.current = null;
+    const stream = videoRef.current?.srcObject as MediaStream | null;
+    stream?.getTracks().forEach((track) => track.stop());
+    if (videoRef.current) videoRef.current.srcObject = null;
+  };
+  useEffect(() => {
+    let cancelled = false;
+    const start = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setStatus("Camera scanning is not supported in this browser. Use manual search.");
+          return;
+        }
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const reader = new BrowserMultiFormatReader();
+        const videoDevices = await BrowserMultiFormatReader.listVideoInputDevices();
+        if (cancelled) return;
+        setDevices(videoDevices);
+        const selected = deviceId || videoDevices.find((device) => /back|rear|environment/i.test(device.label))?.deviceId || videoDevices[0]?.deviceId;
+        setDeviceId(selected || "");
+        if (!selected || !videoRef.current) {
+          setStatus("No camera found. Use manual search.");
+          return;
+        }
+        setStatus("Point camera at barcode or QR code.");
+        controlsRef.current = await reader.decodeFromVideoDevice(selected, videoRef.current, (result, error) => {
+          if (result) {
+            const code = result.getText();
+            const now = Date.now();
+            if (lastScanRef.current.code === code && now - lastScanRef.current.time < 1200) return;
+            lastScanRef.current = { code, time: now };
+            setStatus(`Scanned ${code}`);
+            onScan(code);
+          } else if (error && !/NotFoundException/i.test(String(error))) {
+            setStatus("Scanning... keep the code inside the frame.");
+          }
+        });
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Camera permission denied or unavailable.");
+      }
+    };
+    start();
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [deviceId, onScan]);
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-3"><section className="w-full max-w-xl rounded-md border border-[#d4af37]/40 bg-[#111] p-4 text-white shadow-2xl"><div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="display-font text-xl font-black">Scan Barcode / QR</h2><p className="text-sm text-white/60">{status}</p></div><button type="button" className="h-11 rounded-md border border-white/20 px-4" onClick={() => { stop(); onClose(); }}>Close</button></div>{devices.length > 1 && <select aria-label="Camera device" value={deviceId} onChange={(event) => { stop(); setDeviceId(event.target.value); }} className="mb-3 h-11 w-full rounded-md border border-white/20 bg-black px-3 text-white">{devices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>)}</select>}<video ref={videoRef} className="aspect-video w-full rounded-md bg-black object-cover" muted playsInline /><p className="mt-3 rounded-md bg-white/10 p-3 text-sm text-white/70">If camera permission is blocked or scanning is unclear, close this and use manual search.</p></section></div>;
 }
 
 function OrderTable({ compact = false, ordersOverride }: { compact?: boolean; ordersOverride?: Order[] }) {
@@ -2475,6 +2600,26 @@ function DataTable({ headers, children, minWidth = "min-w-[760px]" }: { headers:
   return <div className="responsive-scroll -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0"><table className={`w-full ${minWidth} border-collapse text-left text-sm`}><thead className="bg-black text-white"><tr>{headers.map((h, index) => <th key={`${h}-${index}`} className="whitespace-nowrap p-3 align-middle">{h}</th>)}</tr></thead><tbody>{children}</tbody></table><p className="scroll-hint mt-2 sm:hidden">Swipe or drag sideways to view all columns.</p></div>;
 }
 
+function PosSyncConflicts() {
+  const { toast } = useStore();
+  const [rows, setRows] = useState<any[]>([]);
+  const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const load = () => fetchAdminOfflineSyncConflicts({ status: status || undefined, q: q || undefined }).then(setRows).catch((error) => toast(error instanceof Error ? error.message : "Unable to load POS sync conflicts.", "error"));
+  useEffect(() => { load(); }, []);
+  const resolve = (row: any, nextStatus: string) => {
+    const resolutionNote = notes[row.id]?.trim();
+    if (!resolutionNote) return toast("Resolution note is required.", "error");
+    resolveAdminOfflineSyncConflict(row.id, { status: nextStatus, resolutionNote }).then((saved) => {
+      setRows((items) => items.map((item) => item.id === saved.id ? saved : item));
+      setNotes((items) => ({ ...items, [row.id]: "" }));
+      toast("Conflict updated", "success");
+    }).catch((error) => toast(error instanceof Error ? error.message : "Could not update conflict.", "error"));
+  };
+  return <AdminShell section="pos-conflicts"><Panel title="POS Sync Conflicts"><div className="mb-4 grid gap-2 md:grid-cols-[180px_1fr_auto]"><select aria-label="Conflict status" value={status} onChange={(event) => setStatus(event.target.value)} className="h-12 rounded-md border px-3"><option value="">All statuses</option>{["STOCK_CONFLICT", "PRICE_CHANGED", "PRODUCT_DISABLED", "PRODUCT_NOT_FOUND", "LOCATION_INVALID", "DUPLICATE", "PAYMENT_REVIEW", "PARTIAL", "FAILED", "MANUAL_REVIEW", "REVIEWED", "CANCELLED"].map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select><input aria-label="Search conflicts" value={q} onChange={(event) => setQ(event.target.value)} className="h-12 rounded-md border px-3" placeholder="Search local/server reference, key, reason" /><Button variant="gold" onClick={load}>Search</Button></div><DataTable headers={["Created", "Local Ref", "Status", "Cashier", "Device", "Reason", "Resolution"]} minWidth="min-w-[1180px]">{rows.map((row) => <tr key={row.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 text-xs font-bold">{new Date(row.createdAt).toLocaleString("en-IN")}</td><td className="p-3 font-bold">{row.localReference}<p className="text-xs font-normal text-black/45">{row.serverReference || row.idempotencyKey || "-"}</p></td><td><StatusBadge value={row.status} /></td><td>{row.cashier?.name || "-"}</td><td className="max-w-36 truncate text-xs">{row.deviceId || "-"}</td><td className="max-w-xs text-sm text-black/65">{row.reason}</td><td className="p-3"><div className="grid gap-2"><input aria-label={`Resolution note for ${row.localReference}`} value={notes[row.id] || ""} onChange={(event) => setNotes((items) => ({ ...items, [row.id]: event.target.value }))} className="h-11 rounded-md border px-3 text-sm" placeholder="Resolution note" /><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => resolve(row, "REVIEWED")}>Mark reviewed</Button><Button variant="ghost" onClick={() => resolve(row, "MANUAL_REVIEW")}>Escalate</Button><Button variant="ghost" onClick={() => resolve(row, "CANCELLED")}>Cancel</Button></div></div></td></tr>)}</DataTable>{!rows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No POS sync conflicts found.</p>}</Panel></AdminShell>;
+}
+
 function AdminPageSwitch({ slug }: { slug: string[] }) {
   const [first, second, third] = slug;
   if (!first) return <Dashboard />;
@@ -2482,6 +2627,7 @@ function AdminPageSwitch({ slug }: { slug: string[] }) {
   if (first === "products" && third === "edit") return <ProductManager mode="edit" id={second} />;
   if (first === "products") return <ProductManager />;
   if (first === "pos") return <Inventory posOnly />;
+  if (first === "pos-conflicts") return <PosSyncConflicts />;
   if (first === "inventory") return <Inventory productId={second} />;
   if (first === "orders") return <Orders detail={second} />;
   if (first === "coupons") return <CouponsManaged />;

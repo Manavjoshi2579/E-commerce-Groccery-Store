@@ -295,6 +295,8 @@ model AdminUser {
   role           Role            @relation(fields: [roleId], references: [id])
   stockMovements StockMovement[]
   offlineSales   OfflineSale[]
+  offlineSyncConflicts OfflineSyncConflict[] @relation("OfflineSyncConflictCashier")
+  reviewedOfflineSyncConflicts OfflineSyncConflict[] @relation("OfflineSyncConflictReviewer")
   coupons        Coupon[]
   settings       Setting[]
   assignedSupportTickets SupportTicket[] @relation("AssignedSupportTickets")
@@ -326,6 +328,7 @@ model StoreLocation {
   inventory    Inventory[]
   movements    StockMovement[]
   offlineSales OfflineSale[]
+  offlineSyncConflicts OfflineSyncConflict[]
 
   @@index([code])
   @@index([active])
@@ -1091,6 +1094,36 @@ model OfflineSaleItem {
   @@index([offlineSaleId])
   @@index([productId])
   @@index([variantId])
+}
+
+model OfflineSyncConflict {
+  id              String   @id @default(cuid())
+  localReference  String   @unique
+  serverReference String?
+  idempotencyKey  String?  @unique
+  status          String
+  reason          String
+  retryable       Boolean  @default(false)
+  locationId      String?
+  cashierId       String?
+  deviceId        String?
+  payload         Json
+  result          Json?
+  resolutionNote  String?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  location        StoreLocation? @relation(fields: [locationId], references: [id])
+  cashier         AdminUser?     @relation("OfflineSyncConflictCashier", fields: [cashierId], references: [id])
+  reviewedBy      AdminUser?     @relation("OfflineSyncConflictReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([locationId])
+  @@index([cashierId])
+  @@index([deviceId])
+  @@index([createdAt])
 }
 
 model Review {

@@ -355,6 +355,25 @@ export async function createAdminOfflineSale(input: { locationId?: string | null
   return data.sale;
 }
 
+export async function syncAdminOfflineSales(input: { deviceId: string; sales: any[] }) {
+  const data = await requestApi<{ results: any[] }>("/api/admin/inventory/offline-sync", { method: "POST", body: JSON.stringify(input) });
+  clearStockCaches();
+  return data.results;
+}
+
+export async function fetchAdminOfflineSyncConflicts(filters?: { status?: string; q?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.q) params.set("q", filters.q);
+  const data = await requestApi<{ conflicts: any[] }>(`/api/admin/inventory/offline-sync-conflicts${params.size ? `?${params}` : ""}`);
+  return data.conflicts;
+}
+
+export async function resolveAdminOfflineSyncConflict(id: string, input: { status: string; resolutionNote: string }) {
+  const data = await requestApi<{ conflict: any }>(`/api/admin/inventory/offline-sync-conflicts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  return data.conflict;
+}
+
 export { mapApiProduct, mapCoupon };
 
 function clearStockCaches() {

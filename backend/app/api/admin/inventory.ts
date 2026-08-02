@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdminRole } from "../../../middleware/auth.js";
-import { adjustInventory, inventoryRoles, listInventory, listStockMovements, posRoles, recordOfflineSale, recordStockInward, searchPosInventory, updateInventory } from "../../../services/inventory.service.js";
-import { inventoryAdjustSchema, inventoryPatchSchema, offlineSaleSchema, stockInwardSchema } from "../../../validators/checkout.js";
+import { adjustInventory, inventoryRoles, listInventory, listOfflineSyncConflicts, listStockMovements, posRoles, recordOfflineSale, recordStockInward, resolveOfflineSyncConflict, searchPosInventory, syncOfflineSales, updateInventory } from "../../../services/inventory.service.js";
+import { inventoryAdjustSchema, inventoryPatchSchema, offlineSaleSchema, offlineSaleSyncSchema, offlineSyncConflictResolutionSchema, stockInwardSchema } from "../../../validators/checkout.js";
 
 export const adminInventoryRouter = Router();
 
@@ -52,5 +52,27 @@ adminInventoryRouter.post("/inventory/offline-sales", requireAdminRole(posRoles)
     return sendOk(res, { sale: await recordOfflineSale(req.admin!.id, parsed.data) }, 201);
   } catch (error) {
     return sendError(res, 400, error instanceof Error ? error.message : "Could not record offline sale.");
+  }
+});
+
+adminInventoryRouter.post("/inventory/offline-sync", requireAdminRole(posRoles), async (req, res) => {
+  const parsed = offlineSaleSyncSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid offline sync payload.");
+  return sendOk(res, { results: await syncOfflineSales(req.admin!.id, parsed.data) });
+});
+
+adminInventoryRouter.get("/inventory/offline-sync-conflicts", requireAdminRole(inventoryRoles), async (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const q = typeof req.query.q === "string" ? req.query.q : undefined;
+  return sendOk(res, { conflicts: await listOfflineSyncConflicts({ status, q }) });
+});
+
+adminInventoryRouter.patch("/inventory/offline-sync-conflicts/:id", requireAdminRole(inventoryRoles), async (req, res) => {
+  const parsed = offlineSyncConflictResolutionSchema.safeParse(req.body);
+  if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid conflict resolution payload.");
+  try {
+    return sendOk(res, { conflict: await resolveOfflineSyncConflict(param(req.params.id), req.admin!.id, parsed.data) });
+  } catch (error) {
+    return sendError(res, 400, error instanceof Error ? error.message : "Could not resolve sync conflict.");
   }
 });

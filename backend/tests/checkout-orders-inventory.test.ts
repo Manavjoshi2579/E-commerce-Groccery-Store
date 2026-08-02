@@ -26,6 +26,21 @@ process.env.RAZORPAY_WEBHOOK_SECRET ||= "webhook_secret";
 beforeAll(async () => {
   await ensureTestPrincipals();
   const suffix = Date.now();
+  const deliveryRole = await db.role.findUniqueOrThrow({ where: { name: "DELIVERY_STAFF" } });
+  const deliveryTestAdmin = await db.adminUser.create({
+    data: {
+      name: "Inventory Test Delivery",
+      email: `delivery-${suffix}@eagleclub.in`,
+      normalizedEmail: `delivery-${suffix}@eagleclub.in`,
+      passwordHash: await bcrypt.hash(adminPassword, 12),
+      roleId: deliveryRole.id,
+      status: "ACTIVE",
+    },
+  });
+  const testStaff = await db.deliveryStaff.create({
+    data: { name: "Inventory Test Delivery", phone: String(8800000000 + (suffix % 1000000000)).slice(0, 10), adminUserId: deliveryTestAdmin.id, active: true },
+  });
+  cleanup.deliveryStaffIds.push(testStaff.id);
   const user = await db.user.create({
     data: {
       name: "Phase Eight Customer",
@@ -37,7 +52,7 @@ beforeAll(async () => {
   cleanup.userId = user.id;
   await customer.post("/api/auth/login").send({ email: user.email, password: "Customer@12345" }).expect(200);
   await admin.post("/api/admin/auth/login").send({ email: "superadmin@eagleclub.in", password: adminPassword }).expect(200);
-  await deliveryAdmin.post("/api/admin/auth/login").send({ email: "delivery@eagleclub.in", password: "Delivery@12345" }).expect(200);
+  await deliveryAdmin.post("/api/admin/auth/login").send({ email: deliveryTestAdmin.email, password: adminPassword }).expect(200);
 
   const inventory = await db.inventory.findFirstOrThrow({
     where: { stock: { gte: 20 }, variantId: { not: null }, product: { status: "ACTIVE", deletedAt: null } },
@@ -58,8 +73,7 @@ beforeAll(async () => {
 
   const slot = await db.deliverySlot.findFirstOrThrow({ where: { active: true } });
   deliverySlotId = slot.id;
-  const staff = await db.deliveryStaff.findFirstOrThrow({ where: { active: true } });
-  deliveryStaffId = staff.id;
+  deliveryStaffId = testStaff.id;
 });
 
 afterAll(async () => {
@@ -416,5 +430,54 @@ describe("admin order and inventory APIs", () => {
     expect(after.sold).toBe(before.sold + 1);
     const movement = await db.stockMovement.findFirst({ where: { referenceType: "OFFLINE_SALE", referenceId: response.body.data.sale.id, type: StockMovementType.OFFLINE_SALE } });
     expect(movement).toBeTruthy();
+  });
+
+  it("syncs queued POS sales idempotently and records stock conflicts", async () => {
+    const before = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
+    const key = `POS:test-device:${Date.now()}`;
+    const first = await admin.post("/api/admin/inventory/offline-sync").send({
+      deviceId: "test-device",
+      sales: [{
+        localReference: `LOCAL-${Date.now()}`,
+        idempotencyKey: key,
+        paymentMethod: "CASH",
+        cashReceived: 50,
+        items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+      }],
+    }).expect(200);
+    cleanup.offlineSaleIds.push(first.body.data.results[0].saleId);
+
+    const duplicate = await admin.post("/api/admin/inventory/offline-sync").send({
+      deviceId: "test-device",
+      sales: [{
+        localReference: `LOCAL-DUP-${Date.now()}`,
+        idempotencyKey: key,
+        paymentMethod: "CASH",
+        cashReceived: 50,
+        items: [{ productId, variantId, quantity: 1, unitPrice: 25 }],
+      }],
+    }).expect(200);
+
+    const after = await db.inventory.findUniqueOrThrow({ where: { id: inventoryId } });
+    expect(first.body.data.results[0].status).toBe("SYNCED");
+    expect(duplicate.body.data.results[0].serverReference).toBe(first.body.data.results[0].serverReference);
+    expect(after.stock).toBe(before.stock - 1);
+
+    const conflictRef = `LOCAL-CONFLICT-${Date.now()}`;
+    const conflict = await admin.post("/api/admin/inventory/offline-sync").send({
+      deviceId: "test-device",
+      sales: [{
+        localReference: conflictRef,
+        idempotencyKey: `POS:test-device:conflict:${Date.now()}`,
+        paymentMethod: "CASH",
+        cashReceived: 250000,
+        items: [{ productId, variantId, quantity: 10000, unitPrice: 25 }],
+      }],
+    }).expect(200);
+
+    expect(conflict.body.data.results[0].status).toBe("STOCK_CONFLICT");
+    const savedConflict = await db.offlineSyncConflict.findUnique({ where: { localReference: conflictRef } });
+    expect(savedConflict?.status).toBe("STOCK_CONFLICT");
+    if (savedConflict) await db.offlineSyncConflict.delete({ where: { id: savedConflict.id } });
   });
 });

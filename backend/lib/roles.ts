@@ -6,6 +6,7 @@ const routePermissions: Record<string, RoleName[]> = {
   brands: [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER],
   inventory: [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER, RoleName.CASHIER],
   pos: [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER, RoleName.CASHIER],
+  "pos-conflicts": [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.INVENTORY_MANAGER],
   "stock-movement": [RoleName.SUPER_ADMIN, RoleName.INVENTORY_MANAGER],
   orders: [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.ORDER_MANAGER, RoleName.SUPPORT_STAFF],
   customers: [RoleName.SUPER_ADMIN, RoleName.STORE_MANAGER, RoleName.ORDER_MANAGER, RoleName.SUPPORT_STAFF],

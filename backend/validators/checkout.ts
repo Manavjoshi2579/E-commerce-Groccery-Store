@@ -114,3 +114,28 @@ export const offlineSaleSchema = z.object({
     unitPrice: z.coerce.number().min(0),
   })).min(1).max(100),
 });
+
+export const offlineSaleSyncSchema = z.object({
+  deviceId: z.string().trim().min(6).max(120),
+  sales: z.array(z.object({
+    localReference: z.string().trim().min(6).max(120),
+    idempotencyKey: z.string().trim().min(12).max(120),
+    locationId: z.string().min(8).optional().nullable(),
+    customerReference: z.string().trim().max(120).optional(),
+    paymentMethod: z.enum(["CASH", "UPI", "CARD", "OTHER"]).default("CASH"),
+    cashReceived: z.coerce.number().min(0).optional().nullable(),
+    note: z.string().trim().max(180).optional(),
+    items: z.array(z.object({
+      productId: z.string().min(8),
+      variantId: z.string().min(8).optional().nullable(),
+      quantity: z.coerce.number().int().min(1).max(10000),
+      unitPrice: z.coerce.number().min(0),
+      cachedAvailable: z.coerce.number().int().min(0).optional(),
+    })).min(1).max(100),
+  })).min(1).max(100),
+});
+
+export const offlineSyncConflictResolutionSchema = z.object({
+  status: z.enum(["QUEUED", "SYNCING", "SYNCED", "STOCK_CONFLICT", "PRICE_CHANGED", "PRODUCT_DISABLED", "PRODUCT_NOT_FOUND", "LOCATION_INVALID", "DUPLICATE", "PAYMENT_REVIEW", "PARTIAL", "FAILED", "MANUAL_REVIEW", "REVIEWED", "CANCELLED"]),
+  resolutionNote: z.string().trim().min(3).max(240),
+});

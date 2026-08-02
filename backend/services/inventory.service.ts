@@ -343,3 +343,72 @@ export async function recordOfflineSale(adminUserId: string, input: { locationId
     return sale;
   });
 }
+
+export async function syncOfflineSales(adminUserId: string, input: { deviceId: string; sales: { localReference: string; idempotencyKey: string; locationId?: string | null; customerReference?: string; paymentMethod: string; cashReceived?: number | null; note?: string; items: { productId: string; variantId?: string | null; quantity: number; unitPrice: number; cachedAvailable?: number }[] }[] }) {
+  const results = [];
+  for (const sale of input.sales) {
+    try {
+      const committed = await recordOfflineSale(adminUserId, sale);
+      results.push({ localReference: sale.localReference, status: "SYNCED", retryable: false, serverReference: committed.referenceNumber, saleId: committed.id });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Offline sale sync failed.";
+      const status = /insufficient stock/i.test(message) ? "STOCK_CONFLICT" : /not found/i.test(message) ? "PRODUCT_NOT_FOUND" : /location/i.test(message) ? "LOCATION_INVALID" : "FAILED";
+      const retryable = status === "FAILED";
+      const conflict = await db.offlineSyncConflict.upsert({
+        where: { localReference: sale.localReference },
+        update: {
+          status,
+          reason: message,
+          retryable,
+          locationId: sale.locationId ?? null,
+          cashierId: adminUserId,
+          deviceId: input.deviceId,
+          payload: sale as any,
+          result: { message, status },
+        },
+        create: {
+          localReference: sale.localReference,
+          idempotencyKey: sale.idempotencyKey,
+          status,
+          reason: message,
+          retryable,
+          locationId: sale.locationId ?? null,
+          cashierId: adminUserId,
+          deviceId: input.deviceId,
+          payload: sale as any,
+          result: { message, status },
+        },
+      });
+      results.push({ localReference: sale.localReference, status, retryable, conflictId: conflict.id, reason: message });
+    }
+  }
+  return results;
+}
+
+export async function listOfflineSyncConflicts(filters: { status?: string; q?: string }) {
+  const where: Prisma.OfflineSyncConflictWhereInput = {
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.q ? {
+      OR: [
+        { localReference: { contains: filters.q } },
+        { serverReference: { contains: filters.q } },
+        { idempotencyKey: { contains: filters.q } },
+        { reason: { contains: filters.q } },
+      ],
+    } : {}),
+  };
+  return db.offlineSyncConflict.findMany({
+    where,
+    include: { location: true, cashier: { select: { name: true, email: true } }, reviewedBy: { select: { name: true, email: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+}
+
+export async function resolveOfflineSyncConflict(id: string, adminUserId: string, input: { status: string; resolutionNote: string }) {
+  return db.offlineSyncConflict.update({
+    where: { id },
+    data: { status: input.status, resolutionNote: input.resolutionNote, reviewedAt: new Date(), reviewedById: adminUserId },
+    include: { location: true, cashier: { select: { name: true, email: true } }, reviewedBy: { select: { name: true, email: true } } },
+  });
+}
