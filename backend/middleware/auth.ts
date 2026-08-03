@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { RoleName } from "@prisma/client";
-import { ADMIN_COOKIE, CUSTOMER_COOKIE, verifySession } from "../lib/auth.js";
+import { ADMIN_COOKIE, CUSTOMER_COOKIE, DELIVERY_COOKIE, verifySession } from "../lib/auth.js";
 import { sendError } from "../lib/http.js";
 import { hasRole } from "../lib/roles.js";
 import { getAdminById, getCustomerById, validateDbSession } from "../services/auth.service.js";
@@ -22,8 +22,19 @@ export async function requireCustomer(req: Request, res: Response, next: NextFun
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const payload = verifySession(req.cookies?.[ADMIN_COOKIE]);
-  if (!payload || payload.kind !== "admin" || !(await validateDbSession(payload, "admin"))) {
+  const preferredScope = String(req.get("x-admin-session-scope") || "").toLowerCase();
+  const cookies = preferredScope === "delivery"
+    ? [req.cookies?.[DELIVERY_COOKIE], req.cookies?.[ADMIN_COOKIE]]
+    : [req.cookies?.[ADMIN_COOKIE], req.cookies?.[DELIVERY_COOKIE]];
+  let payload = null;
+  for (const cookie of cookies) {
+    const nextPayload = verifySession(cookie);
+    if (nextPayload?.kind === "admin" && await validateDbSession(nextPayload, "admin")) {
+      payload = nextPayload;
+      break;
+    }
+  }
+  if (!payload) {
     return sendError(res, 401, "Admin authentication required.", "AUTH_SESSION_EXPIRED");
   }
 

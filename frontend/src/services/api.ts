@@ -37,6 +37,15 @@ function canRetryRequest(init?: RequestInit) {
   return ["GET", "HEAD", "OPTIONS"].includes(requestMethod(init));
 }
 
+function requestHeaders(init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin/delivery")) {
+    headers.set("X-Admin-Session-Scope", "delivery");
+  }
+  return headers;
+}
+
 type CacheEntry = { expiresAt: number; value: unknown };
 
 const responseCache = new Map<string, CacheEntry>();
@@ -88,10 +97,7 @@ async function requestApiNetwork<T>(path: string, init?: RequestInit): Promise<T
         ...init,
         credentials: "include",
         signal: init?.signal || controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(init?.headers || {}),
-        },
+        headers: requestHeaders(init),
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw new Error("Request timed out. Please try again.");

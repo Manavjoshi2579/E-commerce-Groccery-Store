@@ -32,6 +32,34 @@ adminOrderRouter.get("/orders", requireAdminCapability("orders:read"), async (re
   const orders = req.admin?.role.name === RoleName.DELIVERY_STAFF ? await listDeliveryOperationsOrders() : await listAdminOrders(req.db);
   return sendOk(res, { orders });
 });
+
+adminOrderRouter.get("/notifications", requireAdminCapability("orders:read"), async (req, res) => {
+  const since = typeof req.query.since === "string" ? new Date(req.query.since) : null;
+  const sinceFilter = since && !Number.isNaN(since.getTime()) ? since : new Date(Date.now() - 1000 * 60 * 60 * 24);
+  const [orders, confirmations, failedAssignments, supportTickets, returns, reviews, offlineSales] = await Promise.all([
+    db.order.findMany({ where: { createdAt: { gte: sinceFilter } }, orderBy: { createdAt: "desc" }, take: 10, select: { orderNumber: true, customerName: true, status: true, createdAt: true } }),
+    db.customerDeliveryConfirmation.findMany({ where: { confirmedAt: { gte: sinceFilter } }, orderBy: { confirmedAt: "desc" }, take: 10, include: { order: { select: { orderNumber: true, customerName: true } } } }),
+    db.deliveryAssignment.findMany({ where: { OR: [{ failedAt: { gte: sinceFilter } }, { deliveredAt: { gte: sinceFilter } }, { outForDeliveryAt: { gte: sinceFilter } }] }, orderBy: { assignedAt: "desc" }, take: 10, include: { order: { select: { orderNumber: true, customerName: true } }, deliveryStaff: { select: { name: true } } } }),
+    db.supportTicket.findMany({ where: { createdAt: { gte: sinceFilter } }, orderBy: { createdAt: "desc" }, take: 10, select: { ticketNumber: true, subject: true, createdAt: true } }),
+    db.returnRequest.findMany({ where: { createdAt: { gte: sinceFilter } }, orderBy: { createdAt: "desc" }, take: 10, include: { order: { select: { orderNumber: true } }, user: { select: { name: true } } } }),
+    db.review.findMany({ where: { createdAt: { gte: sinceFilter } }, orderBy: { createdAt: "desc" }, take: 10, include: { product: { select: { name: true } }, user: { select: { name: true } } } }),
+    db.offlineSale.findMany({ where: { createdAt: { gte: sinceFilter } }, orderBy: { createdAt: "desc" }, take: 10, select: { referenceNumber: true, total: true, paymentMethod: true, createdAt: true } }),
+  ]);
+  const events = [
+    ...orders.map((order) => ({ id: `order:${order.orderNumber}`, type: "ORDER", title: "New order", message: `${order.orderNumber} from ${order.customerName}`, href: `/admin/orders/${order.orderNumber}`, createdAt: order.createdAt })),
+    ...confirmations.map((item) => ({ id: `receipt:${item.id}`, type: "DELIVERY", title: "Customer confirmed receipt", message: `${item.order.orderNumber} confirmed by ${item.order.customerName}`, href: `/admin/delivery`, createdAt: item.confirmedAt })),
+    ...failedAssignments.map((item) => ({ id: `delivery:${item.id}:${item.failedAt || item.deliveredAt || item.outForDeliveryAt || item.assignedAt}`, type: "DELIVERY", title: item.failedAt ? "Delivery attempt failed" : item.deliveredAt ? "Delivery completed" : "Out for delivery", message: `${item.order.orderNumber} - ${item.deliveryStaff.name}`, href: `/admin/delivery`, createdAt: item.failedAt || item.deliveredAt || item.outForDeliveryAt || item.assignedAt })),
+    ...supportTickets.map((ticket) => ({ id: `support:${ticket.ticketNumber}`, type: "SUPPORT", title: "New support ticket", message: `${ticket.ticketNumber} - ${ticket.subject}`, href: `/admin/support`, createdAt: ticket.createdAt })),
+    ...returns.map((item) => ({ id: `return:${item.id}`, type: "RETURN", title: "Return requested", message: `${item.order.orderNumber} - ${item.user.name}`, href: `/admin/returns`, createdAt: item.createdAt })),
+    ...reviews.map((review) => ({ id: `review:${review.id}`, type: "REVIEW", title: "New review", message: `${review.product.name} - ${review.user.name}`, href: `/admin/reviews`, createdAt: review.createdAt })),
+    ...offlineSales.map((sale) => ({ id: `pos:${sale.referenceNumber}`, type: "POS", title: "POS sale recorded", message: `${sale.referenceNumber} - ${sale.paymentMethod}`, href: `/admin/pos`, createdAt: sale.createdAt })),
+  ];
+  const visibleEvents = req.admin?.role.name === RoleName.DELIVERY_STAFF
+    ? events.filter((event) => event.type === "ORDER" || event.type === "DELIVERY").map((event) => ({ ...event, href: "/admin/delivery" }))
+    : events;
+  const sortedEvents = visibleEvents.sort((a, b) => Number(new Date(b.createdAt)) - Number(new Date(a.createdAt))).slice(0, 20);
+  return sendOk(res, { events: sortedEvents, unreadCount: sortedEvents.length, generatedAt: new Date().toISOString() });
+});
 adminOrderRouter.get("/delivery-orders", requireAdminCapability("delivery:read"), async (_req, res) => sendOk(res, { orders: await listDeliveryOperationsOrders() }));
 
 adminOrderRouter.get("/delivery-staff", requireAdminRole(deliveryStaffManageRoles), async (_req, res) => {

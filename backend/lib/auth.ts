@@ -5,6 +5,7 @@ import type { Response } from "express";
 import type { RoleName } from "@prisma/client";
 
 export type SessionKind = "customer" | "admin";
+export type SessionCookieKind = SessionKind | "delivery";
 
 export type SessionPayload = {
   sub: string;
@@ -16,6 +17,7 @@ export type SessionPayload = {
 
 export const CUSTOMER_COOKIE = "ec_customer_session";
 export const ADMIN_COOKIE = "ec_admin_session";
+export const DELIVERY_COOKIE = "ec_delivery_session";
 export const CUSTOMER_SESSION_MS = 1000 * 60 * 60 * 24 * 14;
 export const ADMIN_SESSION_MS = 1000 * 60 * 30;
 
@@ -48,19 +50,24 @@ export function verifySession(token?: string): SessionPayload | null {
   }
 }
 
-export function setSessionCookie(res: Response, kind: SessionKind, token: string) {
-  res.cookie(kind === "admin" ? ADMIN_COOKIE : CUSTOMER_COOKIE, token, {
+function cookieName(kind: SessionCookieKind) {
+  if (kind === "delivery") return DELIVERY_COOKIE;
+  return kind === "admin" ? ADMIN_COOKIE : CUSTOMER_COOKIE;
+}
+
+export function setSessionCookie(res: Response, kind: SessionCookieKind, token: string) {
+  res.cookie(cookieName(kind), token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: kind === "admin" ? ADMIN_SESSION_MS : CUSTOMER_SESSION_MS,
+    maxAge: kind === "customer" ? CUSTOMER_SESSION_MS : ADMIN_SESSION_MS,
     path: "/",
     domain: process.env.COOKIE_DOMAIN || undefined,
   });
 }
 
-export function clearSessionCookie(res: Response, kind: SessionKind) {
-  res.clearCookie(kind === "admin" ? ADMIN_COOKIE : CUSTOMER_COOKIE, {
+export function clearSessionCookie(res: Response, kind: SessionCookieKind) {
+  res.clearCookie(cookieName(kind), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

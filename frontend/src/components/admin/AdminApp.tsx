@@ -39,7 +39,7 @@ import { createAdminCoupon, deleteAdminCoupon, fetchAdminCoupons, updateAdminCou
 import { adjustAdminInventory, assignAdminDelivery, createAdminDeliveryStaff, createAdminDeliverySlot, createAdminOfflineSale, createAdminStockInward, deleteAdminDeliveryStaff, deleteAdminDeliverySlot, fetchAdminDeliveryOrders, fetchAdminDeliveryStaff, fetchAdminDeliverySlots, fetchAdminInventory, fetchAdminInventoryMovements, fetchAdminOfflineSales, fetchAdminOrder, fetchAdminOrders, fetchAdminPosMetrics, lookupAdminPosInventory, markDeliveryAttemptFailed, searchAdminPosInventory, syncAdminOfflineSales, updateAdminDeliverySlot, updateAdminOrderStatus, updateAdminPaymentStatus, updateDeliveryOrderStatus } from "@/services/checkout";
 import { bulkUpdateAdminFaqStatus, createAdminFaq, deleteAdminFaq, faqCategories, fetchAdminFaqs, updateAdminFaq } from "@/services/faqs";
 import { deleteAdminCustomer, fetchAdminCustomers, updateAdminCustomerStatus } from "@/services/admin";
-import { fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
+import { fetchAdminNotifications, fetchAdminReports, fetchAdminReturns, fetchAdminReviews, fetchAdminRoles, fetchAdminSettings, fetchAdminUsers, resetAdminSettings, updateAdminReturnRefund, updateAdminReturnStatus, updateAdminReviewStatus, updateAdminSettings, updateAdminUser, type AdminNotificationEvent, type AdminReport, type AdminReturn, type AdminReview, type AdminRoleRow, type AdminUserRow } from "@/services/adminOps";
 import { fetchAdminSupportTickets, updateAdminSupportTicket } from "@/services/support";
 import { beginAdminMfaEnrollment, confirmAdminMfaEnrollment, disableAdminMfa, regenerateAdminRecoveryCodes, type AdminMfaEnrollment } from "@/services/auth";
 import { money, uid } from "@/lib/money";
@@ -142,9 +142,11 @@ function AdminShell({ section, children }: { section: string; children: React.Re
   const { admin, adminReady, logoutAdmin } = useStore();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [newOrderCount, setNewOrderCount] = useState(0);
-  const [latestOrderNumber, setLatestOrderNumber] = useState("");
-  const knownOrderNumbers = useRef<Set<string> | null>(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AdminNotificationEvent[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const knownNotificationIds = useRef<Set<string> | null>(null);
+  const notificationSince = useRef(new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString());
   useEffect(() => {
     if (adminReady && !admin) router.replace("/admin/login");
   }, [adminReady, admin, router]);
@@ -160,18 +162,18 @@ function AdminShell({ section, children }: { section: string; children: React.Re
     let stopped = false;
     const poll = async () => {
       try {
-        const rows = await fetchAdminOrders();
-        const numbers = new Set(rows.map((order) => order.orderNumber));
-        if (!knownOrderNumbers.current) {
-          knownOrderNumbers.current = numbers;
-          setLatestOrderNumber(rows[0]?.orderNumber || "");
+        const feed = await fetchAdminNotifications(notificationSince.current);
+        if (stopped) return;
+        setNotifications(feed.events);
+        const ids = new Set(feed.events.map((event) => event.id));
+        if (!knownNotificationIds.current) {
+          knownNotificationIds.current = ids;
           return;
         }
-        const fresh = rows.filter((order) => !knownOrderNumbers.current!.has(order.orderNumber));
+        const fresh = feed.events.filter((event) => !knownNotificationIds.current!.has(event.id));
         if (fresh.length) {
-          knownOrderNumbers.current = numbers;
-          setLatestOrderNumber(fresh[0].orderNumber);
-          setNewOrderCount((count) => count + fresh.length);
+          knownNotificationIds.current = ids;
+          setUnreadNotifications((count) => count + fresh.length);
           try {
             const audio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
             await audio.play();
@@ -210,7 +212,7 @@ function AdminShell({ section, children }: { section: string; children: React.Re
         <header className="sticky top-0 z-30 border-b bg-[#f7f4ec]/95 px-3 py-3 backdrop-blur no-print sm:px-4 sm:py-4">
           <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0"><h1 className="display-font truncate text-xl font-black sm:text-2xl">{section ? title(section) : "Dashboard Overview"}</h1><p className="truncate text-xs text-black/55 sm:text-sm">Eagle Mart Grocery & Essentials control room</p></div>
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 md:gap-3">{canAdminAccess(role, "orders") && <button type="button" onClick={() => { setNewOrderCount(0); router.push(latestOrderNumber ? `/admin/orders/${latestOrderNumber}` : "/admin/orders"); }} className="relative grid h-10 w-10 place-items-center rounded-md border bg-white text-black" aria-label="Order notifications"><Bell size={18} />{newOrderCount > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{newOrderCount}</span>}</button>}{admin && <span className="min-w-0 truncate rounded-md bg-white px-2 py-2 text-center text-[11px] font-bold text-black/55 sm:text-xs">{admin.role?.name || "Admin"}</span>}<button onClick={logout} className="rounded-md bg-black px-3 py-2 text-[13px] font-bold text-white sm:text-sm">Logout</button></div>
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 md:gap-3">{canAdminAccess(role, "orders") && <div className="relative"><button type="button" onClick={() => { setNotificationOpen((open) => !open); setUnreadNotifications(0); }} className="relative grid h-10 w-10 place-items-center rounded-md border bg-white text-black" aria-label="Admin notifications"><Bell size={18} />{unreadNotifications > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadNotifications}</span>}</button>{notificationOpen && <div className="absolute right-0 top-12 z-50 w-[min(340px,calc(100vw-24px))] overflow-hidden rounded-md border border-[#d8d1c2] bg-white text-black shadow-2xl"><div className="flex items-center justify-between gap-3 border-b border-[#eadfca] px-4 py-3"><b className="display-font">Notifications</b><span className="text-xs font-bold text-black/45">{notifications.length} recent</span></div><div className="max-h-96 overflow-y-auto">{notifications.length ? notifications.map((event) => <button type="button" key={event.id} onClick={() => { setNotificationOpen(false); router.push(event.href); }} className="block w-full border-b border-[#f0eadf] px-4 py-3 text-left hover:bg-[#fff8df]"><span className="text-[11px] font-black uppercase text-[#8a6500]">{event.type}</span><b className="mt-1 block text-sm">{event.title}</b><span className="mt-0.5 block text-xs text-black/60">{event.message}</span><span className="mt-1 block text-[11px] text-black/40">{formatInvoiceDate(event.createdAt)}</span></button>) : <p className="p-4 text-sm font-semibold text-black/55">No recent activity.</p>}</div></div>}</div>}{admin && <span className="min-w-0 truncate rounded-md bg-white px-2 py-2 text-center text-[11px] font-bold text-black/55 sm:text-xs">{admin.role?.name || "Admin"}</span>}<button onClick={logout} className="rounded-md bg-black px-3 py-2 text-[13px] font-bold text-white sm:text-sm">Logout</button></div>
           </div>
         </header>
         <div className="mx-auto max-w-7xl p-2.5 sm:p-4 md:p-6">{children}</div>

@@ -1,12 +1,21 @@
-import { Router } from "express";
-import { clearSessionCookie, setSessionCookie } from "../../../lib/auth.js";
+import { Router, type Request } from "express";
+import { ADMIN_COOKIE, DELIVERY_COOKIE, clearSessionCookie, setSessionCookie, verifySession, type SessionCookieKind } from "../../../lib/auth.js";
 import { sendError, sendOk } from "../../../lib/http.js";
 import { requireAdmin } from "../../../middleware/auth.js";
 import { otpRateLimit, strictAuthRateLimit } from "../../../middleware/rate-limit.js";
+import { RoleName } from "@prisma/client";
 import { AuthError, beginAdminMfaEnrollment, changeAdminPassword, confirmAdminMfaEnrollment, disableAdminMfa, getAdminById, loginAdmin, providerStatus, regenerateAdminRecoveryCodes, requestAdminPasswordReset, resetAdminPassword, resetAdminProfile, revokeSession, updateAdminProfile, verifyAdminMfa } from "../../../services/auth.service.js";
 import { adminMfaConfirmSchema, adminMfaDisableSchema, adminMfaVerifySchema, adminPasswordResetRequestSchema, adminPasswordResetSchema, adminProfileSchema, changePasswordSchema, loginSchema } from "../../../validators/auth.js";
 
 export const adminAuthRouter = Router();
+
+function adminCookieScope(roleName?: string): SessionCookieKind {
+  return roleName === RoleName.DELIVERY_STAFF ? "delivery" : "admin";
+}
+
+function requestedCookieScope(req: Request): SessionCookieKind {
+  return String(req.get("x-admin-session-scope") || "").toLowerCase() === "delivery" ? "delivery" : "admin";
+}
 
 adminAuthRouter.post("/login", strictAuthRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -15,7 +24,7 @@ adminAuthRouter.post("/login", strictAuthRateLimit, async (req, res) => {
   try {
     const result = await loginAdmin(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") });
     if ("mfaRequired" in result) return sendOk(res, { mfaRequired: true, challengeId: result.challengeId });
-    setSessionCookie(res, "admin", result.token);
+    setSessionCookie(res, adminCookieScope(result.admin.role.name), result.token);
     return sendOk(res, { admin: result.admin, mfaRequired: false });
   } catch (error) {
     return sendAuthError(res, error, "Admin login failed.");
@@ -27,7 +36,7 @@ adminAuthRouter.post("/mfa/verify", strictAuthRateLimit, async (req, res) => {
   if (!parsed.success) return sendError(res, 400, parsed.error.issues[0]?.message || "Invalid MFA payload.", "AUTH_MFA_INVALID");
   try {
     const result = await verifyAdminMfa(parsed.data, { ip: req.ip, userAgent: req.get("user-agent") });
-    setSessionCookie(res, "admin", result.token);
+    setSessionCookie(res, adminCookieScope(result.admin.role.name), result.token);
     return sendOk(res, { admin: result.admin });
   } catch (error) {
     return sendAuthError(res, error, "MFA verification failed.");
@@ -56,8 +65,11 @@ adminAuthRouter.post("/reset-password", strictAuthRateLimit, async (req, res) =>
 });
 
 adminAuthRouter.post("/logout", async (req, res) => {
-  await revokeSession(req.session?.sid);
-  clearSessionCookie(res, "admin");
+  const scope = requestedCookieScope(req);
+  const cookie = scope === "delivery" ? req.cookies?.[DELIVERY_COOKIE] : req.cookies?.[ADMIN_COOKIE];
+  const payload = verifySession(cookie);
+  await revokeSession(payload?.sid);
+  clearSessionCookie(res, scope);
   return sendOk(res, { loggedOut: true });
 });
 

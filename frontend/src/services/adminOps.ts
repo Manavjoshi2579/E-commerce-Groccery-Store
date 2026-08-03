@@ -53,6 +53,21 @@ export type AdminReport = {
   deliveryStaff: { id: string; name: string; phone: string; assignments: number; delivered?: number; pending?: number; failed?: number }[];
 };
 
+export type AdminNotificationEvent = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  href: string;
+  createdAt: string;
+};
+
+export async function fetchAdminNotifications(since?: string) {
+  const params = new URLSearchParams();
+  if (since) params.set("since", since);
+  return requestApi<{ events: AdminNotificationEvent[]; unreadCount: number; generatedAt: string }>(`/api/admin/notifications${params.size ? `?${params}` : ""}`);
+}
+
 export async function fetchAdminReturns(filters?: { q?: string; status?: string }) {
   const params = new URLSearchParams();
   if (filters?.q) params.set("q", filters.q);
