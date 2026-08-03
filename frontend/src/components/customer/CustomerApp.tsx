@@ -26,6 +26,33 @@ import type { Address, CartItem, Category, FAQ, Order, Product, SupportTicket } 
 
 const imageFallback = "/assets/products/product-placeholder.svg";
 const storeAddress = "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama, Vadodara, Gujarat - 390024";
+function formatDateParts(value?: string | Date | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return { date: "", time: "" };
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).formatToParts(date).reduce<Record<string, string>>((items, part) => {
+    if (part.type !== "literal") items[part.type] = part.value;
+    return items;
+  }, {});
+  return {
+    date: `${parts.day}/${parts.month}/${parts.year}`,
+    time: `${parts.hour}:${parts.minute}:${parts.second} ${(parts.dayPeriod || "").toLowerCase()}`.trim(),
+  };
+}
+function formatInvoiceDate(value?: string | Date | null) {
+  const parts = formatDateParts(value);
+  return parts.date ? `${parts.date}, ${parts.time}` : "";
+}
+function formatInvoiceDateOnly(value?: string | Date | null) {
+  return formatDateParts(value).date;
+}
 
 type StoreCoupons = ReturnType<typeof useStore>["coupons"];
 type ComingSoonVariant = "education" | "entertainment";
@@ -1945,7 +1972,7 @@ function InvoicePage({ number }: { number?: string }) {
         </div>
         <section className="invoice-print-root receipt-print-root bg-white text-black">
           <div className="receipt-topline">
-            <span>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</span>
+            <span>{formatInvoiceDate(order.invoiceDate || order.createdAt)}</span>
             <span>Eagle Mart Grocery & Essentials</span>
           </div>
           <div className="receipt-header">
@@ -1959,7 +1986,7 @@ function InvoicePage({ number }: { number?: string }) {
           <div className="receipt-meta">
             <p><span>Bill No:</span><b>{order.invoiceNumber || `INV-${order.orderNumber}`}</b></p>
             <p><span>Order:</span><b>{order.orderNumber}</b></p>
-            <p><span>Date:</span><b>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</b></p>
+            <p><span>Date:</span><b>{formatInvoiceDate(order.invoiceDate || order.createdAt)}</b></p>
             <p><span>Payment:</span><b>{order.paymentMethod} / {order.paymentStatus}</b></p>
             <p><span>Customer:</span><b>{order.customerName}</b></p>
             <p><span>Phone:</span><b>{order.address.phone}</b></p>
@@ -2150,7 +2177,7 @@ function AccountPage({ section = "dashboard" }: { section?: string }) {
     if (active === "addresses") return <section className="premium-card p-5"><AddressManager /></section>;
     if (active === "orders") return <section><div className="mb-4 flex items-center justify-between gap-3"><h2 className="display-font text-2xl font-black">My Orders</h2><Link href="/orders"><Button variant="outline">Open full orders page</Button></Link></div>{orders.length ? <div className="grid gap-4">{orders.map((o) => <AccountOrderCard key={o.orderNumber} order={o} products={products} coupons={coupons} onReturnSubmitted={refreshCustomerData} onOrderChanged={refreshCustomerData} />)}</div> : <Empty title="No orders yet" cta="Start shopping" href="/products" />}</section>;
     if (active === "wishlist") return <section><div className="mb-4 flex items-center justify-between gap-3"><h2 className="display-font text-2xl font-black">Wishlist</h2><Link href="/wishlist"><Button variant="outline">Open wishlist page</Button></Link></div>{wishlistProducts.length ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{wishlistProducts.map((p) => <ProductCard key={p.id} product={p} footer={<><Button variant="gold" onClick={() => moveWishlistToCart(p.id)}>Move</Button><Button variant="outline" onClick={() => toggleWishlist(p.id)}>Remove</Button></>} />)}</div> : <Empty title="Your wishlist is empty" cta="Browse products" href="/products" />}</section>;
-    if (active === "invoices") { const invoiceOrders = orders.filter(canShowInvoice); return <section><h2 className="display-font text-2xl font-black">Invoices</h2>{invoiceOrders.length ? <div className="mt-4 grid gap-3">{invoiceOrders.map((o) => <div key={o.orderNumber} className="premium-card flex flex-wrap items-center justify-between gap-3 p-5"><div><b>INV-{o.orderNumber}</b><p className="text-sm text-black/55">{new Date(o.createdAt).toLocaleDateString("en-IN")} | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div><Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link></div>)}</div> : <Empty title="No invoices yet" cta="View products" href="/products" />}</section>; }
+    if (active === "invoices") { const invoiceOrders = orders.filter(canShowInvoice); return <section><h2 className="display-font text-2xl font-black">Invoices</h2>{invoiceOrders.length ? <div className="mt-4 grid gap-3">{invoiceOrders.map((o) => <div key={o.orderNumber} className="premium-card flex flex-wrap items-center justify-between gap-3 p-5"><div><b>INV-{o.orderNumber}</b><p className="text-sm text-black/55">{formatInvoiceDateOnly(o.createdAt)} | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div><Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link></div>)}</div> : <Empty title="No invoices yet" cta="View products" href="/products" />}</section>; }
     if (active === "coupons") return <section><h2 className="display-font text-2xl font-black">Coupons</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{coupons.filter((c) => c.active).map((coupon) => <div key={coupon.code} className="premium-card p-5"><p className="text-xs font-bold uppercase text-[#8a6500]">Available coupon</p><h3 className="display-font mt-1 text-xl font-black">{coupon.code}</h3><p className="text-sm text-black/60">{coupon.title}</p><p className="mt-2 text-sm font-bold">Minimum order {money(coupon.minOrder)}</p></div>)}</div></section>;
     if (active === "support") return <SupportCenter compact />;
     return <section className="grid gap-6"><div className="premium-card overflow-hidden"><div className="bg-black p-6 text-white"><p className="text-xs font-bold uppercase text-[#d4af37]">Customer dashboard</p><h2 className="display-font mt-2 text-3xl font-black">Welcome back, {customer?.name?.split(" ")[0] || "Customer"}</h2><p className="mt-2 text-white/65">{customer?.email} {customer?.phone ? `| ${customer.phone}` : ""}</p></div><div className="grid gap-4 p-5 md:grid-cols-3">{[["Total orders", orders.length], ["Active orders", activeOrders.length], ["Wishlist count", wishlist.length], ["Saved addresses", addresses.length], ["Available coupons", coupons.filter((c) => c.active).length], ["Last order status", recentOrder?.status || "None"]].map(([k, v]) => <div key={String(k)} className="rounded-md border border-[#eadfca] bg-white p-4"><p className="text-sm text-black/55">{String(k)}</p><h3 className="display-font mt-2 text-2xl font-black">{String(v)}</h3></div>)}</div></div><div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]"><AccountTrackingPreview order={recentOrder} /><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Default address</h3>{defaultAddress ? <p className="mt-3 text-sm text-black/65">{defaultAddress.name}, {defaultAddress.line}, {defaultAddress.city} - {defaultAddress.pincode}</p> : <p className="mt-3 text-sm text-black/55">No saved address.</p>}<Link href="/account/addresses"><Button className="mt-4" variant="outline">Manage addresses</Button></Link></div></div><div className="grid gap-4 lg:grid-cols-3"><div className="premium-card p-5 lg:col-span-2"><h3 className="display-font text-xl font-bold">Recent orders</h3><div className="mt-3 grid gap-3">{orders.slice(0, 3).map((o) => <div key={o.orderNumber} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#eadfca] bg-white p-3"><div><b>{o.orderNumber}</b><p className="text-xs text-black/55">{o.items.length} items | {money(o.grandTotal || totals(o.items, products, coupons, o.couponCode).total)}</p></div>{canShowInvoice(o) && <Link href={`/invoice/${o.orderNumber}`}><Button variant="gold">View Invoice</Button></Link>}</div>)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Coupons</h3>{coupons.filter((c) => c.active).slice(0, 3).map((coupon) => <div key={coupon.code} className="mt-3 rounded-md bg-[#fff8df] p-3"><b>{coupon.code}</b><p className="text-xs text-black/55">{coupon.title}</p></div>)}</div></div><div className="grid gap-4 lg:grid-cols-2"><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Reorder suggestions</h3><div className="mt-4 grid grid-cols-2 gap-3">{reorderSuggestions.map((p) => <ProductCard key={p.id} product={p} />)}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Wishlist preview</h3>{wishlistProducts.length ? <div className="mt-4 grid grid-cols-2 gap-3">{wishlistProducts.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}</div> : <Empty title="Wishlist is empty" cta="Browse products" href="/products" />}</div></div><div className="premium-card p-5"><h3 className="display-font text-xl font-bold">Support</h3><p className="mt-2 text-sm text-black/60">Need help with delivery, invoices, refunds, or address changes? Eagle Mart support is ready with your latest order context.</p><Link href="/account/support"><Button className="mt-4" variant="gold">Open support</Button></Link></div></section>;

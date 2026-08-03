@@ -110,6 +110,33 @@ function calc(items: { productId: string; qty: number; price?: number }[], produ
 }
 
 const storeAddress = "GF-4, Siddharth Annexe, Sama-Savli Main Road, Vemali, New Sama, Vadodara, Gujarat - 390024";
+function formatDateParts(value?: string | Date | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return { date: "", time: "" };
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).formatToParts(date).reduce<Record<string, string>>((items, part) => {
+    if (part.type !== "literal") items[part.type] = part.value;
+    return items;
+  }, {});
+  return {
+    date: `${parts.day}/${parts.month}/${parts.year}`,
+    time: `${parts.hour}:${parts.minute}:${parts.second} ${(parts.dayPeriod || "").toLowerCase()}`.trim(),
+  };
+}
+function formatInvoiceDate(value?: string | Date | null) {
+  const parts = formatDateParts(value);
+  return parts.date ? `${parts.date}, ${parts.time}` : "";
+}
+function formatInvoiceDateOnly(value?: string | Date | null) {
+  return formatDateParts(value).date;
+}
 
 function AdminShell({ section, children }: { section: string; children: React.ReactNode }) {
   const { admin, adminReady, logoutAdmin } = useStore();
@@ -885,8 +912,6 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
   const [inventorySearch, setInventorySearch] = useState("");
   const [offlineSearch, setOfflineSearch] = useState("");
   const [offlineCart, setOfflineCart] = useState<Record<string, number>>({});
-  const [offlineNote, setOfflineNote] = useState("");
-  const [offlineCustomer, setOfflineCustomer] = useState("");
   const [offlinePaymentMethod, setOfflinePaymentMethod] = useState<"CASH" | "UPI" | "CARD" | "OTHER">("CASH");
   const [cashReceived, setCashReceived] = useState("");
   const [offlineSaving, setOfflineSaving] = useState(false);
@@ -915,10 +940,8 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     if (typeof window === "undefined") return;
     setOnline(window.navigator.onLine);
     getPosDeviceId().then(setDeviceId).catch(() => setDeviceId("browser-pos"));
-    loadPosDraft<{ cart?: Record<string, number>; note?: string; customer?: string }>().then((saved) => {
+    loadPosDraft<{ cart?: Record<string, number> }>().then((saved) => {
       if (saved?.cart) setOfflineCart(saved.cart);
-      if (saved?.note) setOfflineNote(saved.note);
-      if (saved?.customer) setOfflineCustomer(saved.customer);
     }).catch(() => undefined);
     listQueuedSales().then(setQueuedSales).catch(() => undefined);
     const handleOnline = () => setOnline(true);
@@ -931,8 +954,8 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
     };
   }, []);
   useEffect(() => {
-    savePosDraft({ cart: offlineCart, note: offlineNote, customer: offlineCustomer }).catch(() => undefined);
-  }, [offlineCart, offlineNote, offlineCustomer]);
+    savePosDraft({ cart: offlineCart }).catch(() => undefined);
+  }, [offlineCart]);
   const refreshQueue = () => listQueuedSales().then(setQueuedSales).catch(() => undefined);
   const rows: AdminInventoryRow[] = remoteInventory.filter((item) => !productId || item.productId === productId).map((item) => {
     const lowStock = Number(item.lowStockThreshold ?? item.product.lowStock ?? 0);
@@ -1038,10 +1061,8 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       const payload = {
         localReference,
         idempotencyKey,
-        customerReference: offlineCustomer.trim() || undefined,
         paymentMethod: offlinePaymentMethod,
         cashReceived: offlinePaymentMethod === "CASH" ? cashNumber : null,
-        note: offlineNote.trim() || undefined,
         locationId: offlineItems[0]?.row.locationId || undefined,
         items: offlineItems.map(({ row, quantity }) => ({ productId: row.inventoryProductId, variantId: row.variantId || null, quantity, unitPrice: Number(row.price || 0) })),
       };
@@ -1049,8 +1070,6 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
         await queueOfflineSale({ localReference, idempotencyKey, deviceId: deviceId || "browser-pos", status: "QUEUED", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), payload });
         setLastOfflineSale({ referenceNumber: localReference, status: "QUEUED", changeDue });
         setOfflineCart({});
-        setOfflineNote("");
-        setOfflineCustomer("");
         setCashReceived("");
         await clearPosDraft();
         await refreshQueue();
@@ -1061,8 +1080,6 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       setLastOfflineSale(sale);
       setOfflineSalesPage(1);
       setOfflineCart({});
-      setOfflineNote("");
-      setOfflineCustomer("");
       setCashReceived("");
       await clearPosDraft();
       await loadInventory();
@@ -1141,6 +1158,8 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
       ["Low Stock", String(rows.filter((p) => p.stock > 0 && p.stock <= p.lowStock).length), "Below threshold"],
       ["Out of Stock", String(rows.filter((p) => p.stock <= 0).length), "Needs inward"],
     ];
+  const offlineSalesTotal = offlineSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const offlineSalesItems = offlineSales.reduce((sum, sale) => sum + (sale.items?.reduce((itemSum: number, item: any) => itemSum + Number(item.quantity || 0), 0) || 0), 0);
   return <AdminShell section={shellSection}>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {statCards.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}
@@ -1169,17 +1188,33 @@ function Inventory({ productId, posOnly = false }: { productId?: string; posOnly
           <div className="sticky bottom-3 grid gap-3 self-start rounded-md border border-[#eadfca] bg-white p-3 shadow-xl xl:top-24">
             <div className="flex items-center justify-between gap-3"><h3 className="display-font text-base font-black">Current bill</h3><span className="rounded-full bg-black px-3 py-1 text-xs font-black text-white">{offlineItems.reduce((sum, item) => sum + item.quantity, 0)} items</span></div>
             <div className="max-h-[360px] overflow-y-auto overscroll-contain rounded-md border border-[#eadfca] bg-[#faf7ef] p-2">{offlineItems.length ? offlineItems.map(({ row, quantity }) => <div key={row.inventoryId} className="grid gap-2 border-b border-[#e0d2b4] bg-white px-2 py-2 last:border-b-0"><div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3"><div className="min-w-0"><b className="block truncate text-sm">{row.name}</b><p className="truncate text-xs text-black/50">{row.sku} | {row.variantLabel || row.unit}</p></div><b className="text-sm">{money(row.price * quantity)}</b></div><div className="flex items-center justify-between gap-2"><div className="inline-flex h-10 overflow-hidden rounded-md border border-black sm:h-9"><button type="button" aria-label={`Decrease ${row.name}`} className="w-10 font-black sm:w-9" onClick={() => updateOfflineQty(row, quantity - 1)}>-</button><input aria-label={`Offline sale quantity for ${row.name}`} className="w-12 border-x text-center text-sm font-black sm:w-10" value={quantity} onChange={(event) => updateOfflineQty(row, Number(event.target.value || 0))} inputMode="numeric" /><button type="button" aria-label={`Increase ${row.name}`} className="w-10 font-black sm:w-9" onClick={() => updateOfflineQty(row, quantity + 1)}>+</button></div><button type="button" className="h-10 rounded-md border px-3 text-xs font-bold sm:h-9" onClick={() => updateOfflineQty(row, 0)}>Remove</button></div></div>) : <p className="rounded-md border border-dashed border-[#cfc4a6] bg-white p-4 text-sm text-black/55">Scan or choose products to start a POS bill.</p>}</div>
-            <input aria-label="POS customer reference" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Customer reference optional" value={offlineCustomer} onChange={(event) => setOfflineCustomer(event.target.value)} />
-            <input aria-label="Offline sale note" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Invoice note optional" value={offlineNote} onChange={(event) => setOfflineNote(event.target.value)} />
             <select aria-label="POS payment method" value={offlinePaymentMethod} onChange={(event) => setOfflinePaymentMethod(event.target.value as any)} className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm font-bold outline-none focus:border-[#d4af37]"><option value="CASH">Cash</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="OTHER">Other</option></select>
-            {offlinePaymentMethod === "CASH" && <div className="grid gap-2 sm:grid-cols-3"><input aria-label="Cash received" className="h-12 rounded-md border border-[#cfc4a6] px-3 text-sm outline-none focus:border-[#d4af37]" placeholder="Cash received" value={cashReceived} onChange={(event) => setCashReceived(event.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1"))} inputMode="decimal" /><div className={`rounded-md p-3 text-sm ${amountDue > 0 ? "bg-red-50 text-red-700" : "bg-[#faf7ef]"}`}><span className="text-black/55">Amount Due</span><b className="block">{money(amountDue)}</b></div><div className="rounded-md bg-[#faf7ef] p-3 text-sm"><span className="text-black/55">Change to Return</span><b className="block">{money(changeDue)}</b></div></div>}
+            {offlinePaymentMethod === "CASH" && <input aria-label="Cash received" className={`h-12 rounded-md border px-3 text-sm outline-none focus:border-[#d4af37] ${amountDue > 0 ? "border-red-300 bg-red-50" : "border-[#cfc4a6]"}`} placeholder="Cash received" value={cashReceived} onChange={(event) => setCashReceived(event.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1"))} inputMode="decimal" />}
             <div className="rounded-md bg-[#faf7ef] p-3"><div className="flex justify-between text-sm"><span>Items</span><b>{offlineItems.reduce((sum, item) => sum + item.quantity, 0)}</b></div><div className="mt-2 flex justify-between text-base"><span className="font-black">Bill total</span><b>{money(offlineTotal)}</b></div></div>
             <div className="grid grid-cols-2 gap-2"><Button className="min-h-11 px-3 text-xs sm:min-h-10" variant="outline" disabled={offlineSaving || !offlineItems.length} onClick={() => setOfflineCart({})}>Clear</Button><Button className="min-h-11 px-3 text-xs sm:min-h-10" variant="gold" disabled={!canCompleteSale} onClick={submitOfflineSale}>{offlineSaving ? "Recording..." : "Complete Sale"}</Button></div>
             {lastOfflineSale && <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800"><p>Receipt ready: {lastOfflineSale.referenceNumber}</p><p>{lastOfflineSale.invoiceNumber || lastOfflineSale.invoice?.invoiceNumber || "Invoice pending"} | {lastOfflineSale.receiptNumber || ""}</p>{lastOfflineSale.changeDue != null ? <p>Change {money(Number(lastOfflineSale.changeDue))}</p> : null}<div className="mt-2 flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}>Print</Button><Button variant="gold" onClick={() => setLastOfflineSale(null)}>New Sale</Button></div></div>}
           </div>
         </div>
       </Panel>}
-      {posOnly && <Panel title="Offline Sales"><DataTable headers={["Sale", "Invoice", "Date", "Cashier", "Location", "Items", "Total", "Payment", "Actions"]} minWidth="min-w-[1080px]">{offlineSales.map((sale) => <tr key={sale.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{sale.referenceNumber}<div className="text-xs font-normal text-black/50">{sale.receiptNumber || "-"}</div></td><td className="p-3">{sale.invoiceNumber || sale.invoice?.invoiceNumber || "-"}</td><td className="p-3">{new Date(sale.createdAt).toLocaleString("en-IN")}</td><td className="p-3">{sale.actor?.name || sale.actor?.email || "-"}</td><td className="p-3">{sale.location?.name || "-"}</td><td className="p-3">{sale.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0}</td><td className="p-3 font-black">{money(Number(sale.total || 0))}</td><td className="p-3"><StatusBadge value={sale.paymentMethod || "CASH"} /></td><td className="p-3"><Button className="min-h-10 px-3 text-xs" variant="outline" onClick={() => setLastOfflineSale(sale)}>View receipt</Button></td></tr>)}</DataTable>{!offlineSales.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No POS offline sales found.</p>}<PaginationControls page={offlineSalesPagination.page} totalPages={offlineSalesPagination.totalPages} total={offlineSalesPagination.total} pageSize={offlineSalesPagination.pageSize} onPageChange={setOfflineSalesPage} /></Panel>}
+      {posOnly && <Panel title="Offline Sales">
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/45">Shown sales</p><b className="text-xl">{offlineSales.length}</b></div>
+          <div className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/45">Items sold</p><b className="text-xl">{offlineSalesItems}</b></div>
+          <div className="rounded-md border border-[#eadfca] bg-white p-3"><p className="text-xs font-black uppercase text-black/45">Shown total</p><b className="text-xl">{money(offlineSalesTotal)}</b></div>
+        </div>
+        <div className="grid gap-3 md:hidden">
+          {offlineSales.map((sale) => {
+            const itemCount = sale.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0;
+            return <article key={sale.id} className="rounded-md border border-[#eadfca] bg-white p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="block truncate">{sale.referenceNumber}</b><p className="truncate text-xs text-black/50">{sale.invoiceNumber || sale.invoice?.invoiceNumber || sale.receiptNumber || "-"}</p></div><b className="text-lg">{money(Number(sale.total || 0))}</b></div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm"><p><span className="block text-xs font-bold uppercase text-black/45">Date</span>{formatInvoiceDate(sale.createdAt)}</p><p><span className="block text-xs font-bold uppercase text-black/45">Payment</span><StatusBadge value={sale.paymentMethod || "CASH"} /></p><p><span className="block text-xs font-bold uppercase text-black/45">Items</span>{itemCount}</p><p><span className="block text-xs font-bold uppercase text-black/45">Cashier</span>{sale.actor?.name || sale.actor?.email || "-"}</p></div>
+              <div className="mt-3 flex items-center justify-between gap-3"><p className="text-xs text-black/50">{sale.location?.name || "Store"}</p><Button className="min-h-9 px-3 text-xs" variant="outline" onClick={() => setLastOfflineSale(sale)}>View</Button></div>
+            </article>;
+          })}
+        </div>
+        <div className="hidden md:block"><DataTable headers={["Sale", "Invoice", "Date", "Cashier", "Location", "Items", "Total", "Payment", "Actions"]} minWidth="min-w-[1080px]">{offlineSales.map((sale) => <tr key={sale.id} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{sale.referenceNumber}<div className="text-xs font-normal text-black/50">{sale.receiptNumber || "-"}</div></td><td className="p-3">{sale.invoiceNumber || sale.invoice?.invoiceNumber || "-"}</td><td className="p-3">{formatInvoiceDate(sale.createdAt)}</td><td className="p-3">{sale.actor?.name || sale.actor?.email || "-"}</td><td className="p-3">{sale.location?.name || "-"}</td><td className="p-3">{sale.items?.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0) || 0}</td><td className="p-3 font-black">{money(Number(sale.total || 0))}</td><td className="p-3"><StatusBadge value={sale.paymentMethod || "CASH"} /></td><td className="p-3"><Button className="min-h-9 px-3 text-xs" variant="outline" onClick={() => setLastOfflineSale(sale)}>View</Button></td></tr>)}</DataTable></div>
+        {!offlineSales.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No POS offline sales found.</p>}<PaginationControls page={offlineSalesPagination.page} totalPages={offlineSalesPagination.totalPages} total={offlineSalesPagination.total} pageSize={offlineSalesPagination.pageSize} onPageChange={setOfflineSalesPage} />
+      </Panel>}
     </div>
     {!posOnly && <div className="mt-6">
       <Panel title="Stock Inward">
@@ -1608,7 +1643,7 @@ function BillingInvoices() {
     setExactDate("");
   };
   const pagedOrders = usePagedItems(filteredRows);
-  return <AdminShell section="invoices"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}</div><Panel title="Billing & Invoices"><div className="mb-4 grid gap-3 md:grid-cols-7"><input aria-label="Search invoices" value={query} onChange={(event) => setQuery(event.target.value)} className="rounded-md border px-3 py-2 md:col-span-2" placeholder="Search invoice/order/customer/phone" /><select aria-label="Invoice date range" value={datePreset} onChange={(event) => { setDatePreset(event.target.value); if (event.target.value) setExactDate(""); }} className="rounded-md border px-3 py-2"><option value="">All dates</option><option value="today">Today</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><input aria-label="Exact invoice date" type="date" value={exactDate} onChange={(event) => { setExactDate(event.target.value); if (event.target.value) setDatePreset(""); }} className="rounded-md border px-3 py-2" /><select aria-label="Payment status" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All payments</option><option value="Paid">Paid</option><option value="COD Pending">COD Pending</option><option value="Failed">Failed</option><option value="Refunded">Refunded</option></select><select aria-label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All methods</option><option value="COD">COD</option><option value="Razorpay">Razorpay</option></select><select aria-label="Order status" value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All order statuses</option>{(["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered", "Cancelled"] as OrderStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}</select><Button variant="outline" onClick={resetFilters}>Reset</Button></div><DataTable headers={["Invoice Number", "Order Number", "Customer", "Date", "Amount", "Payment Method", "Payment Status", "Order Status", "Actions"]} minWidth="min-w-[1120px]">{pagedOrders.items.map((order) => <tr key={order.invoiceNumber || order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.invoiceNumber}</td><td className="p-3">{order.orderNumber}</td><td className="p-3">{order.customerName}</td><td className="p-3">{new Date(order.invoiceDate || order.createdAt).toLocaleDateString("en-IN")}</td><td className="p-3 font-bold">{money(order.grandTotal || 0)}</td><td className="p-3">{order.paymentMethod}</td><td className="p-3"><StatusBadge value={order.paymentStatus} /></td><td className="p-3"><StatusBadge value={order.status} /></td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Link href={`/admin/invoices/${order.orderNumber}`}><Button variant="outline">View</Button></Link><Link href={`/admin/invoices/${order.orderNumber}?print=1`} target="_blank"><Button variant="gold">Print</Button></Link></div></td></tr>)}</DataTable>{!filteredRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No database invoices match the current filters.</p>}<PaginationControls page={pagedOrders.page} totalPages={pagedOrders.totalPages} total={pagedOrders.total} onPageChange={pagedOrders.setPage} /></Panel></AdminShell>;
+  return <AdminShell section="invoices"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([label, value, sub]) => <Stat key={label} label={label} value={value} sub={sub} />)}</div><Panel title="Billing & Invoices"><div className="mb-4 grid gap-3 md:grid-cols-7"><input aria-label="Search invoices" value={query} onChange={(event) => setQuery(event.target.value)} className="rounded-md border px-3 py-2 md:col-span-2" placeholder="Search invoice/order/customer/phone" /><select aria-label="Invoice date range" value={datePreset} onChange={(event) => { setDatePreset(event.target.value); if (event.target.value) setExactDate(""); }} className="rounded-md border px-3 py-2"><option value="">All dates</option><option value="today">Today</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><input aria-label="Exact invoice date" type="date" value={exactDate} onChange={(event) => { setExactDate(event.target.value); if (event.target.value) setDatePreset(""); }} className="rounded-md border px-3 py-2" /><select aria-label="Payment status" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All payments</option><option value="Paid">Paid</option><option value="COD Pending">COD Pending</option><option value="Failed">Failed</option><option value="Refunded">Refunded</option></select><select aria-label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All methods</option><option value="COD">COD</option><option value="Razorpay">Razorpay</option></select><select aria-label="Order status" value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)} className="rounded-md border px-3 py-2"><option value="">All order statuses</option>{(["Placed", "Confirmed", "Packed", "Out for Delivery", "Delivered", "Cancelled"] as OrderStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}</select><Button variant="outline" onClick={resetFilters}>Reset</Button></div><DataTable headers={["Invoice Number", "Order Number", "Customer", "Date", "Amount", "Payment Method", "Payment Status", "Order Status", "Actions"]} minWidth="min-w-[1120px]">{pagedOrders.items.map((order) => <tr key={order.invoiceNumber || order.orderNumber} className="border-b odd:bg-white even:bg-[#faf7ef]"><td className="p-3 font-bold">{order.invoiceNumber}</td><td className="p-3">{order.orderNumber}</td><td className="p-3">{order.customerName}</td><td className="p-3">{formatInvoiceDateOnly(order.invoiceDate || order.createdAt)}</td><td className="p-3 font-bold">{money(order.grandTotal || 0)}</td><td className="p-3">{order.paymentMethod}</td><td className="p-3"><StatusBadge value={order.paymentStatus} /></td><td className="p-3"><StatusBadge value={order.status} /></td><td className="p-3"><div className="flex gap-2 whitespace-nowrap"><Link href={`/admin/invoices/${order.orderNumber}`}><Button variant="outline">View</Button></Link><Link href={`/admin/invoices/${order.orderNumber}?print=1`} target="_blank"><Button variant="gold">Print</Button></Link></div></td></tr>)}</DataTable>{!filteredRows.length && <p className="rounded-md bg-white p-4 text-sm text-black/60">No database invoices match the current filters.</p>}<PaginationControls page={pagedOrders.page} totalPages={pagedOrders.totalPages} total={pagedOrders.total} onPageChange={pagedOrders.setPage} /></Panel></AdminShell>;
 }
 
 function AdminInvoiceView({ orderNumber }: { orderNumber?: string }) {
@@ -1652,7 +1687,7 @@ function AdminInvoiceView({ orderNumber }: { orderNumber?: string }) {
   const delivery = order.deliveryCharge ?? 0;
   const handling = order.handlingCharge ?? 0;
   const total = order.grandTotal ?? subtotal - discount - couponDiscount + gst + delivery + handling;
-  return <AdminShell section="invoices"><div className="mb-4 flex flex-wrap items-center justify-between gap-3 no-print"><Link href="/admin/invoices"><Button variant="outline">Back to invoices</Button></Link><Button variant="gold" onClick={printInvoice}>Print Invoice</Button></div><section className="invoice-print-root receipt-print-root bg-white text-black"><div className="receipt-topline"><span>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</span><span>Eagle Mart Grocery & Essentials</span></div><div className="receipt-header"><h1>EAGLE MART</h1><p>Eagle Club Grocery & Essentials</p><p>{storeAddress}</p><p>GSTIN: 24ABCDE1234F1Z5</p><p>TAX INVOICE</p></div><div className="receipt-rule" /><div className="receipt-meta"><p><span>Bill No:</span><b>{order.invoiceNumber || `INV-${order.orderNumber}`}</b></p><p><span>Order:</span><b>{order.orderNumber}</b></p><p><span>Date:</span><b>{new Date(order.invoiceDate || order.createdAt).toLocaleString("en-IN")}</b></p><p><span>Payment:</span><b>{order.paymentMethod} / {order.paymentStatus}</b></p><p><span>Customer:</span><b>{order.customerName}</b></p><p><span>Phone:</span><b>{order.address.phone}</b></p></div><div className="receipt-rule" /><table className="receipt-items"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{rows.map((item) => <tr key={`${item.sku}-${item.index}`}><td><b>{item.name}</b><span>{item.unit} | {item.sku}</span></td><td>{item.qty}</td><td>{money(item.price)}</td><td>{money(item.lineTotal + item.tax)}</td></tr>)}</tbody></table><div className="receipt-rule" /><div className="receipt-totals"><p><span>Items:</span><b>{rows.length}</b></p><p><span>Subtotal:</span><b>{money(subtotal)}</b></p><p><span>Product Discount:</span><b>-{money(discount)}</b></p><p><span>Coupon Discount:</span><b>-{money(couponDiscount)}</b></p><p><span>GST/Tax:</span><b>{money(gst)}</b></p><p><span>Delivery:</span><b>{money(delivery)}</b></p><p><span>Handling:</span><b>{money(handling)}</b></p><p className="receipt-grand"><span>NET TOTAL:</span><b>{money(total)}</b></p></div><div className="receipt-rule" /><div className="receipt-tax"><p><span>Taxable</span><span>GST</span><span>Total</span></p><p><b>{money(subtotal - discount - couponDiscount)}</b><b>{money(gst)}</b><b>{money(total)}</b></p></div><p className="receipt-address">{order.address.line}, {order.address.city} - {order.address.pincode}</p><p className="receipt-thanks">Thank you for shopping with Eagle Mart</p><div className="receipt-barcode" aria-hidden="true">{order.orderNumber}</div></section></AdminShell>;
+  return <AdminShell section="invoices"><div className="mb-4 flex flex-wrap items-center justify-between gap-3 no-print"><Link href="/admin/invoices"><Button variant="outline">Back to invoices</Button></Link><Button variant="gold" onClick={printInvoice}>Print Invoice</Button></div><section className="invoice-print-root receipt-print-root bg-white text-black"><div className="receipt-topline"><span>{formatInvoiceDate(order.invoiceDate || order.createdAt)}</span><span>Eagle Mart Grocery & Essentials</span></div><div className="receipt-header"><h1>EAGLE MART</h1><p>Eagle Club Grocery & Essentials</p><p>{storeAddress}</p><p>GSTIN: 24ABCDE1234F1Z5</p><p>TAX INVOICE</p></div><div className="receipt-rule" /><div className="receipt-meta"><p><span>Bill No:</span><b>{order.invoiceNumber || `INV-${order.orderNumber}`}</b></p><p><span>Order:</span><b>{order.orderNumber}</b></p><p><span>Date:</span><b>{formatInvoiceDate(order.invoiceDate || order.createdAt)}</b></p><p><span>Payment:</span><b>{order.paymentMethod} / {order.paymentStatus}</b></p><p><span>Customer:</span><b>{order.customerName}</b></p><p><span>Phone:</span><b>{order.address.phone}</b></p></div><div className="receipt-rule" /><table className="receipt-items"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{rows.map((item) => <tr key={`${item.sku}-${item.index}`}><td><b>{item.name}</b><span>{item.unit} | {item.sku}</span></td><td>{item.qty}</td><td>{money(item.price)}</td><td>{money(item.lineTotal + item.tax)}</td></tr>)}</tbody></table><div className="receipt-rule" /><div className="receipt-totals"><p><span>Items:</span><b>{rows.length}</b></p><p><span>Subtotal:</span><b>{money(subtotal)}</b></p><p><span>Product Discount:</span><b>-{money(discount)}</b></p><p><span>Coupon Discount:</span><b>-{money(couponDiscount)}</b></p><p><span>GST/Tax:</span><b>{money(gst)}</b></p><p><span>Delivery:</span><b>{money(delivery)}</b></p><p><span>Handling:</span><b>{money(handling)}</b></p><p className="receipt-grand"><span>NET TOTAL:</span><b>{money(total)}</b></p></div><div className="receipt-rule" /><div className="receipt-tax"><p><span>Taxable</span><span>GST</span><span>Total</span></p><p><b>{money(subtotal - discount - couponDiscount)}</b><b>{money(gst)}</b><b>{money(total)}</b></p></div><p className="receipt-address">{order.address.line}, {order.address.city} - {order.address.pincode}</p><p className="receipt-thanks">Thank you for shopping with Eagle Mart</p><div className="receipt-barcode" aria-hidden="true">{order.orderNumber}</div></section></AdminShell>;
 }
 
 function AdminPayments() {
