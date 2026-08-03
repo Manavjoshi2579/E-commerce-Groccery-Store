@@ -30,7 +30,9 @@ function razorpaySecret() {
 }
 
 function razorpayAvailable() {
-  return Boolean(razorpayKeyId() && razorpaySecret());
+  const keyId = razorpayKeyId();
+  const liveEnabled = process.env.RAZORPAY_LIVE_ENABLED === "true";
+  return liveEnabled && Boolean(keyId && razorpaySecret()) && !keyId.startsWith("rzp_test_");
 }
 
 export function paymentProviderStatus() {
