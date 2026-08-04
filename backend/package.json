@@ -7,6 +7,7 @@
     "start": "tsx app/server.ts",
     "build": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:prod": "prisma migrate deploy",
     "db:check": "tsx scripts/db-check.ts",
     "db:demo-reset": "tsx scripts/real-catalog-reset.ts",
     "db:real-catalog-reset": "tsx scripts/real-catalog-reset.ts",
