@@ -18,6 +18,9 @@ export type SessionPayload = {
 export const CUSTOMER_COOKIE = "ec_customer_session";
 export const ADMIN_COOKIE = "ec_admin_session";
 export const DELIVERY_COOKIE = "ec_delivery_session";
+export const CUSTOMER_AUTH_MARKER = "ec_customer_auth";
+export const ADMIN_AUTH_MARKER = "ec_admin_auth";
+export const DELIVERY_AUTH_MARKER = "ec_delivery_auth";
 export const CUSTOMER_SESSION_MS = 1000 * 60 * 60 * 24 * 14;
 export const ADMIN_SESSION_MS = 1000 * 60 * 30;
 
@@ -55,20 +58,41 @@ function cookieName(kind: SessionCookieKind) {
   return kind === "admin" ? ADMIN_COOKIE : CUSTOMER_COOKIE;
 }
 
-export function setSessionCookie(res: Response, kind: SessionCookieKind, token: string) {
-  res.cookie(cookieName(kind), token, {
-    httpOnly: true,
-    sameSite: "lax",
+function markerName(kind: SessionCookieKind) {
+  if (kind === "delivery") return DELIVERY_AUTH_MARKER;
+  return kind === "admin" ? ADMIN_AUTH_MARKER : CUSTOMER_AUTH_MARKER;
+}
+
+function baseCookieOptions(kind: SessionCookieKind) {
+  return {
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     maxAge: kind === "customer" ? CUSTOMER_SESSION_MS : ADMIN_SESSION_MS,
     path: "/",
     domain: process.env.COOKIE_DOMAIN || undefined,
+  };
+}
+
+export function setSessionCookie(res: Response, kind: SessionCookieKind, token: string) {
+  res.cookie(cookieName(kind), token, {
+    ...baseCookieOptions(kind),
+    httpOnly: true,
+  });
+  res.cookie(markerName(kind), "1", {
+    ...baseCookieOptions(kind),
+    httpOnly: false,
   });
 }
 
 export function clearSessionCookie(res: Response, kind: SessionCookieKind) {
   res.clearCookie(cookieName(kind), {
     httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    domain: process.env.COOKIE_DOMAIN || undefined,
+  });
+  res.clearCookie(markerName(kind), {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",

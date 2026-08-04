@@ -37,6 +37,23 @@ function canRetryRequest(init?: RequestInit) {
   return ["GET", "HEAD", "OPTIONS"].includes(requestMethod(init));
 }
 
+function isSessionProbe(path: string) {
+  return path === "/api/auth/me" || path === "/api/admin/auth/me";
+}
+
+export function hasAuthMarker(kind: "customer" | "admin" | "delivery") {
+  if (typeof document === "undefined") return false;
+  const cookieName = kind === "customer" ? "ec_customer_auth" : kind === "delivery" ? "ec_delivery_auth" : "ec_admin_auth";
+  return document.cookie.split(";").some((item) => item.trim().startsWith(`${cookieName}=`));
+}
+
+export function clearAuthMarker(kind: "customer" | "admin" | "delivery") {
+  if (typeof document === "undefined") return;
+  const cookieName = kind === "customer" ? "ec_customer_auth" : kind === "delivery" ? "ec_delivery_auth" : "ec_admin_auth";
+  document.cookie = `${cookieName}=; Max-Age=0; path=/`;
+  document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=.eaglesclub.in`;
+}
+
 function requestHeaders(init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
@@ -65,7 +82,7 @@ export function clearApiCache(prefix?: string) {
 
 export async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   const method = requestMethod(init);
-  const shouldUseCache = method === "GET" && !init?.body;
+  const shouldUseCache = method === "GET" && !init?.body && !isSessionProbe(path);
   const key = shouldUseCache ? cacheKey(path, init) : "";
   if (shouldUseCache) {
     const cached = responseCache.get(key);

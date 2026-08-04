@@ -42,6 +42,7 @@ import {
   type AdminSession,
   type CustomerSession,
 } from "@/services/auth";
+import { clearAuthMarker, hasAuthMarker } from "@/services/api";
 import type { Address, CartItem, Coupon, Order, OrderStatus, Product } from "@/types";
 import { uid } from "@/lib/money";
 
@@ -214,17 +215,35 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [applyBackendCart, applyBackendWishlist]);
 
   useEffect(() => {
-    getCustomerMe()
-      .then(async (user) => {
-        setCustomer(user);
-        await loadCustomerData();
-      })
-      .catch(() => clearCustomerState())
-      .finally(() => setAuthReady(true));
-    getAdminMe()
-      .then(setAdmin)
-      .catch(() => setAdmin(null))
-      .finally(() => setAdminReady(true));
+    if (hasAuthMarker("customer")) {
+      getCustomerMe()
+        .then(async (user) => {
+          setCustomer(user);
+          await loadCustomerData();
+        })
+        .catch(() => {
+          clearAuthMarker("customer");
+          clearCustomerState();
+        })
+        .finally(() => setAuthReady(true));
+    } else {
+      clearCustomerState();
+      setAuthReady(true);
+    }
+
+    const adminMarker = typeof window !== "undefined" && window.location.pathname.startsWith("/admin/delivery") ? "delivery" : "admin";
+    if (hasAuthMarker(adminMarker)) {
+      getAdminMe()
+        .then(setAdmin)
+        .catch(() => {
+          clearAuthMarker(adminMarker);
+          setAdmin(null);
+        })
+        .finally(() => setAdminReady(true));
+    } else {
+      setAdmin(null);
+      setAdminReady(true);
+    }
   }, [clearCustomerState, loadCustomerData]);
 
   useEffect(() => {
